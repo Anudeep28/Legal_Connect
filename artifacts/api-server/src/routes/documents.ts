@@ -1,23 +1,38 @@
 import { Router, type IRouter } from "express";
-import { and, eq, desc, gt, sql } from "drizzle-orm";
+import { and, eq, desc, gt, sql, asc } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { db, documents, accounts } from "@workspace/db";
+import { db, documents, accounts, paymentOrders } from "@workspace/db";
 import * as api from "@workspace/api-zod";
 import { requireAccount, requireLawyer, HttpError } from "../middlewares/access";
 import type { Account } from "../middlewares/access";
+import { lockAccount } from "../lib/payments";
+import { hasDocumentTrial, hasMonthlyAccess } from "../lib/payment-rules";
 
 const router: IRouter = Router();
 router.use("/documents", requireAccount, requireLawyer);
 
-async function insertDocumentWithAccess(account: Account, values: typeof documents.$inferInsert) {
+export async function insertDocumentWithAccess(account: Account, values: typeof documents.$inferInsert) {
   return db.transaction(async (tx) => {
-    const inTrial = account.subscriptionPlan === "trial" &&
-      Date.now() < new Date(account.createdAt).getTime() + 2 * 86400000;
-    if (!inTrial) {
+    const current = await lockAccount(tx, account.id);
+    const inTrial = hasDocumentTrial(current.createdAt);
+    const monthly = hasMonthlyAccess(current.subscriptionExpiresAt);
+    if (!inTrial && monthly) {
+      const [grant] = await tx.select().from(paymentOrders).where(and(
+        eq(paymentOrders.userId, account.id), eq(paymentOrders.kind, "monthly"),
+        eq(paymentOrders.status, "paid"), gt(paymentOrders.entitlementEndsAt, new Date().toISOString()),
+      )).orderBy(asc(paymentOrders.entitlementEndsAt)).limit(1).for("update");
+      if (!grant) throw new HttpError(402, "Your plan could not be verified. Please check your payment history.");
+      await tx.update(paymentOrders).set({ usedCount: sql`${paymentOrders.usedCount} + 1` }).where(eq(paymentOrders.id, grant.id));
+    } else if (!inTrial) {
       const [credit] = await tx.update(accounts)
         .set({ documentCredits: sql`${accounts.documentCredits} - 1` })
         .where(and(eq(accounts.id, account.id), gt(accounts.documentCredits, 0))).returning();
-      if (!credit) throw new HttpError(402, "Your 2-day document trial has ended and you have no document credits. Checkout is not connected yet. Existing documents can still be edited and exported.");
+      if (!credit) throw new HttpError(402, "Your 2-day trial has ended. A document credit or active 30-day plan is required. Existing documents can still be edited and exported.");
+      const [grant] = await tx.select().from(paymentOrders).where(and(
+        eq(paymentOrders.userId, account.id), eq(paymentOrders.kind, "single"),
+        eq(paymentOrders.status, "paid"), eq(paymentOrders.usedCount, 0),
+      )).orderBy(asc(paymentOrders.paidAt)).limit(1).for("update");
+      if (grant) await tx.update(paymentOrders).set({ usedCount: 1 }).where(eq(paymentOrders.id, grant.id));
     }
     const [document] = await tx.insert(documents).values(values).returning();
     return document;

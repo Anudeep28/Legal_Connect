@@ -9,4 +9,9 @@ import type { CheckoutInputPlan } from './checkoutInputPlan';
 
 export interface CheckoutInput {
   plan: CheckoutInputPlan;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  consultationId?: string;
 }

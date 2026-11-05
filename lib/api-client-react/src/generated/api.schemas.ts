@@ -85,6 +85,8 @@ export interface Account {
   status: AccountStatus;
   emailNotifications: boolean;
   subscriptionPlan: string;
+  /** @nullable */
+  subscriptionExpiresAt?: string | null;
   documentCredits: number;
   createdAt: string;
 }
@@ -212,6 +214,17 @@ export const ConsultationStatus = {
   completed: 'completed',
 } as const;
 
+export type ConsultationPaymentStatus = typeof ConsultationPaymentStatus[keyof typeof ConsultationPaymentStatus];
+
+
+export const ConsultationPaymentStatus = {
+  unpaid: 'unpaid',
+  pending: 'pending',
+  paid: 'paid',
+  refund_pending: 'refund_pending',
+  refunded: 'refunded',
+} as const;
+
 export interface Consultation {
   id: string;
   userId: string;
@@ -224,6 +237,7 @@ export interface Consultation {
   mode: ConsultationMode;
   package: ConsultationPackage;
   status: ConsultationStatus;
+  paymentStatus: ConsultationPaymentStatus;
   startsAt: string;
   endsAt: string;
   fee: number;
@@ -497,10 +511,100 @@ export type CheckoutInputPlan = typeof CheckoutInputPlan[keyof typeof CheckoutIn
 export const CheckoutInputPlan = {
   single: 'single',
   monthly: 'monthly',
+  consultation: 'consultation',
 } as const;
 
 export interface CheckoutInput {
   plan: CheckoutInputPlan;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  consultationId?: string;
+}
+
+export type CheckoutOrderMode = typeof CheckoutOrderMode[keyof typeof CheckoutOrderMode];
+
+
+export const CheckoutOrderMode = {
+  test: 'test',
+  live: 'live',
+} as const;
+
+export interface CheckoutOrder {
+  id: string;
+  keyId: string;
+  providerOrderId: string;
+  amount: number;
+  currency: string;
+  mode: CheckoutOrderMode;
+}
+
+export interface ChargeApproval {
+  approveCharge: boolean;
+}
+
+export interface PaymentVerification {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  paymentId: string;
+  /** @pattern ^[a-fA-F0-9]{64}$ */
+  signature: string;
+}
+
+export type PaymentRecordKind = typeof PaymentRecordKind[keyof typeof PaymentRecordKind];
+
+
+export const PaymentRecordKind = {
+  single: 'single',
+  monthly: 'monthly',
+  consultation: 'consultation',
+} as const;
+
+export type PaymentRecordMode = typeof PaymentRecordMode[keyof typeof PaymentRecordMode];
+
+
+export const PaymentRecordMode = {
+  test: 'test',
+  live: 'live',
+} as const;
+
+export type PaymentRecordStatus = typeof PaymentRecordStatus[keyof typeof PaymentRecordStatus];
+
+
+export const PaymentRecordStatus = {
+  pending: 'pending',
+  paid: 'paid',
+  refund_pending: 'refund_pending',
+  refunded: 'refunded',
+} as const;
+
+export interface PaymentRecord {
+  id: string;
+  kind: PaymentRecordKind;
+  /** @nullable */
+  consultationId?: string | null;
+  amount: number;
+  currency: string;
+  mode: PaymentRecordMode;
+  status: PaymentRecordStatus;
+  providerOrderId: string;
+  /** @nullable */
+  providerPaymentId?: string | null;
+  usedCount: number;
+  /** @nullable */
+  paidAt?: string | null;
+  /** @nullable */
+  entitlementEndsAt?: string | null;
+  createdAt: string;
+  refundable: boolean;
 }
 
 export type ListLawyersParams = {

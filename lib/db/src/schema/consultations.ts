@@ -12,6 +12,8 @@ export const consultations = pgTable("consultations", {
   mode: text("mode").$type<"chat" | "call">().notNull(),
   package: text("package").$type<"consultation_only" | "consultation_document">().notNull(),
   status: text("status").$type<"requested" | "booked" | "cancelled" | "completed">().notNull().default("requested"),
+  paymentStatus: text("payment_status").$type<"unpaid" | "pending" | "paid" | "refund_pending" | "refunded">().notNull().default("unpaid"),
+  cancelledBy: text("cancelled_by").$type<"client" | "lawyer">(),
   startsAt: timestamp("starts_at", { withTimezone: true, mode: "string" }).notNull(),
   endsAt: timestamp("ends_at", { withTimezone: true, mode: "string" }).notNull(),
   fee: integer("fee").notNull(),

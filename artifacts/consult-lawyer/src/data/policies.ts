@@ -37,20 +37,20 @@ You must be at least 18 years of age and legally competent to enter into a contr
 5.1. Consultations are private sessions between a Client and a Lawyer. The Company is not a party to any professional engagement arising from a consultation.
 5.2. Whether a consultation gives rise to an advocate-client relationship is determined solely by the applicable provisions of the Advocates Act, 1961, and Bar Council of India Rules. The Platform does not create such a relationship by itself.
 5.3. Lawyers set their own fees. The total fee (including any document add-on) is displayed before booking and processed via Razorpay.
-5.4. Chat consultations open 10 minutes before the booked slot and close when the slot ends. Call consultations use a third-party video link.
+5.4. Saving a request does not charge you or confirm an appointment. A real lawyer can accept only after payment is captured and verified by the server. Illustrative profiles cannot accept payments. Calls remain unavailable until a calling provider is connected.
 
 6. PAYMENTS AND SUBSCRIPTION
 
-6.1. All payments are processed securely through Razorpay and are denominated in Indian Rupees (INR).
-6.2. Subscription plans for the document editor: (a) 2-day free trial for new users; (b) Single document credit at ₹10; (c) Monthly plan at ₹499 for unlimited documents.
-6.3. Consultation fees are paid directly to secure the booking. The Company facilitates the transaction.
+6.1. When checkout is enabled after verification, payments are processed through Razorpay in Indian Rupees (INR). Adding credentials does not by itself enable checkout. Test-mode payments are labelled and do not transfer real funds.
+6.2. Document plans for lawyer accounts: (a) a 2-day trial from account creation; (b) one document credit at ₹10; (c) ₹499 for 30 days of unlimited new documents. A duplicate counts as a new document. Editing and exporting existing documents does not consume credits and remains available after expiry. AI service availability and any separate usage charges are not a guarantee of unlimited AI use.
+6.3. These are one-time purchases, not automatically recurring subscriptions. Payment does not replace lawyer acceptance or establish a professional engagement by itself.
 6.4. All prices are inclusive of applicable taxes unless otherwise stated.
 6.5. See the Refund & Cancellation Policy for cancellation and refund terms.
 
 7. INTELLECTUAL PROPERTY
 
 7.1. The Platform, its software, design, and branding are the intellectual property of the Company.
-7.2. Documents you create or receive through the Platform belong to you. You grant us a limited licence to store and transmit them solely to provide the service.
+7.2. Clients retain rights to their legal content, including supplied facts, consultation content and documents created for or delivered to them, subject to applicable law and third-party rights. The Company does not acquire ownership of client legal content. You grant a limited licence to store, process and transmit content solely to provide the requested service. Private consultation content is available only to the participants and authorized administrators as needed to administer the service; private lawyer workspace drafts remain accessible only to their account owner. Published templates and the Platform software remain separate from client content.
 7.3. Templates provided on the Platform may be used for your legal practice but may not be redistributed or resold.
 
 8. PROHIBITED CONDUCT
@@ -196,27 +196,27 @@ This Refund and Cancellation Policy applies to all paid services on the Consult 
 1. CONSULTATION CANCELLATIONS
 
 1.1. Client-initiated cancellation: You may cancel a booked consultation at any time before the scheduled start time through the "Cancel" button on your bookings page.
-1.2. Cancellation before the session: If you cancel before the consultation start time, a full refund will be processed to your original payment method.
+1.2. Client-initiated cancellations do not qualify for a consultation refund, including cancellations before the session, except where mandatory applicable law requires otherwise.
 1.3. No-show: If you do not join the consultation within the scheduled time window, no refund will be issued. The Lawyer's fee is considered earned.
-1.4. Lawyer no-show: If the Lawyer fails to join the consultation, you will receive a full refund. Please contact support@consultwithlawyer.in if this occurs.
+1.4. Lawyer cancellation: If the assigned Lawyer cancels or declines a paid consultation, you may request a full refund from the payment history on your consultation page or the Plans page. A no-show or other dispute requires owner review and any remedy required by applicable law.
 
 2. CONSULTATION REFUNDS
 
-2.1. If a consultation is materially disrupted due to a Platform technical failure (not your internet connection), contact support@consultwithlawyer.in within 24 hours for a review. We will issue a refund or credit at our discretion.
+2.1. Ordinary consultation refunds are available for Lawyer cancellation only. A captured payment arriving after a request was cancelled or its scheduled start passed is treated as an unavailable-service payment and is eligible for a full refund. Mandatory statutory rights are not excluded.
 2.2. We do not issue refunds for dissatisfaction with the legal advice received. Disputes regarding the quality of legal services are between you and the Lawyer.
 
 3. DOCUMENT SUBSCRIPTION REFUNDS
 
 3.1. Single document credit (₹10): Non-refundable once the credit has been consumed (a document has been created).
 3.2. Unused document credits: Refundable within 7 days of purchase if no credit has been consumed. Contact support@consultwithlawyer.in.
-3.3. Monthly subscription (₹499): Non-refundable once activated. You will retain access until the end of your billing period.
+3.3. 30-day document plan (₹499): Refundable within 7 days of purchase if no new or duplicated document has used that paid plan. Activation alone does not make an unused plan non-refundable. Once the paid plan is used to create a document it is not refundable, except as required by applicable law.
 3.4. Free trial: No payment is involved; no refund applies.
 
 4. HOW REFUNDS ARE PROCESSED
 
-4.1. Eligible refunds are processed through Razorpay to your original payment method.
+4.1. Request an eligible full refund from Payment history. Refunds are submitted through Razorpay to the original payment method. Associated unused credits or plan access are withdrawn while the request is processing; existing documents remain available for editing/export. An ambiguous provider response is reconciled rather than blindly submitting another refund.
 4.2. Refund processing typically takes 5–10 business days depending on your bank or payment provider.
-4.3. You will receive an email confirmation when a refund has been initiated.
+4.3. Payment history displays refund pending until Razorpay confirms processing, then refunded. Email delivery is not yet connected; do not rely on an email confirmation. Contact the platform owner with the order and payment references if a refund remains pending or fails.
 
 5. DISPUTE RESOLUTION
 

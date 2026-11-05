@@ -60,6 +60,7 @@ export const GetMeResponse = zod.object({
   "status": zod.enum(['active', 'suspended', 'deactivated']),
   "emailNotifications": zod.boolean(),
   "subscriptionPlan": zod.string(),
+  "subscriptionExpiresAt": zod.string().nullish(),
   "documentCredits": zod.number().int(),
   "createdAt": zod.string()
 })
@@ -82,6 +83,7 @@ export const UpdateMeResponse = zod.object({
   "status": zod.enum(['active', 'suspended', 'deactivated']),
   "emailNotifications": zod.boolean(),
   "subscriptionPlan": zod.string(),
+  "subscriptionExpiresAt": zod.string().nullish(),
   "documentCredits": zod.number().int(),
   "createdAt": zod.string()
 })
@@ -295,6 +297,7 @@ export const ListConsultationsResponseItem = zod.object({
   "mode": zod.enum(['chat', 'call']),
   "package": zod.enum(['consultation_only', 'consultation_document']),
   "status": zod.enum(['requested', 'booked', 'cancelled', 'completed']),
+  "paymentStatus": zod.enum(['unpaid', 'pending', 'paid', 'refund_pending', 'refunded']),
   "startsAt": zod.string(),
   "endsAt": zod.string(),
   "fee": zod.number().int(),
@@ -333,6 +336,7 @@ export const CreateConsultationResponse = zod.object({
   "mode": zod.enum(['chat', 'call']),
   "package": zod.enum(['consultation_only', 'consultation_document']),
   "status": zod.enum(['requested', 'booked', 'cancelled', 'completed']),
+  "paymentStatus": zod.enum(['unpaid', 'pending', 'paid', 'refund_pending', 'refunded']),
   "startsAt": zod.string(),
   "endsAt": zod.string(),
   "fee": zod.number().int(),
@@ -361,6 +365,7 @@ export const GetConsultationResponse = zod.object({
   "mode": zod.enum(['chat', 'call']),
   "package": zod.enum(['consultation_only', 'consultation_document']),
   "status": zod.enum(['requested', 'booked', 'cancelled', 'completed']),
+  "paymentStatus": zod.enum(['unpaid', 'pending', 'paid', 'refund_pending', 'refunded']),
   "startsAt": zod.string(),
   "endsAt": zod.string(),
   "fee": zod.number().int(),
@@ -398,6 +403,7 @@ export const UpdateConsultationResponse = zod.object({
   "mode": zod.enum(['chat', 'call']),
   "package": zod.enum(['consultation_only', 'consultation_document']),
   "status": zod.enum(['requested', 'booked', 'cancelled', 'completed']),
+  "paymentStatus": zod.enum(['unpaid', 'pending', 'paid', 'refund_pending', 'refunded']),
   "startsAt": zod.string(),
   "endsAt": zod.string(),
   "fee": zod.number().int(),
@@ -756,6 +762,7 @@ export const ListAdminUsersResponseItem = zod.object({
   "status": zod.enum(['active', 'suspended', 'deactivated']),
   "emailNotifications": zod.boolean(),
   "subscriptionPlan": zod.string(),
+  "subscriptionExpiresAt": zod.string().nullish(),
   "documentCredits": zod.number().int(),
   "createdAt": zod.string()
 })
@@ -787,6 +794,7 @@ export const ModerateUserResponse = zod.object({
   "status": zod.enum(['active', 'suspended', 'deactivated']),
   "emailNotifications": zod.boolean(),
   "subscriptionPlan": zod.string(),
+  "subscriptionExpiresAt": zod.string().nullish(),
   "documentCredits": zod.number().int(),
   "createdAt": zod.string()
 })
@@ -904,10 +912,150 @@ export const ModerateReviewResponse = zod.object({
 })
 
 
+export const createCheckoutBodyConsultationIdMax = 100;
+
+
+
 export const CreateCheckoutBody = zod.object({
-  "plan": zod.enum(['single', 'monthly'])
+  "plan": zod.enum(['single', 'monthly', 'consultation']),
+  "consultationId": zod.string().min(1).max(createCheckoutBodyConsultationIdMax).optional()
 })
 
-export const CreateCheckoutResponse = zod.void()
+export const CreateCheckoutResponse = zod.object({
+  "id": zod.string(),
+  "keyId": zod.string(),
+  "providerOrderId": zod.string(),
+  "amount": zod.number().int(),
+  "currency": zod.string(),
+  "mode": zod.enum(['test', 'live'])
+})
+
+
+export const verifyPaymentBodyIdMax = 100;
+
+export const verifyPaymentBodyPaymentIdMax = 100;
+
+export const verifyPaymentBodySignatureRegExp = new RegExp('^[a-fA-F0-9]{64}$');
+
+
+export const VerifyPaymentBody = zod.object({
+  "id": zod.string().min(1).max(verifyPaymentBodyIdMax),
+  "paymentId": zod.string().min(1).max(verifyPaymentBodyPaymentIdMax),
+  "signature": zod.string().regex(verifyPaymentBodySignatureRegExp)
+})
+
+export const VerifyPaymentResponse = zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['single', 'monthly', 'consultation']),
+  "consultationId": zod.string().nullish(),
+  "amount": zod.number().int(),
+  "currency": zod.string(),
+  "mode": zod.enum(['test', 'live']),
+  "status": zod.enum(['pending', 'paid', 'refund_pending', 'refunded']),
+  "providerOrderId": zod.string(),
+  "providerPaymentId": zod.string().nullish(),
+  "usedCount": zod.number().int(),
+  "paidAt": zod.string().nullish(),
+  "entitlementEndsAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "refundable": zod.boolean()
+})
+
+
+/**
+ * Administrator-only explicit 10 INR verification purchase before general checkout activation. Does not enable checkout.
+ */
+export const CreateValidationCheckoutBody = zod.object({
+  "approveCharge": zod.boolean()
+})
+
+export const CreateValidationCheckoutResponse = zod.object({
+  "id": zod.string(),
+  "keyId": zod.string(),
+  "providerOrderId": zod.string(),
+  "amount": zod.number().int(),
+  "currency": zod.string(),
+  "mode": zod.enum(['test', 'live'])
+})
+
+
+export const ListPaymentsResponseItem = zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['single', 'monthly', 'consultation']),
+  "consultationId": zod.string().nullish(),
+  "amount": zod.number().int(),
+  "currency": zod.string(),
+  "mode": zod.enum(['test', 'live']),
+  "status": zod.enum(['pending', 'paid', 'refund_pending', 'refunded']),
+  "providerOrderId": zod.string(),
+  "providerPaymentId": zod.string().nullish(),
+  "usedCount": zod.number().int(),
+  "paidAt": zod.string().nullish(),
+  "entitlementEndsAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "refundable": zod.boolean()
+})
+export const ListPaymentsResponse = zod.array(ListPaymentsResponseItem)
+
+
+
+
+
+export const ReconcilePaymentParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const ReconcilePaymentResponse = zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['single', 'monthly', 'consultation']),
+  "consultationId": zod.string().nullish(),
+  "amount": zod.number().int(),
+  "currency": zod.string(),
+  "mode": zod.enum(['test', 'live']),
+  "status": zod.enum(['pending', 'paid', 'refund_pending', 'refunded']),
+  "providerOrderId": zod.string(),
+  "providerPaymentId": zod.string().nullish(),
+  "usedCount": zod.number().int(),
+  "paidAt": zod.string().nullish(),
+  "entitlementEndsAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "refundable": zod.boolean()
+})
+
+
+
+
+
+export const RefundPaymentParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const RefundPaymentResponse = zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['single', 'monthly', 'consultation']),
+  "consultationId": zod.string().nullish(),
+  "amount": zod.number().int(),
+  "currency": zod.string(),
+  "mode": zod.enum(['test', 'live']),
+  "status": zod.enum(['pending', 'paid', 'refund_pending', 'refunded']),
+  "providerOrderId": zod.string(),
+  "providerPaymentId": zod.string().nullish(),
+  "usedCount": zod.number().int(),
+  "paidAt": zod.string().nullish(),
+  "entitlementEndsAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "refundable": zod.boolean()
+})
+
+
+/**
+ * Public Razorpay endpoint, authenticated by HMAC over the raw body.
+ */
+export const ReceivePaymentWebhookHeader = zod.object({
+  "X-Razorpay-Signature": zod.string(),
+  "x-razorpay-event-id": zod.string()
+})
+
+export const ReceivePaymentWebhookResponse = zod.unknown()
 
 

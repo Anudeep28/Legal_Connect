@@ -7,6 +7,7 @@ import { clerkMiddleware } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
 import { CLERK_PROXY_PATH, clerkProxyMiddleware, getClerkProxyHost } from "./middlewares/clerkProxyMiddleware";
 import { apiErrorHandler, csrfProtection } from "./middlewares/access";
+import { razorpayWebhook } from "./routes/billing";
 
 const app: Express = express();
 
@@ -32,6 +33,7 @@ app.use(
 app.set("trust proxy", 1);
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(cors({ credentials: true, origin: false }));
+app.post("/api/billing/webhook", express.raw({ type: "application/json", limit: "256kb" }), razorpayWebhook);
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(clerkMiddleware((req) => ({

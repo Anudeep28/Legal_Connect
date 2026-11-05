@@ -5,6 +5,7 @@ import { db, lawyers, consultations, messages, deliverables, reviews, notificati
 import * as api from "@workspace/api-zod";
 import { requireAccount, HttpError } from "../middlewares/access";
 import { accessibleConsultation, consultationRows, availableSlots, notify } from "../lib/legal";
+import { lockAccount } from "../lib/payments";
 
 const router: IRouter = Router();
 router.use(["/consultations", "/deliverables"], requireAccount);
@@ -37,7 +38,7 @@ router.post("/consultations", async (req, res): Promise<void> => {
     });
     await tx.insert(notifications).values({
       id: randomUUID(), userId: req.account.id, title: lawyer.demo ? "Demo consultation request saved" : "Consultation request saved",
-      body: lawyer.demo ? "This is an illustrative lawyer profile with no practitioner attached. No advice, appointment or payment has been confirmed." : "Your request has been sent to the lawyer. This unpaid pilot request is not a paid or confirmed appointment.",
+      body: lawyer.demo ? "This is an illustrative lawyer profile with no practitioner attached. No advice, appointment or payment has been confirmed." : "Your unpaid request has been saved. Verified payment and lawyer acceptance are required before this is a paid, confirmed appointment.",
       link: `/consultations/${id}`,
     });
     if (lawyer.ownerId) await tx.insert(notifications).values({
@@ -61,23 +62,34 @@ router.patch("/consultations/:id", async (req, res): Promise<void> => {
   const isLawyer = record.lawyerOwnerId === req.account.id;
   if (!input.status && input.transcript === undefined) throw new HttpError(400, "No update was supplied.");
   if (input.transcript !== undefined && !isLawyer) throw new HttpError(403, "Only the assigned lawyer can edit the transcript.");
-  if (input.status) {
+  await db.transaction(async (tx) => {
+    await lockAccount(tx, record.userId);
+    const [current] = await tx.select().from(consultations).where(eq(consultations.id, id)).for("update");
+    if (input.status) {
     const allowed = (
-      input.status === "cancelled" && ["requested", "booked"].includes(record.status) &&
+      input.status === "cancelled" && ["requested", "booked"].includes(current.status) &&
       (record.userId === req.account.id || isLawyer)
     ) || (
-      isLawyer && input.status === "booked" && record.status === "requested"
+      isLawyer && input.status === "booked" && current.status === "requested"
     ) || (
-      isLawyer && input.status === "completed" && record.status === "booked"
+      isLawyer && input.status === "completed" && current.status === "booked"
     );
     if (!allowed) throw new HttpError(409, "This consultation status cannot be changed that way.");
-    if (input.status === "booked" && new Date(record.endsAt).getTime() < Date.now())
+    if (input.status === "booked" && !current.demo && current.paymentStatus !== "paid")
+      throw new HttpError(409, "The client must complete a verified payment before you accept this request.");
+    if (input.status === "booked" && new Date(current.startsAt).getTime() < Date.now())
       throw new HttpError(409, "This slot has passed. Please arrange a new consultation.");
-  }
-  await db.update(consultations).set(input).where(eq(consultations.id, id));
+    }
+    await tx.update(consultations).set({
+      ...input, ...(input.status === "cancelled" ? { cancelledBy: isLawyer ? "lawyer" as const : "client" as const } : {}),
+    }).where(eq(consultations.id, id));
+  });
   if (input.status) await notify(isLawyer ? record.userId : record.lawyerOwnerId,
     `Consultation ${input.status}`,
-    input.status === "booked" ? "The lawyer accepted your unpaid pilot request. No payment has been collected." : `Your consultation about ${record.topic} is now ${input.status}.`,
+    input.status === "booked" ? "The lawyer accepted your paid consultation request."
+      : input.status === "cancelled" && isLawyer && record.paymentStatus === "paid"
+        ? "The lawyer cancelled your consultation. You can request a full refund in payment history."
+        : `Your consultation about ${record.topic} is now ${input.status}.`,
     `/consultations/${id}`);
   res.json(api.UpdateConsultationResponse.parse(await accessibleConsultation(req.account, id)));
 });

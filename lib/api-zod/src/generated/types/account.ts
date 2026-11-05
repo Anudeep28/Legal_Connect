@@ -16,6 +16,8 @@ export interface Account {
   status: AccountStatus;
   emailNotifications: boolean;
   subscriptionPlan: string;
+  /** @nullable */
+  subscriptionExpiresAt?: string | null;
   documentCredits: number;
   createdAt: string;
 }

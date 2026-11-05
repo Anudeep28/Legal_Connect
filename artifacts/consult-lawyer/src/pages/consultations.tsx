@@ -37,7 +37,7 @@ function Inner({ me }: { me: Account }) {
       <PageHeader
         eyebrow="Consultations"
         title="Your conversations with advocates"
-        sub={showIncoming ? 'Requests you made and requests clients sent to you, in one place.' : 'Requests stay unpaid and unconfirmed until the lawyer accepts.'}
+        sub={showIncoming ? 'Requests you made and requests clients sent to you, in one place.' : 'Payment and lawyer acceptance are separate steps. Saving a request does not charge you.'}
         actions={<Button asChild className="rounded-full"><Link href="/lawyers">New request</Link></Button>}
       />
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="mb-6">

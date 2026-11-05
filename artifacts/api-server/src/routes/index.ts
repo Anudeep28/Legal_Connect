@@ -6,6 +6,7 @@ import consultationsRouter from "./consultations";
 import documentsRouter from "./documents";
 import adminRouter from "./admin";
 import writingRouter from "./writing";
+import billingRouter from "./billing";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(consultationsRouter);
 router.use(documentsRouter);
 router.use(adminRouter);
 router.use(writingRouter);
+router.use(billingRouter);
 
 export default router;

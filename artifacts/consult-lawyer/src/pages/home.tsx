@@ -107,7 +107,7 @@ export default function Home() {
       {p?.demo && (
         <div className="mx-auto mt-8 max-w-7xl px-4 md:px-6">
           <Notice icon={<Info />} tone="ink">
-            This is a pilot. Profiles marked <strong>Illustrative</strong> are example lawyers created to show how the marketplace works. They are not real advocates and their ratings are not real reviews. Payments and calls are not connected.
+            This is a pilot. Profiles marked <strong>Illustrative</strong> are example lawyers created to show how the marketplace works. They are not real advocates and their ratings are not real reviews. Checkout stays disabled until Razorpay verification. Calls are not connected.
           </Notice>
         </div>
       )}
@@ -255,7 +255,7 @@ export default function Home() {
             <h2 className="text-3xl font-semibold">Questions people ask first</h2>
             <Accordion type="single" collapsible className="mt-4">
               {[
-                ['Do I pay when I send a request?', 'No. A request is saved unpaid and unconfirmed. Online payment is not connected during this pilot; the advocate accepts first.'],
+                ['Do I pay when I send a request?', 'No. Saving a request does not charge you. Once checkout is verified and enabled, pay from your consultation page; the advocate can then accept. Illustrative profiles cannot accept payments.'],
                 ['How is the fee calculated?', 'Each advocate sets one price for a 30-minute consultation in INR. If you add a document, their document percentage is added on top.'],
                 ['Can I talk in Hindi or my regional language?', 'Yes. Filter the directory by language to find advocates who speak it.'],
                 ['Will the lawyer guarantee a result?', 'No honest advocate can. Expect a clear explanation of your options and next steps.'],

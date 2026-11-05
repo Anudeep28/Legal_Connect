@@ -6,8 +6,8 @@ Indian lawyer discovery, consultation requests, messaging, document drafting, an
 
 - Read `.agents/memory/product-scope.md` for the owner's direction on product provenance and the boundary with the existing live service before any import or migration.
 - This is currently a pilot. Seeded profiles are fictional, marked illustrative, and have no practitioner attached. Do not imply real verification, ratings, presence, appointments, or advice.
-- Booking saves an unpaid request; it does not collect payment. Real profile owners can accept pilot requests. Example profile requests cannot connect to a real lawyer.
-- Calls, Razorpay checkout, SMS verification, outbound email, browser push, and automated reminders are **not connected**. The UI and API must not simulate success.
+- Booking saves an unpaid request; verified payment is required before real profile owners can accept it. Example profile requests cannot take payments or connect to a real lawyer.
+- Razorpay payment code is prepared but **checkout remains disabled pending credentials and real provider verification**. See `artifacts/api-server/BILLING_SETUP.md`. The owner deferred adding keys; do not enable payment flags or claim real checkout was tested. Calls, SMS verification, outbound email, browser push, and automated reminders remain **not connected**.
 - Clerk handles sign-in and email verification. App roles and resource ownership are enforced by the API, never client-selected or granted to the first visitor.
 - AI drafts/translations are preliminary and require advocate review. Original templates include historical legislation; statutory applicability must be checked before use.
 
@@ -20,6 +20,7 @@ Indian lawyer discovery, consultation requests, messaging, document drafting, an
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate clients and validators after contract changes.
 - `pnpm --filter @workspace/db run push` — development schema only.
 - `pnpm --filter @workspace/api-server run seed` — explicitly add example profiles, idempotently. Never seed automatically in production.
+- `pnpm --filter @workspace/api-server run test:billing` — synthetic Razorpay integration checks against disposable development fixtures; not a real payment test.
 - `pnpm --filter @workspace/api-server run grant-admin -- <owner-designated-email>` — grant admin to an existing verified Clerk account in the current environment. Never infer the owner email or assign a default password. Development and production identities are separate.
 
 ## Structure and sources of truth
@@ -41,7 +42,8 @@ Indian lawyer discovery, consultation requests, messaging, document drafting, an
 - Reviews: only the client of a completed **non-demo** consultation, one review per consultation; ratings aggregate visible reviews.
 - Lawyer application: credentials submitted for manual review; credential edits revoke approval, weekday/online changes do not. Pending applicants may use document drafting.
 - Documents: create, edit, duplicate, delete, templates with field filling, Markdown preview, PDF/DOCX/Markdown export, AI assistance and recorded-audio transcription.
-- Trial: new-document creation and duplication are allowed for two days from account creation, then require document credits. Existing-document editing/export remains available. Paid plans cannot activate without a real verified payment integration.
+- Trial: new-document creation and duplication are allowed for two days from account creation, then require a document credit or an active ₹499 30-day plan. Existing-document editing/export remains available. Paid plans cannot activate without a real verified captured payment.
+- Owner-selected policy: ordinary consultation refunds only for lawyer cancellation; unused document purchases refundable within seven days; clients retain rights to their legal content, subject to mandatory applicable law. Ambiguous refunds remain pending for reconciliation, never blindly retried.
 - Notifications: persisted in-app events, read state and account email preference (preference is not email delivery).
 - Admin: overview, lawyer approval/rejection, user suspension/reactivation, review moderation, required reasons and audit log. Suspending a lawyer unpublishes the profile.
 

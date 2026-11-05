@@ -51,7 +51,7 @@ export const requireAccount: RequestHandler = async (req, res, next) => {
       if (created) await tx.insert(notifications).values({
         id: randomUUID(), userId,
         title: "Welcome to Consult with Lawyer",
-        body: "This is a separate pilot. Example lawyer profiles are illustrative. No payment is collected. Please do not submit sensitive documents until your lawyer's identity and engagement are confirmed.",
+        body: "This is a separate pilot. Example lawyer profiles are illustrative and cannot accept payments. Checkout stays disabled until provider verification. Please do not submit sensitive documents until your lawyer's identity and engagement are confirmed.",
         link: "/dashboard",
       });
     });

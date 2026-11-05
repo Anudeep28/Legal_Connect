@@ -3,12 +3,12 @@ import { and, eq, desc } from "drizzle-orm";
 import { db, accounts, notifications } from "@workspace/db";
 import {
   GetMeResponse, UpdateMeBody, UpdateMeResponse, ListNotificationsResponse,
-  ReadNotificationParams, ReadNotificationResponse, CreateCheckoutBody,
+  ReadNotificationParams, ReadNotificationResponse,
 } from "@workspace/api-zod";
 import { requireAccount, HttpError } from "../middlewares/access";
 
 const router: IRouter = Router();
-router.use(["/me", "/notifications", "/billing"], requireAccount);
+router.use(["/me", "/notifications"], requireAccount);
 
 router.get("/me", async (req, res): Promise<void> => {
   res.json(GetMeResponse.parse(req.account));
@@ -34,9 +34,4 @@ router.patch("/notifications/:id/read", async (req, res): Promise<void> => {
   if (!notification) throw new HttpError(404, "Notification not found.");
   res.json(ReadNotificationResponse.parse(notification));
 });
-router.post("/billing/checkout", async (req, res): Promise<void> => {
-  CreateCheckoutBody.parse(req.body);
-  res.status(503).json({ error: "Razorpay checkout has not been connected to this separate version. No payment was taken and no subscription was activated." });
-});
-
 export default router;

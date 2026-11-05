@@ -12,4 +12,5 @@ export type CheckoutInputPlan = typeof CheckoutInputPlan[keyof typeof CheckoutIn
 export const CheckoutInputPlan = {
   single: 'single',
   monthly: 'monthly',
+  consultation: 'consultation',
 } as const;

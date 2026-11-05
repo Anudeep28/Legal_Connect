@@ -1,1 +1,2 @@
 - [Product scope](product-scope.md) — separate successor to the owner's existing legal app; preserve its full client/lawyer/admin and document workflows.
+- [Payment policy](payment-policy.md) — owner-selected refund rules and client rights for the separate legal app.

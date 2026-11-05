@@ -50,7 +50,7 @@ export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { la
           qc.invalidateQueries({ queryKey: getListConsultationsQueryKey() });
           qc.invalidateQueries({ queryKey: getGetLawyerSlotsQueryKey(lawyer.id, date) });
           qc.invalidateQueries({ queryKey: getListNotificationsQueryKey() });
-          toast({ title: c.demo ? 'Demo request saved' : 'Request sent', description: 'Not paid and not confirmed until the lawyer accepts.' });
+          toast({ title: c.demo ? 'Demo request saved' : 'Request sent', description: 'Unpaid request saved. Payment and lawyer acceptance are separate steps.' });
           onOpenChange(false);
           setLocation(`/consultations/${c.id}`);
         },
@@ -181,7 +181,7 @@ export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { la
               </div>
             </section>
             <Notice icon={<Info />}>
-              This saves a <strong>consultation request</strong>. It is <strong>not paid and not confirmed</strong>. The lawyer must accept it first; online payment is not connected in this pilot. Estimated fee {inr(total)}.
+              This saves an <strong>unpaid consultation request</strong>, not a confirmed appointment. For real lawyers, verified payment is required before acceptance. Checkout remains disabled until Razorpay verification. Fee {inr(total)}. Client cancellation does not qualify for a refund; lawyer cancellation does, subject to applicable law.
             </Notice>
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

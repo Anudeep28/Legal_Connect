@@ -160,7 +160,7 @@ function ProfileForm({ me, existing }: { me: Account; existing?: Lawyer }) {
         </div>
         <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
           <Notice icon={<Info />}>Your enrolment details are reviewed manually by an administrator. Do not upload ID documents here.</Notice>
-          <Notice icon={<Info />} tone="ink">Payments are not connected during this pilot. You accept requests manually and they remain unpaid pilot consultations.</Notice>
+          <Notice icon={<Info />} tone="ink">Checkout stays disabled until Razorpay verification. You can accept real requests only after verified payment. If you cancel a paid consultation, the client becomes eligible for a full refund.</Notice>
         </aside>
       </div>
     </>

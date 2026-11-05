@@ -8,6 +8,7 @@ export const accounts = pgTable("accounts", {
   status: text("status").$type<"active" | "suspended" | "deactivated">().notNull().default("active"),
   emailNotifications: boolean("email_notifications").notNull().default(false),
   subscriptionPlan: text("subscription_plan").notNull().default("trial"),
+  subscriptionExpiresAt: timestamp("subscription_expires_at", { withTimezone: true, mode: "string" }),
   documentCredits: integer("document_credits").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 });

@@ -449,11 +449,94 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/CheckoutInput" }
       responses:
+        "200":
+          description: Server-created Razorpay order, not yet paid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckoutOrder" }
         "503":
           description: Payment provider not connected; no payment collected
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ServiceError" }
+  /billing/verify:
+    post:
+      operationId: verifyPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentVerification" }
+      responses:
+        "200":
+          description: Verified payment and current entitlement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentRecord" }
+  /billing/validation-checkout:
+    post:
+      operationId: createValidationCheckout
+      description: Administrator-only explicit 10 INR verification purchase before general checkout activation. Does not enable checkout.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChargeApproval" }
+      responses:
+        "200":
+          description: Administrator verification order, not yet paid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckoutOrder" }
+  /billing/payments:
+    get:
+      operationId: listPayments
+      responses:
+        "200":
+          description: Current account payment history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PaymentRecord" }
+  /billing/payments/{id}/reconcile:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reconcilePayment
+      responses:
+        "200":
+          description: Current provider-confirmed payment state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentRecord" }
+  /billing/payments/{id}/refund:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: refundPayment
+      responses:
+        "200":
+          description: Eligible refund submitted or reconciled, not necessarily processed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentRecord" }
+  /billing/webhook:
+    post:
+      operationId: receivePaymentWebhook
+      description: Public Razorpay endpoint, authenticated by HMAC over the raw body.
+      parameters:
+        - name: X-Razorpay-Signature
+          in: header
+          required: true
+          schema: { type: string }
+        - name: x-razorpay-event-id
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Event applied or already processed
 components:
   parameters:
     Id:
@@ -536,6 +619,7 @@ components:
         status: { type: string, enum: [active, suspended, deactivated] }
         emailNotifications: { type: boolean }
         subscriptionPlan: { type: string }
+        subscriptionExpiresAt: { type: string, nullable: true }
         documentCredits: { type: integer }
         createdAt: { type: string }
     AccountInput:
@@ -586,7 +670,7 @@ components:
         online: { type: boolean }
     Consultation:
       type: object
-      required: [id, userId, clientName, lawyerId, lawyerName, lawyerAvatar, topic, notes, mode, package, status, startsAt, endsAt, fee, transcript, demo, createdAt]
+      required: [id, userId, clientName, lawyerId, lawyerName, lawyerAvatar, topic, notes, mode, package, status, paymentStatus, startsAt, endsAt, fee, transcript, demo, createdAt]
       properties:
         id: { type: string }
         userId: { type: string }
@@ -599,6 +683,7 @@ components:
         mode: { type: string, enum: [chat, call] }
         package: { type: string, enum: [consultation_only, consultation_document] }
         status: { type: string, enum: [requested, booked, cancelled, completed] }
+        paymentStatus: { type: string, enum: [unpaid, pending, paid, refund_pending, refunded] }
         startsAt: { type: string }
         endsAt: { type: string }
         fee: { type: integer }
@@ -753,4 +838,45 @@ components:
       type: object
       required: [plan]
       properties:
-        plan: { type: string, enum: [single, monthly] }
+        plan: { type: string, enum: [single, monthly, consultation] }
+        consultationId: { type: string, minLength: 1, maxLength: 100 }
+    CheckoutOrder:
+      type: object
+      required: [id, keyId, providerOrderId, amount, currency, mode]
+      properties:
+        id: { type: string }
+        keyId: { type: string }
+        providerOrderId: { type: string }
+        amount: { type: integer }
+        currency: { type: string }
+        mode: { type: string, enum: [test, live] }
+    ChargeApproval:
+      type: object
+      required: [approveCharge]
+      properties:
+        approveCharge: { type: boolean }
+    PaymentVerification:
+      type: object
+      required: [id, paymentId, signature]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 100 }
+        paymentId: { type: string, minLength: 1, maxLength: 100 }
+        signature: { type: string, pattern: "^[a-fA-F0-9]{64}$" }
+    PaymentRecord:
+      type: object
+      required: [id, kind, amount, currency, mode, status, providerOrderId, usedCount, createdAt, refundable]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [single, monthly, consultation] }
+        consultationId: { type: string, nullable: true }
+        amount: { type: integer }
+        currency: { type: string }
+        mode: { type: string, enum: [test, live] }
+        status: { type: string, enum: [pending, paid, refund_pending, refunded] }
+        providerOrderId: { type: string }
+        providerPaymentId: { type: string, nullable: true }
+        usedCount: { type: integer }
+        paidAt: { type: string, nullable: true }
+        entitlementEndsAt: { type: string, nullable: true }
+        createdAt: { type: string }
+        refundable: { type: boolean }

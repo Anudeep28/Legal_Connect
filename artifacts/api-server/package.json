@@ -9,7 +9,8 @@
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:billing": "NODE_ENV=test RAZORPAY_KEY_ID=rzp_test_fixture RAZORPAY_KEY_SECRET=billing-test-only-secret RAZORPAY_WEBHOOK_SECRET=billing-test-only-webhook RAZORPAY_CHECKOUT_VERIFIED_MODE=test tsx --test src/lib/__tests__/billing.test.ts"
   },
   "dependencies": {
     "@clerk/express": "^2.1.87",

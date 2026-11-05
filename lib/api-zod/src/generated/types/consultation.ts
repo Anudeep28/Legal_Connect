@@ -7,6 +7,7 @@
  */
 import type { ConsultationMode } from './consultationMode';
 import type { ConsultationPackage } from './consultationPackage';
+import type { ConsultationPaymentStatus } from './consultationPaymentStatus';
 import type { ConsultationStatus } from './consultationStatus';
 
 export interface Consultation {
@@ -21,6 +22,7 @@ export interface Consultation {
   mode: ConsultationMode;
   package: ConsultationPackage;
   status: ConsultationStatus;
+  paymentStatus: ConsultationPaymentStatus;
   startsAt: string;
   endsAt: string;
   fee: number;

@@ -12,6 +12,7 @@ import { requireAccount, HttpError } from "../middlewares/access";
 import { availableSlots, categoryNames, lawyerViews } from "../lib/legal";
 import { legalTemplates } from "../data/templates";
 import { supportedLanguages } from "../data/languages";
+import { paymentsEnabled } from "../lib/razorpay";
 
 const router: IRouter = Router();
 
@@ -20,7 +21,7 @@ router.get("/platform", async (_req, res): Promise<void> => {
   res.json(GetPlatformResponse.parse({
     name: "Consult with Lawyer",
     demo: rows.some((l) => l.demo),
-    paymentsEnabled: false,
+    paymentsEnabled: paymentsEnabled(),
     callsEnabled: false,
     aiEnabled: Boolean(process.env.AI_INTEGRATIONS_OPENAI_BASE_URL),
     categories: categoryNames.map(([id, name, description]) => ({ id, name, description, count: rows.filter((l) => l.practiceAreas.includes(name)).length })),

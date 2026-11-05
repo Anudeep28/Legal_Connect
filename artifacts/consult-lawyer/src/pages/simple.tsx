@@ -3,7 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, Bell, CheckCheck, Info, Scale, FileText, MessagesSquare, CalendarDays, Mic, ArrowRight } from 'lucide-react';
 import {
-  useGetPlatform, useCreateCheckout, useUpdateMe, getGetMeQueryKey,
+  useGetPlatform, useUpdateMe, getGetMeQueryKey,
   useListNotifications, getListNotificationsQueryKey, useReadNotification,
   type Account, type CheckoutInputPlan,
 } from '@workspace/api-client-react';
@@ -20,6 +20,8 @@ import { useAccount } from '@/lib/account';
 import { cn } from '@/lib/utils';
 import { errMsg, fmtDate, inr, relTime } from '@/lib/format';
 import { policies } from '@/data/policies';
+import { usePaymentCheckout } from '@/hooks/use-payment-checkout';
+import { PaymentHistory } from '@/components/payment-history';
 
 const base = import.meta.env.BASE_URL;
 
@@ -39,6 +41,7 @@ function TrialNotice({ me }: { me: Account }) {
   const t = trialStatus(me.createdAt);
   return (
     <Notice icon={<Info />} className="mb-8" data-testid="text-trial-status">
+      {me.subscriptionExpiresAt && new Date(me.subscriptionExpiresAt).getTime() > Date.now() && <p>Your 30-day document plan is active until <strong>{fmtDate(me.subscriptionExpiresAt)}</strong>. It does not renew automatically.</p>}
       {t.active
         ? <>Your free trial for creating new documents ends <strong>{fmtDate(t.ends.toISOString())}</strong> ({t.label}). After that, each new or duplicated document uses a document credit; you have <strong>{me.documentCredits}</strong>. Editing and exporting existing documents stays available.</>
         : <>Your 2-day trial for new documents <strong>has ended</strong> ({fmtDate(t.ends.toISOString())}). New or duplicated documents now use document credits; you have <strong>{me.documentCredits}</strong>. Editing and exporting existing documents stays available.</>}
@@ -49,25 +52,25 @@ function TrialNotice({ me }: { me: Account }) {
 /* ---------------- PLANS ---------------- */
 export function Plans() {
   const platform = useGetPlatform();
-  const checkout = useCreateCheckout();
+  const checkout = usePaymentCheckout();
   const { signedIn, me } = useAccount();
-  const { toast } = useToast();
   const paymentsEnabled = !!platform.data?.paymentsEnabled;
 
-  const buy = (plan: CheckoutInputPlan) =>
-    checkout.mutate(
-      { data: { plan } },
-      {
-        onSuccess: () => toast({ title: 'Checkout started' }),
-        onError: (e) => toast({ title: 'Checkout unavailable', description: errMsg(e), variant: 'destructive' }),
-      },
-    );
+  const buy = (plan: CheckoutInputPlan) => checkout.start({ plan });
 
   return (
     <AppPage>
       <PageHeader eyebrow="Plans for advocates" title={<>Document plans, <span className="italic text-primary">priced plainly</span></>} sub="Plans cover the document workspace: templates, dictation and AI drafting. Consultation fees are set by each lawyer per 30 minutes." />
       {me && <TrialNotice me={me} />}
-      <Notice icon={<Info />} className="mb-8">Checkout is <strong>not connected</strong> in this pilot. These plans are shown for information only; nothing can be purchased and no card details are collected.</Notice>
+      <Notice icon={<Info />} className="mb-8">{paymentsEnabled
+        ? <>Payments are processed by Razorpay. Access starts only after server verification. The ₹499 plan lasts 30 days with no automatic renewal. Unused document purchases are refundable within seven days. <Link href="/refund-policy" className="underline">Refund rules</Link>.</>
+        : <>Checkout is <strong>disabled pending Razorpay verification</strong>. Plans cannot be purchased yet. Adding credentials alone will not enable payments.</>}</Notice>
+      {me?.role === 'admin' && <Notice icon={<Info />} className="mb-8">
+        <p><strong>Administrator verification only.</strong> After dedicated Razorpay keys and the signed webhook are configured, run a ₹10 verification purchase here. Test-mode checkout does not move real funds; live-mode checkout charges ₹10. This does not enable general checkout.</p>
+        <Button variant="outline" className="mt-3" disabled={checkout.pending} onClick={() => {
+          if (window.confirm('Open a ₹10 Razorpay verification purchase? Live-mode credentials will charge real money. This will not enable general checkout.')) checkout.startValidation();
+        }}>Verify Razorpay (admin)</Button>
+      </Notice>}
       {platform.isLoading ? (
         <div className="grid gap-4 md:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-96 rounded-3xl" />)}</div>
       ) : platform.isError ? (
@@ -91,7 +94,7 @@ export function Plans() {
                 <Button
                   className={cn('mt-7 rounded-full', featured && 'bg-haldi text-ink hover:bg-haldi')}
                   variant={featured ? 'default' : 'outline'}
-                  disabled={!purchasable || !paymentsEnabled || !signedIn || checkout.isPending}
+                  disabled={!purchasable || !paymentsEnabled || !signedIn || me?.role !== 'lawyer' || checkout.pending || (p.id === 'monthly' && !!me.subscriptionExpiresAt && new Date(me.subscriptionExpiresAt).getTime() > Date.now())}
                   onClick={() => purchasable && buy(p.id as CheckoutInputPlan)}
                   data-testid={`button-plan-${p.id}`}
                 >
@@ -102,6 +105,8 @@ export function Plans() {
           })}
         </div>
       )}
+      {signedIn && me?.role !== 'lawyer' && <p className="mt-4 text-sm text-muted-foreground">Document plans are for lawyer accounts. Consultation payments are available from your consultation request.</p>}
+      <PaymentHistory />
     </AppPage>
   );
 }
@@ -158,6 +163,7 @@ function SettingsForm({ me }: { me: Account }) {
         <Row k="Plan" v={me.subscriptionPlan || 'free'} />
         <Row k="New-document trial" v={trialStatus(me.createdAt).label} />
         <Row k="Document credits" v={String(me.documentCredits)} />
+        {me.subscriptionExpiresAt && <Row k="Document plan expires" v={fmtDate(me.subscriptionExpiresAt)} />}
         <Row k="Member since" v={fmtDate(me.createdAt)} />
         {me.role === 'client' && <Link href="/lawyer/profile" className="mt-2 inline-flex items-center gap-1 font-medium text-primary">Apply as a lawyer <ArrowRight className="h-4 w-4" /></Link>}
       </aside>
@@ -261,7 +267,7 @@ export function ForLawyers() {
               <li><span className="mr-2 font-mono text-haldi">02</span>Your profile is pending while an administrator reviews it. The document workspace is open right away.</li>
               <li><span className="mr-2 font-mono text-haldi">03</span>Once approved, you appear in the directory and can receive requests.</li>
             </ol>
-            <p className="mt-5 text-sm text-white/55">Pilot note: payments are not connected. Accepted requests are unpaid pilot consultations.</p>
+            <p className="mt-5 text-sm text-white/55">Checkout stays disabled until Razorpay verification. Real consultation requests require verified payment before lawyer acceptance.</p>
           </div>
           <Button asChild size="lg" className="rounded-full bg-haldi text-ink hover:bg-haldi"><Link href="/lawyer/profile">Start application</Link></Button>
         </div>
@@ -273,8 +279,8 @@ export function ForLawyers() {
 /* ---------------- POLICY ---------------- */
 const policyMap: Record<string, { key: string; title: string; context: string }> = {
   '/privacy': { key: 'privacy', title: 'Privacy Policy', context: 'In this pilot, consultation messages are visible to the client, the chosen advocate and administrators where needed. Audio you dictate is sent for transcription and is not kept as a recording by this app.' },
-  '/terms': { key: 'terms', title: 'Terms of Service', context: 'In this pilot, payments and calls are not connected. Consultation requests are unpaid until a lawyer accepts, and illustrative demo profiles are not real advocates.' },
-  '/refund-policy': { key: 'refunds', title: 'Refund & Cancellation Policy', context: 'No payments are collected in this pilot, so there is nothing to refund today. The policy below describes how refunds will work once payments are connected.' },
+  '/terms': { key: 'terms', title: 'Terms of Service', context: 'This is a separate pilot. Checkout stays disabled until Razorpay is verified. Illustrative demo profiles cannot take payments. Clients retain rights to their legal content.' },
+  '/refund-policy': { key: 'refunds', title: 'Refund & Cancellation Policy', context: 'Owner-selected rules: consultation refunds for lawyer cancellation only; unused document purchases refundable within seven days, subject to mandatory applicable law. Checkout remains disabled pending provider verification.' },
 };
 export function Policy({ path }: { path: string }) {
   const p = policyMap[path];

@@ -30,6 +30,8 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { errMsg, fmtDateTime, fmtTime, inr } from '@/lib/format';
 import { exportDocx, exportMarkdown, exportPdf } from '@/lib/export';
+import { usePaymentCheckout } from '@/hooks/use-payment-checkout';
+import { PaymentHistory } from '@/components/payment-history';
 
 export default function ConsultationDetail() {
   const { id = '' } = useParams<{ id: string }>();
@@ -42,7 +44,7 @@ export default function ConsultationDetail() {
 }
 
 function Inner({ id, me }: { id: string; me: Account }) {
-  const q = useGetConsultation(id, { query: { enabled: !!id, queryKey: getGetConsultationQueryKey(id) } });
+  const q = useGetConsultation(id, { query: { enabled: !!id, queryKey: getGetConsultationQueryKey(id), refetchInterval: 10000 } });
   if (q.isLoading) return <div className="space-y-4"><Skeleton className="h-40 rounded-3xl" /><Skeleton className="h-96 rounded-3xl" /></div>;
   if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} title="This consultation is not available" />;
   const c = q.data;
@@ -53,6 +55,7 @@ function Inner({ id, me }: { id: string; me: Account }) {
   return (
     <div>
       <Header c={c} asClient={asClient} isClient={isClient} />
+      {isClient && <ConsultationPayment c={c} />}
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.25fr_1fr]">
         <Messages c={c} asClient={asClient} />
         <div className="space-y-6">
@@ -69,6 +72,23 @@ function Inner({ id, me }: { id: string; me: Account }) {
       </div>
     </div>
   );
+}
+
+function ConsultationPayment({ c }: { c: Consultation }) {
+  const platform = useGetPlatform();
+  const checkout = usePaymentCheckout();
+  const payable = !c.demo && c.status === 'requested' && ['unpaid', 'pending'].includes(c.paymentStatus) && new Date(c.startsAt).getTime() > Date.now();
+  return <div className="mt-4">
+    <Notice icon={<Info />}>
+      Payment: <strong>{c.paymentStatus.replace('_', ' ')}</strong>. {c.paymentStatus === 'paid' ? 'Captured payment does not itself confirm the appointment; the lawyer must accept.'
+        : c.demo ? 'Illustrative profiles never accept payments.' : 'Only a server-verified captured payment marks this request paid.'}
+      {payable && <Button className="mt-3 block" disabled={!platform.data?.paymentsEnabled || checkout.pending} onClick={() => checkout.start({ plan: 'consultation', consultationId: c.id })} data-testid="button-pay-consultation">
+        {platform.data?.paymentsEnabled ? `Pay ${inr(c.fee)} with Razorpay` : 'Checkout disabled pending verification'}
+      </Button>}
+      <p className="mt-2 text-sm">Consultation refunds require lawyer cancellation. Client cancellation is not refundable, subject to applicable law.</p>
+    </Notice>
+    <PaymentHistory consultationId={c.id} />
+  </div>;
 }
 
 function useStatusMutation(c: Consultation) {
@@ -103,6 +123,7 @@ function Header({ c, asClient, isClient }: { c: Consultation; asClient: boolean;
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <StatusPill status={c.status} />
+              <span className="text-xs text-white/80">Payment: {c.paymentStatus.replace('_', ' ')}</span>
               {c.demo && <DemoTag className="bg-white/90" />}
               <span className="rounded-full border border-white/20 px-2 py-0.5 font-mono text-[10px] uppercase text-white/70">{!asClient ? 'You are the advocate' : isClient ? 'You are the client' : 'Read-only view'}</span>
             </div>
@@ -115,7 +136,7 @@ function Header({ c, asClient, isClient }: { c: Consultation; asClient: boolean;
         <div className="flex flex-wrap gap-2">
           {!asClient && c.status === 'requested' && (
             <>
-              <Button onClick={() => run('booked', 'Request accepted')} disabled={pending} className="rounded-full bg-haldi text-ink hover:bg-haldi" data-testid="button-accept"><Check /> Accept request</Button>
+              <Button onClick={() => run('booked', 'Request accepted')} disabled={pending || (!c.demo && c.paymentStatus !== 'paid')} className="rounded-full bg-haldi text-ink hover:bg-haldi" data-testid="button-accept"><Check /> {c.paymentStatus === 'paid' ? 'Accept request' : 'Awaiting verified payment'}</Button>
               <ConfirmButton label="Decline" icon={<X />} title="Decline this request?" body="The client will see it as cancelled." onConfirm={() => run('cancelled', 'Request declined')} />
             </>
           )}
@@ -126,7 +147,7 @@ function Header({ c, asClient, isClient }: { c: Consultation; asClient: boolean;
             </>
           )}
           {isClient && (c.status === 'requested' || c.status === 'booked') && (
-            <ConfirmButton label="Cancel request" icon={<X />} title="Cancel this consultation request?" body="The lawyer will be notified. Nothing was charged." onConfirm={() => run('cancelled', 'Request cancelled')} />
+            <ConfirmButton label="Cancel request" icon={<X />} title="Cancel this consultation request?" body="The lawyer will be notified. Client cancellation is not refundable, except where required by applicable law. Check payment history for any pending payment." onConfirm={() => run('cancelled', 'Request cancelled')} />
           )}
         </div>
       </div>
@@ -134,8 +155,8 @@ function Header({ c, asClient, isClient }: { c: Consultation; asClient: boolean;
         <p className="mt-5 flex items-start gap-2 border-t border-white/10 pt-4 text-[13px] text-white/65">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-haldi" />
           {c.status === 'requested'
-            ? 'Saved request. Not paid and not confirmed. The advocate needs to accept it.'
-            : 'Accepted by the advocate as an unpaid pilot consultation. Online payment is not connected.'}
+            ? `Saved request. Payment: ${c.paymentStatus.replace('_', ' ')}. The advocate still needs to accept.`
+            : `Accepted by the advocate. Payment: ${c.paymentStatus.replace('_', ' ')}.`}
           {c.demo && ' This is a demo consultation with an illustrative profile; no real advice will be given.'}
         </p>
       )}
