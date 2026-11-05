@@ -1,36 +1,756 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: 1.0.0
+  description: Consult with Lawyer — independent legal consultation platform.
 servers:
   - url: /api
-    description: Base API path
-tags:
-  - name: health
-    description: Health operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
-      tags: [health]
-      summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
           content:
             application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+  /platform:
+    get:
+      operationId: getPlatform
+      responses:
+        "200":
+          description: Public resources and service availability
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Platform" }
+  /me:
+    get:
+      operationId: getMe
+      responses:
+        "200":
+          description: Current account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+    patch:
+      operationId: updateMe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccountInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+  /lawyers:
+    get:
+      operationId: listLawyers
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: practiceArea, in: query, schema: { type: string } }
+        - { name: language, in: query, schema: { type: string } }
+        - { name: online, in: query, schema: { type: string, enum: ["true", "false"] } }
+        - { name: sort, in: query, schema: { type: string, enum: [recommended, fee_asc, fee_desc, experience, rating] } }
+      responses:
+        "200":
+          description: Lawyers
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Lawyer" } }
+  /lawyers/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      operationId: getLawyer
+      responses:
+        "200":
+          description: Lawyer profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Lawyer" }
+  /lawyers/{id}/slots/{date}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      operationId: getLawyerSlots
+      parameters:
+        - { name: date, in: path, required: true, schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' } }
+      responses:
+        "200":
+          description: Available half-hour slots in IST
+          content:
+            application/json:
+              schema: { type: array, items: { type: string } }
+  /lawyers/{id}/reviews:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      operationId: listLawyerReviews
+      responses:
+        "200":
+          description: Visible consultation reviews
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Review" } }
+  /lawyer/profile:
+    get:
+      operationId: getLawyerProfile
+      responses:
+        "200":
+          description: Own profile or null
+          content:
+            application/json:
               schema:
-                $ref: "#/components/schemas/HealthStatus"
+                oneOf:
+                  - { $ref: "#/components/schemas/Lawyer" }
+                  - { type: "null" }
+    put:
+      operationId: saveLawyerProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LawyerInput" }
+      responses:
+        "200":
+          description: Submitted profile, pending approval
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Lawyer" }
+  /consultations:
+    get:
+      operationId: listConsultations
+      responses:
+        "200":
+          description: Account consultations, restricted by role
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Consultation" } }
+    post:
+      operationId: createConsultation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConsultationInput" }
+      responses:
+        "201":
+          description: Request saved, no payment collected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Consultation" }
+  /consultations/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      operationId: getConsultation
+      responses:
+        "200":
+          description: Consultation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Consultation" }
+    patch:
+      operationId: updateConsultation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConsultationUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Consultation" }
+  /consultations/{id}/messages:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      operationId: listMessages
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Message" } }
+    post:
+      operationId: sendMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MessageInput" }
+      responses:
+        "201":
+          description: Sent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+  /consultations/{id}/deliverables:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      operationId: listDeliverables
+      responses:
+        "200":
+          description: Lawyer drafts or client delivered documents
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Deliverable" } }
+    post:
+      operationId: createDeliverable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeliverableInput" }
+      responses:
+        "201":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Deliverable" }
+  /deliverables/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    patch:
+      operationId: updateDeliverable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeliverableInput" }
+      responses:
+        "200":
+          description: Updated or delivered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Deliverable" }
+  /consultations/{id}/review:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    post:
+      operationId: createReview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReviewInput" }
+      responses:
+        "201":
+          description: Reviewed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Review" }
+  /documents:
+    get:
+      operationId: listDocuments
+      responses:
+        "200":
+          description: Lawyer documents
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Document" } }
+    post:
+      operationId: createDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+  /documents/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      operationId: getDocument
+      responses:
+        "200":
+          description: Document
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+    patch:
+      operationId: updateDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+    delete:
+      operationId: deleteDocument
+      responses:
+        "204": { description: Deleted }
+  /documents/{id}/duplicate:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    post:
+      operationId: duplicateDocument
+      responses:
+        "201":
+          description: Duplicated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+  /writing/assist:
+    post:
+      operationId: assistWriting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WritingInput" }
+      responses:
+        "200":
+          description: AI assistance, subject to lawyer review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TextResult" }
+  /writing/transcribe:
+    post:
+      operationId: transcribeAudio
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AudioInput" }
+      responses:
+        "200":
+          description: Transcription
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TextResult" }
+  /notifications:
+    get:
+      operationId: listNotifications
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Notification" } }
+  /notifications/{id}/read:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    patch:
+      operationId: readNotification
+      responses:
+        "200":
+          description: Read
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notification" }
+  /admin/overview:
+    get:
+      operationId: getAdminOverview
+      responses:
+        "200":
+          description: Administration summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminOverview" }
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      responses:
+        "200":
+          description: Accounts
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Account" } }
+  /admin/users/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    patch:
+      operationId: moderateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserModeration" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+  /admin/lawyers:
+    get:
+      operationId: listAdminLawyers
+      responses:
+        "200":
+          description: Lawyer applications
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Lawyer" } }
+  /admin/lawyers/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    patch:
+      operationId: moderateLawyer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LawyerModeration" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Lawyer" }
+  /admin/reviews:
+    get:
+      operationId: listAdminReviews
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Review" } }
+  /admin/reviews/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    patch:
+      operationId: moderateReview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReviewModeration" }
+      responses:
+        "200":
+          description: Moderated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Review" }
+  /billing/checkout:
+    post:
+      operationId: createCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CheckoutInput" }
+      responses:
+        "503":
+          description: Payment provider not connected; no payment collected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceError" }
 components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
-        status:
-          type: string
-      required:
-        - status
-
+        status: { type: string }
+    ServiceError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    Category:
+      type: object
+      required: [id, name, description, count]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        count: { type: integer }
+    Template:
+      type: object
+      required: [id, name, category, description, content, fields]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        category: { type: string }
+        description: { type: string }
+        content: { type: string }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/TemplateField" }
+    TemplateField:
+      type: object
+      required: [id, name, type, required]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string }
+        placeholder: { type: string }
+        required: { type: boolean }
+    Plan:
+      type: object
+      required: [id, name, price, description, features]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        price: { type: integer }
+        description: { type: string }
+        features: { type: array, items: { type: string } }
+    Platform:
+      type: object
+      required: [name, demo, paymentsEnabled, callsEnabled, aiEnabled, categories, templates, languages, plans, lawyerCount, onlineCount]
+      properties:
+        name: { type: string }
+        demo: { type: boolean }
+        paymentsEnabled: { type: boolean }
+        callsEnabled: { type: boolean }
+        aiEnabled: { type: boolean }
+        categories: { type: array, items: { $ref: "#/components/schemas/Category" } }
+        templates: { type: array, items: { $ref: "#/components/schemas/Template" } }
+        languages: { type: array, items: { type: string } }
+        plans: { type: array, items: { $ref: "#/components/schemas/Plan" } }
+        lawyerCount: { type: integer }
+        onlineCount: { type: integer }
+    Account:
+      type: object
+      required: [id, name, email, role, status, emailNotifications, subscriptionPlan, documentCredits, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [client, lawyer, admin] }
+        status: { type: string, enum: [active, suspended, deactivated] }
+        emailNotifications: { type: boolean }
+        subscriptionPlan: { type: string }
+        documentCredits: { type: integer }
+        createdAt: { type: string }
+    AccountInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        emailNotifications: { type: boolean }
+    Lawyer:
+      type: object
+      required: [id, name, title, bio, practiceAreas, languages, experienceYears, barCouncil, enrollmentNumber, fee, documentFeePercent, rating, reviewCount, verified, approvalStatus, online, city, avatarUrl, demo, availability, rejectionReason]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        title: { type: string }
+        bio: { type: string }
+        practiceAreas: { type: array, items: { type: string } }
+        languages: { type: array, items: { type: string } }
+        experienceYears: { type: integer }
+        barCouncil: { type: string }
+        enrollmentNumber: { type: string }
+        fee: { type: integer, description: INR for 30-minute consultation }
+        documentFeePercent: { type: integer }
+        rating: { type: number }
+        reviewCount: { type: integer }
+        verified: { type: boolean }
+        approvalStatus: { type: string, enum: [pending, approved, rejected] }
+        online: { type: boolean }
+        city: { type: string }
+        avatarUrl: { type: string }
+        demo: { type: boolean }
+        availability: { type: array, items: { type: integer } }
+        rejectionReason: { type: string }
+    LawyerInput:
+      type: object
+      required: [name, title, bio, practiceAreas, languages, experienceYears, barCouncil, enrollmentNumber, fee, city, availability, online]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        title: { type: string, minLength: 3, maxLength: 150 }
+        bio: { type: string, minLength: 40, maxLength: 2000 }
+        practiceAreas: { type: array, minItems: 1, items: { type: string } }
+        languages: { type: array, minItems: 1, items: { type: string } }
+        experienceYears: { type: integer, minimum: 0, maximum: 70 }
+        barCouncil: { type: string, minLength: 3, maxLength: 200 }
+        enrollmentNumber: { type: string, minLength: 3, maxLength: 100 }
+        fee: { type: integer, minimum: 1, maximum: 100000 }
+        city: { type: string, minLength: 2, maxLength: 100 }
+        availability: { type: array, minItems: 1, items: { type: integer, minimum: 0, maximum: 6 } }
+        online: { type: boolean }
+    Consultation:
+      type: object
+      required: [id, userId, clientName, lawyerId, lawyerName, lawyerAvatar, topic, notes, mode, package, status, startsAt, endsAt, fee, transcript, demo, createdAt]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        clientName: { type: string }
+        lawyerId: { type: string }
+        lawyerName: { type: string }
+        lawyerAvatar: { type: string }
+        topic: { type: string }
+        notes: { type: string }
+        mode: { type: string, enum: [chat, call] }
+        package: { type: string, enum: [consultation_only, consultation_document] }
+        status: { type: string, enum: [requested, booked, cancelled, completed] }
+        startsAt: { type: string }
+        endsAt: { type: string }
+        fee: { type: integer }
+        transcript: { type: string }
+        demo: { type: boolean }
+        createdAt: { type: string }
+    ConsultationInput:
+      type: object
+      required: [lawyerId, startsAt, topic, mode, package]
+      properties:
+        lawyerId: { type: string }
+        startsAt: { type: string, format: date-time }
+        topic: { type: string, minLength: 3, maxLength: 200 }
+        notes: { type: string, maxLength: 5000 }
+        mode: { type: string, enum: [chat, call] }
+        package: { type: string, enum: [consultation_only, consultation_document] }
+    ConsultationUpdate:
+      type: object
+      properties:
+        status: { type: string, enum: [booked, cancelled, completed] }
+        transcript: { type: string, maxLength: 100000 }
+    Message:
+      type: object
+      required: [id, consultationId, sender, senderName, content, createdAt]
+      properties:
+        id: { type: string }
+        consultationId: { type: string }
+        sender: { type: string, enum: [client, lawyer, system] }
+        senderName: { type: string }
+        content: { type: string }
+        createdAt: { type: string }
+    MessageInput:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1, maxLength: 5000 }
+    Deliverable:
+      type: object
+      required: [id, consultationId, title, content, status, createdAt]
+      properties:
+        id: { type: string }
+        consultationId: { type: string }
+        title: { type: string }
+        content: { type: string }
+        status: { type: string, enum: [draft, delivered] }
+        createdAt: { type: string }
+    DeliverableInput:
+      type: object
+      required: [title, content, status]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        content: { type: string, maxLength: 100000 }
+        status: { type: string, enum: [draft, delivered] }
+    Review:
+      type: object
+      required: [id, consultationId, lawyerId, clientName, rating, comment, visible, moderationReason, createdAt]
+      properties:
+        id: { type: string }
+        consultationId: { type: string }
+        lawyerId: { type: string }
+        clientName: { type: string }
+        rating: { type: integer }
+        comment: { type: string }
+        visible: { type: boolean }
+        moderationReason: { type: string }
+        createdAt: { type: string }
+    ReviewInput:
+      type: object
+      required: [rating, comment]
+      properties:
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string, maxLength: 2000 }
+    Document:
+      type: object
+      required: [id, title, content, templateId, category, language, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        content: { type: string }
+        templateId: { type: string }
+        category: { type: string }
+        language: { type: string }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    DocumentInput:
+      type: object
+      required: [title, content, language]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        content: { type: string, maxLength: 100000 }
+        templateId: { type: string }
+        category: { type: string }
+        language: { type: string }
+    WritingInput:
+      type: object
+      required: [action, text, language]
+      properties:
+        action: { type: string, enum: [draft, translate, improve] }
+        text: { type: string, minLength: 1, maxLength: 30000 }
+        language: { type: string, minLength: 2, maxLength: 50 }
+    AudioInput:
+      type: object
+      required: [audio, mimeType]
+      properties:
+        audio: { type: string, maxLength: 15000000 }
+        mimeType: { type: string, enum: [audio/webm, audio/mp4, audio/wav, audio/ogg] }
+        language: { type: string }
+    TextResult:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string }
+    Notification:
+      type: object
+      required: [id, title, body, read, link, createdAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        body: { type: string }
+        read: { type: boolean }
+        link: { type: string }
+        createdAt: { type: string }
+    AdminOverview:
+      type: object
+      required: [users, lawyers, pendingLawyers, consultations, completedConsultations, documents]
+      properties:
+        users: { type: integer }
+        lawyers: { type: integer }
+        pendingLawyers: { type: integer }
+        consultations: { type: integer }
+        completedConsultations: { type: integer }
+        documents: { type: integer }
+    UserModeration:
+      type: object
+      required: [status, reason]
+      properties:
+        status: { type: string, enum: [active, suspended, deactivated] }
+        reason: { type: string, minLength: 3, maxLength: 1000 }
+    LawyerModeration:
+      type: object
+      required: [approvalStatus, reason]
+      properties:
+        approvalStatus: { type: string, enum: [approved, rejected] }
+        reason: { type: string, minLength: 3, maxLength: 1000 }
+    ReviewModeration:
+      type: object
+      required: [visible, reason]
+      properties:
+        visible: { type: boolean }
+        reason: { type: string, minLength: 3, maxLength: 1000 }
+    CheckoutInput:
+      type: object
+      required: [plan]
+      properties:
+        plan: { type: string, enum: [single, monthly] }

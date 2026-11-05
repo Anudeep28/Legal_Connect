@@ -1,0 +1,1 @@
+- [Product scope](product-scope.md) — separate successor to the owner's existing legal app; preserve its full client/lawyer/admin and document workflows.

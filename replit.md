@@ -1,45 +1,62 @@
-# [Project name]
+# Consult with Lawyer
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Indian lawyer discovery, consultation requests, messaging, document drafting, and role-specific client, lawyer, and admin workspaces.
 
-## Run & Operate
+## Product direction and boundaries
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Read `.agents/memory/product-scope.md` for the owner's direction on product provenance and the boundary with the existing live service before any import or migration.
+- This is currently a pilot. Seeded profiles are fictional, marked illustrative, and have no practitioner attached. Do not imply real verification, ratings, presence, appointments, or advice.
+- Booking saves an unpaid request; it does not collect payment. Real profile owners can accept pilot requests. Example profile requests cannot connect to a real lawyer.
+- Calls, Razorpay checkout, SMS verification, outbound email, browser push, and automated reminders are **not connected**. The UI and API must not simulate success.
+- Clerk handles sign-in and email verification. App roles and resource ownership are enforced by the API, never client-selected or granted to the first visitor.
+- AI drafts/translations are preliminary and require advocate review. Original templates include historical legislation; statutory applicability must be checked before use.
 
-## Stack
+## Run and check
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- API workflow: `artifacts/api-server: API Server`
+- Web workflow: `artifacts/consult-lawyer: web`
+- Canvas remains a separate pre-existing mockup service; it is not the app.
+- `pnpm run typecheck` — all packages.
+- `pnpm --filter @workspace/api-spec run codegen` — regenerate clients and validators after contract changes.
+- `pnpm --filter @workspace/db run push` — development schema only.
+- `pnpm --filter @workspace/api-server run seed` — explicitly add example profiles, idempotently. Never seed automatically in production.
+- `pnpm --filter @workspace/api-server run grant-admin -- <owner-designated-email>` — grant admin to an existing verified Clerk account in the current environment. Never infer the owner email or assign a default password. Development and production identities are separate.
 
-## Where things live
+## Structure and sources of truth
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/consult-lawyer/` — React/Vite frontend, public marketplace, auth, consultation, editor, and admin routes.
+- `artifacts/api-server/src/routes/` — domain routes: marketplace, account, consultations, documents, admin, writing.
+- `artifacts/api-server/src/middlewares/access.ts` — Clerk/local-account bridge, role checks, same-origin write protection, sanitized error handler.
+- `artifacts/api-server/src/lib/legal.ts` — shared consultation access, directory aggregation and IST slots.
+- `artifacts/api-server/src/data/` — actual templates and language definitions reused from the owner's repository.
+- `lib/api-spec/openapi.yaml` — API contract; `@workspace/api-client-react` and `@workspace/api-zod` are generated.
+- `lib/db/src/schema/` — isolated pilot PostgreSQL schema via Drizzle. Do not replace or migrate the original app's Prisma database.
+- `lib/integrations-openai-ai-server/` — managed OpenAI integration client and audio conversion utilities.
 
-## Architecture decisions
+## Core behavior
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Public discovery: legal area, name/city, language, availability, fee/experience/rating sort, full profiles, visible reviews and IST half-hour slots.
+- Booking: snapshot fee in INR for a 30-minute consultation, optional 50% document package, unique active lawyer/time slot, participant-only access and cancellation.
+- Consultation: role-scoped requests, lawyer acceptance/completion, 4-second message polling, editable lawyer transcript, lawyer draft/delivered documents, client sees delivered documents only. Closed chats are read-only.
+- Reviews: only the client of a completed **non-demo** consultation, one review per consultation; ratings aggregate visible reviews.
+- Lawyer application: credentials submitted for manual review; credential edits revoke approval, weekday/online changes do not. Pending applicants may use document drafting.
+- Documents: create, edit, duplicate, delete, templates with field filling, Markdown preview, PDF/DOCX/Markdown export, AI assistance and recorded-audio transcription.
+- Trial: new-document creation and duplication are allowed for two days from account creation, then require document credits. Existing-document editing/export remains available. Paid plans cannot activate without a real verified payment integration.
+- Notifications: persisted in-app events, read state and account email preference (preference is not email delivery).
+- Admin: overview, lawyer approval/rejection, user suspension/reactivation, review moderation, required reasons and audit log. Suspending a lawyer unpublishes the profile.
 
-## Product
+## Integration details and gotchas
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Use managed artifact workflows, not root `pnpm dev` or duplicate service commands.
+- Browser API calls use same-origin Clerk session cookies, not manually added bearer tokens.
+- Clerk production proxy is `/api/__clerk`, mounted before body parsing. Keep canonical host-derived publishable-key wiring.
+- Queries return values directly, not an envelope. Invalidate affected caches after mutations, and clear account caches when identity changes.
+- All consultation times display in `Asia/Kolkata`. API slot dates use `YYYY-MM-DD`; stored instants use ISO timezone-aware timestamps.
+- The slot endpoint puts date in the path to avoid conflicting generated parameter exports.
+- AI requires managed OpenAI integration variables; usage is billed to Replit credits. Limit AI operations by authenticated account and do not log legal text or SQL parameter errors.
+- Audio is processed transiently and deleted after conversion, not stored as base64 in PostgreSQL. Persistent future uploads require App Storage.
+- No database DDL or seeding on server startup. Replit's publish flow handles managed production schema changes.
 
-## User preferences
+## Launch prerequisites
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+Before offering real paid legal services: designate the owner admin account, onboard and verify real lawyers, connect and verify Razorpay payments and subscription entitlements, connect calls and notification delivery, review legal/privacy/refund terms and professional advertising rules with qualified counsel, and exercise signed-in multi-role workflows end to end.

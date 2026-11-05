@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Consult with Lawyer"
+description = "An Indian legal consultation marketplace connecting clients with lawyers, with consultation booking, messaging, document drafting, and lawyer and admin workspaces based on the existing law_consultation app."
+version = "1.0.0"
+id = "artifacts/consult-lawyer"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22833
+
+[services.development]
+run = "pnpm --filter @workspace/consult-lawyer run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/consult-lawyer", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/consult-lawyer/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22833"
+BASE_PATH = "/"
