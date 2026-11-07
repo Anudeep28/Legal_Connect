@@ -14,6 +14,13 @@ export interface Platform {
   demo: boolean;
   paymentsEnabled: boolean;
   callsEnabled: boolean;
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  phoneVerificationEnabled: boolean;
+  recordingEnabled: false;
+  remindersEnabled: boolean;
+  /** @nullable */
+  pushPublicKey?: string | null;
   aiEnabled: boolean;
   categories: Category[];
   templates: Template[];

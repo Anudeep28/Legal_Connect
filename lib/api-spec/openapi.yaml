@@ -6,6 +6,110 @@ info:
 servers:
   - url: /api
 paths:
+  /communications/dispatch:
+    post:
+      operationId: dispatchCommunications
+      description: Machine-only scheduler endpoint. Requires COMMUNICATION_WORKER_SECRET, never a browser session. Acknowledges a worker tick, not delivery.
+      security:
+        - SchedulerKey: []
+      responses:
+        "202":
+          description: Dispatch tick acknowledged
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionResult" }
+        "401":
+          description: Scheduler authorization missing or invalid
+        "503":
+          description: Scheduler secret not configured
+  /me/phone/challenge:
+    post:
+      operationId: requestPhoneVerification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PhoneInput" }
+      responses:
+        "200":
+          description: Provider accepted the SMS verification request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VerificationChallenge" }
+  /me/phone/verify:
+    post:
+      operationId: confirmPhoneVerification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PhoneCodeInput" }
+      responses:
+        "200":
+          description: Provider verified the phone
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+  /me/push-subscriptions:
+    post:
+      operationId: savePushSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PushSubscriptionInput" }
+      responses:
+        "200":
+          description: Saved subscription and enabled push preference
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionResult" }
+    delete:
+      operationId: removePushSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PushEndpointInput" }
+      responses:
+        "200":
+          description: Removed this browser subscription
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionResult" }
+  /me/deliveries:
+    get:
+      operationId: listCommunicationDeliveries
+      responses:
+        "200":
+          description: Recent outbound delivery attempts, not inbox receipts
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CommunicationDelivery" } }
+  /consultations/{id}/call:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      operationId: getConsultationCall
+      responses:
+        "200":
+          description: Participant-only call eligibility
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallAvailability" }
+    post:
+      operationId: joinConsultationCall
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallConsentInput" }
+      responses:
+        "200":
+          description: Short-lived participant-scoped Twilio audio-room token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallAccess" }
   /healthz:
     get:
       operationId: healthCheck
@@ -538,6 +642,10 @@ paths:
         "200":
           description: Event applied or already processed
 components:
+  securitySchemes:
+    SchedulerKey:
+      type: http
+      scheme: bearer
   parameters:
     Id:
       name: id
@@ -595,12 +703,18 @@ components:
         features: { type: array, items: { type: string } }
     Platform:
       type: object
-      required: [name, demo, paymentsEnabled, callsEnabled, aiEnabled, categories, templates, languages, plans, lawyerCount, onlineCount]
+      required: [name, demo, paymentsEnabled, callsEnabled, emailEnabled, pushEnabled, phoneVerificationEnabled, recordingEnabled, remindersEnabled, aiEnabled, categories, templates, languages, plans, lawyerCount, onlineCount]
       properties:
         name: { type: string }
         demo: { type: boolean }
         paymentsEnabled: { type: boolean }
         callsEnabled: { type: boolean }
+        emailEnabled: { type: boolean }
+        pushEnabled: { type: boolean }
+        phoneVerificationEnabled: { type: boolean }
+        recordingEnabled: { type: boolean, const: false }
+        remindersEnabled: { type: boolean }
+        pushPublicKey: { type: ["string", "null"] }
         aiEnabled: { type: boolean }
         categories: { type: array, items: { $ref: "#/components/schemas/Category" } }
         templates: { type: array, items: { $ref: "#/components/schemas/Template" } }
@@ -610,7 +724,7 @@ components:
         onlineCount: { type: integer }
     Account:
       type: object
-      required: [id, name, email, role, status, emailNotifications, subscriptionPlan, documentCredits, createdAt]
+      required: [id, name, email, role, status, emailNotifications, pushNotifications, phone, phoneVerifiedAt, subscriptionPlan, documentCredits, createdAt]
       properties:
         id: { type: string }
         name: { type: string }
@@ -618,6 +732,9 @@ components:
         role: { type: string, enum: [client, lawyer, admin] }
         status: { type: string, enum: [active, suspended, deactivated] }
         emailNotifications: { type: boolean }
+        pushNotifications: { type: boolean }
+        phone: { type: ["string", "null"] }
+        phoneVerifiedAt: { type: ["string", "null"] }
         subscriptionPlan: { type: string }
         subscriptionExpiresAt: { type: string, nullable: true }
         documentCredits: { type: integer }
@@ -627,6 +744,80 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
         emailNotifications: { type: boolean }
+        pushNotifications: { type: boolean }
+    PhoneInput:
+      type: object
+      required: [phone]
+      properties:
+        phone: { type: string, pattern: '^\+[1-9]\d{7,14}$' }
+    PhoneCodeInput:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, pattern: '^\d{4,10}$' }
+    VerificationChallenge:
+      type: object
+      required: [maskedPhone, expiresAt]
+      properties:
+        maskedPhone: { type: string }
+        expiresAt: { type: string }
+    PushEndpointInput:
+      type: object
+      required: [endpoint]
+      properties:
+        endpoint: { type: string, format: uri, maxLength: 2048 }
+    PushSubscriptionInput:
+      type: object
+      required: [endpoint, keys]
+      properties:
+        endpoint: { type: string, format: uri, maxLength: 2048 }
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh: { type: string, minLength: 80, maxLength: 100 }
+            auth: { type: string, minLength: 20, maxLength: 30 }
+    ActionResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+    CallConsentInput:
+      type: object
+      required: [microphoneConsent, recordingDisabledAcknowledged]
+      properties:
+        microphoneConsent: { type: boolean, const: true }
+        recordingDisabledAcknowledged: { type: boolean, const: true }
+    CallAvailability:
+      type: object
+      required: [enabled, canJoin, reason, recordingEnabled, opensAt, closesAt]
+      properties:
+        enabled: { type: boolean }
+        canJoin: { type: boolean }
+        reason: { type: string }
+        recordingEnabled: { type: boolean, const: false }
+        opensAt: { type: string }
+        closesAt: { type: string }
+    CallAccess:
+      type: object
+      required: [token, room, expiresAt, closesAt, recordingEnabled]
+      properties:
+        token: { type: string }
+        room: { type: string }
+        expiresAt: { type: string }
+        closesAt: { type: string }
+        recordingEnabled: { type: boolean, const: false }
+    CommunicationDelivery:
+      type: object
+      required: [id, channel, status, attempts, nextAttemptAt, lastError, createdAt]
+      properties:
+        id: { type: string }
+        channel: { type: string, enum: [email, push] }
+        status: { type: string, enum: [pending, processing, retry, blocked, accepted, skipped, failed] }
+        attempts: { type: integer }
+        nextAttemptAt: { type: string }
+        lastError: { type: ["string", "null"] }
+        createdAt: { type: string }
     Lawyer:
       type: object
       required: [id, name, title, bio, practiceAreas, languages, experienceYears, barCouncil, enrollmentNumber, fee, documentFeePercent, rating, reviewCount, verified, approvalStatus, online, city, avatarUrl, demo, availability, rejectionReason]

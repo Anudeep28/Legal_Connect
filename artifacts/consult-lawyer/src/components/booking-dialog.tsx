@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
-import { MessageSquareText, PhoneOff, FileSignature, Info, Loader2, CalendarX2 } from 'lucide-react';
+import { MessageSquareText, Phone, FileSignature, Info, Loader2, CalendarX2 } from 'lucide-react';
 import {
   useGetLawyerSlots,
   getGetLawyerSlotsQueryKey,
@@ -34,17 +34,18 @@ export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { la
   const [topic, setTopic] = useState('');
   const [notes, setNotes] = useState('');
   const [pkg, setPkg] = useState<ConsultationInputPackage>('consultation_only');
+  const [mode, setMode] = useState<'chat' | 'call'>('chat');
   const slots = useGetLawyerSlots(lawyer.id, date, { query: { enabled: open && signedIn, queryKey: getGetLawyerSlotsQueryKey(lawyer.id, date) } });
   const create = useCreateConsultation();
 
   const docFee = Math.round((lawyer.fee * lawyer.documentFeePercent) / 100);
   const total = pkg === 'consultation_document' ? lawyer.fee + docFee : lawyer.fee;
-  const canSubmit = !!slot && topic.trim().length >= 3 && !create.isPending;
+  const canSubmit = !!slot && topic.trim().length >= 3 && !create.isPending && (mode === 'chat' || (callsEnabled && !lawyer.demo));
 
   const submit = () => {
-    if (!slot) return;
+    if (!slot || !canSubmit) return;
     create.mutate(
-      { data: { lawyerId: lawyer.id, startsAt: slot, topic: topic.trim(), notes: notes.trim() || undefined, mode: 'chat', package: pkg } },
+      { data: { lawyerId: lawyer.id, startsAt: slot, topic: topic.trim(), notes: notes.trim() || undefined, mode, package: pkg } },
       {
         onSuccess: (c) => {
           qc.invalidateQueries({ queryKey: getListConsultationsQueryKey() });
@@ -141,13 +142,13 @@ export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { la
               )}
             </section>
             <section className="grid gap-3 sm:grid-cols-2">
-              <button type="button" className="flex items-start gap-3 rounded-2xl border-2 border-primary bg-primary/5 p-4 text-left" data-testid="button-mode-chat">
+              <button type="button" onClick={() => setMode('chat')} aria-pressed={mode === 'chat'} className={cn("flex items-start gap-3 rounded-2xl border-2 p-4 text-left", mode === 'chat' ? 'border-primary bg-primary/5' : 'border-border')} data-testid="button-mode-chat">
                 <MessageSquareText className="mt-0.5 h-5 w-5 text-primary" />
                 <span><span className="block font-medium">Chat</span><span className="text-xs text-muted-foreground">Written messages inside the consultation</span></span>
               </button>
-              <button type="button" disabled className="flex cursor-not-allowed items-start gap-3 rounded-2xl border p-4 text-left opacity-50" data-testid="button-mode-call">
-                <PhoneOff className="mt-0.5 h-5 w-5" />
-                <span><span className="block font-medium">Call</span><span className="text-xs text-muted-foreground">{callsEnabled ? 'Available' : 'Not connected in this pilot'}</span></span>
+              <button type="button" disabled={!callsEnabled || lawyer.demo} onClick={() => setMode('call')} aria-pressed={mode === 'call'} className={cn("flex items-start gap-3 rounded-2xl border-2 p-4 text-left disabled:cursor-not-allowed disabled:opacity-50", mode === 'call' ? 'border-primary bg-primary/5' : 'border-border')} data-testid="button-mode-call">
+                <Phone className="mt-0.5 h-5 w-5" />
+                <span><span className="block font-medium">Call</span><span className="text-xs text-muted-foreground">{lawyer.demo ? 'Unavailable for illustrative profiles' : callsEnabled ? 'Private audio through Twilio' : 'Twilio is not configured'}</span></span>
               </button>
             </section>
             <section className="grid gap-3 sm:grid-cols-2">

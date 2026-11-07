@@ -16,10 +16,10 @@ router.get("/me", async (req, res): Promise<void> => {
 router.patch("/me", async (req, res): Promise<void> => {
   const input = UpdateMeBody.parse(req.body);
   if (input.name !== undefined && !input.name.trim()) throw new HttpError(400, "Please enter your name.");
-  // Preserve the preference, but email delivery is not claimed until a provider is connected.
   const [account] = await db.update(accounts).set({
     ...(input.name !== undefined ? { name: input.name.trim() } : {}),
     ...(input.emailNotifications !== undefined ? { emailNotifications: input.emailNotifications } : {}),
+    ...(input.pushNotifications !== undefined ? { pushNotifications: input.pushNotifications } : {}),
   }).where(eq(accounts.id, req.account.id)).returning();
   res.json(UpdateMeResponse.parse(account));
 });

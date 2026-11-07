@@ -8,6 +8,137 @@
 import * as zod from 'zod';
 
 
+/**
+ * Machine-only scheduler endpoint. Requires COMMUNICATION_WORKER_SECRET, never a browser session. Acknowledges a worker tick, not delivery.
+ */
+export const DispatchCommunicationsResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+export const requestPhoneVerificationBodyPhoneRegExp = new RegExp('^\\+[1-9]\\d{7,14}$');
+
+
+export const RequestPhoneVerificationBody = zod.object({
+  "phone": zod.string().regex(requestPhoneVerificationBodyPhoneRegExp)
+})
+
+export const RequestPhoneVerificationResponse = zod.object({
+  "maskedPhone": zod.string(),
+  "expiresAt": zod.string()
+})
+
+
+export const confirmPhoneVerificationBodyCodeRegExp = new RegExp('^\\d{4,10}$');
+
+
+export const ConfirmPhoneVerificationBody = zod.object({
+  "code": zod.string().regex(confirmPhoneVerificationBodyCodeRegExp)
+})
+
+export const ConfirmPhoneVerificationResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['client', 'lawyer', 'admin']),
+  "status": zod.enum(['active', 'suspended', 'deactivated']),
+  "emailNotifications": zod.boolean(),
+  "pushNotifications": zod.boolean(),
+  "phone": zod.string().nullable(),
+  "phoneVerifiedAt": zod.string().nullable(),
+  "subscriptionPlan": zod.string(),
+  "subscriptionExpiresAt": zod.string().nullish(),
+  "documentCredits": zod.number().int(),
+  "createdAt": zod.string()
+})
+
+
+export const savePushSubscriptionBodyEndpointMax = 2048;
+
+export const savePushSubscriptionBodyKeysP256dhMin = 80;
+export const savePushSubscriptionBodyKeysP256dhMax = 100;
+
+export const savePushSubscriptionBodyKeysAuthMin = 20;
+export const savePushSubscriptionBodyKeysAuthMax = 30;
+
+
+
+export const SavePushSubscriptionBody = zod.object({
+  "endpoint": zod.string().url().max(savePushSubscriptionBodyEndpointMax),
+  "keys": zod.object({
+  "p256dh": zod.string().min(savePushSubscriptionBodyKeysP256dhMin).max(savePushSubscriptionBodyKeysP256dhMax),
+  "auth": zod.string().min(savePushSubscriptionBodyKeysAuthMin).max(savePushSubscriptionBodyKeysAuthMax)
+})
+})
+
+export const SavePushSubscriptionResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+export const removePushSubscriptionBodyEndpointMax = 2048;
+
+
+
+export const RemovePushSubscriptionBody = zod.object({
+  "endpoint": zod.string().url().max(removePushSubscriptionBodyEndpointMax)
+})
+
+export const RemovePushSubscriptionResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+export const ListCommunicationDeliveriesResponseItem = zod.object({
+  "id": zod.string(),
+  "channel": zod.enum(['email', 'push']),
+  "status": zod.enum(['pending', 'processing', 'retry', 'blocked', 'accepted', 'skipped', 'failed']),
+  "attempts": zod.number().int(),
+  "nextAttemptAt": zod.string(),
+  "lastError": zod.string().nullable(),
+  "createdAt": zod.string()
+})
+export const ListCommunicationDeliveriesResponse = zod.array(ListCommunicationDeliveriesResponseItem)
+
+
+
+
+
+export const GetConsultationCallParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const GetConsultationCallResponse = zod.object({
+  "enabled": zod.boolean(),
+  "canJoin": zod.boolean(),
+  "reason": zod.string(),
+  "recordingEnabled": zod.literal(false),
+  "opensAt": zod.string(),
+  "closesAt": zod.string()
+})
+
+
+
+
+
+export const JoinConsultationCallParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const JoinConsultationCallBody = zod.object({
+  "microphoneConsent": zod.literal(true),
+  "recordingDisabledAcknowledged": zod.literal(true)
+})
+
+export const JoinConsultationCallResponse = zod.object({
+  "token": zod.string(),
+  "room": zod.string(),
+  "expiresAt": zod.string(),
+  "closesAt": zod.string(),
+  "recordingEnabled": zod.literal(false)
+})
+
+
 export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
@@ -18,6 +149,12 @@ export const GetPlatformResponse = zod.object({
   "demo": zod.boolean(),
   "paymentsEnabled": zod.boolean(),
   "callsEnabled": zod.boolean(),
+  "emailEnabled": zod.boolean(),
+  "pushEnabled": zod.boolean(),
+  "phoneVerificationEnabled": zod.boolean(),
+  "recordingEnabled": zod.literal(false),
+  "remindersEnabled": zod.boolean(),
+  "pushPublicKey": zod.string().nullish(),
   "aiEnabled": zod.boolean(),
   "categories": zod.array(zod.object({
   "id": zod.string(),
@@ -59,6 +196,9 @@ export const GetMeResponse = zod.object({
   "role": zod.enum(['client', 'lawyer', 'admin']),
   "status": zod.enum(['active', 'suspended', 'deactivated']),
   "emailNotifications": zod.boolean(),
+  "pushNotifications": zod.boolean(),
+  "phone": zod.string().nullable(),
+  "phoneVerifiedAt": zod.string().nullable(),
   "subscriptionPlan": zod.string(),
   "subscriptionExpiresAt": zod.string().nullish(),
   "documentCredits": zod.number().int(),
@@ -72,7 +212,8 @@ export const updateMeBodyNameMax = 100;
 
 export const UpdateMeBody = zod.object({
   "name": zod.string().min(1).max(updateMeBodyNameMax).optional(),
-  "emailNotifications": zod.boolean().optional()
+  "emailNotifications": zod.boolean().optional(),
+  "pushNotifications": zod.boolean().optional()
 })
 
 export const UpdateMeResponse = zod.object({
@@ -82,6 +223,9 @@ export const UpdateMeResponse = zod.object({
   "role": zod.enum(['client', 'lawyer', 'admin']),
   "status": zod.enum(['active', 'suspended', 'deactivated']),
   "emailNotifications": zod.boolean(),
+  "pushNotifications": zod.boolean(),
+  "phone": zod.string().nullable(),
+  "phoneVerifiedAt": zod.string().nullable(),
   "subscriptionPlan": zod.string(),
   "subscriptionExpiresAt": zod.string().nullish(),
   "documentCredits": zod.number().int(),
@@ -761,6 +905,9 @@ export const ListAdminUsersResponseItem = zod.object({
   "role": zod.enum(['client', 'lawyer', 'admin']),
   "status": zod.enum(['active', 'suspended', 'deactivated']),
   "emailNotifications": zod.boolean(),
+  "pushNotifications": zod.boolean(),
+  "phone": zod.string().nullable(),
+  "phoneVerifiedAt": zod.string().nullable(),
   "subscriptionPlan": zod.string(),
   "subscriptionExpiresAt": zod.string().nullish(),
   "documentCredits": zod.number().int(),
@@ -793,6 +940,9 @@ export const ModerateUserResponse = zod.object({
   "role": zod.enum(['client', 'lawyer', 'admin']),
   "status": zod.enum(['active', 'suspended', 'deactivated']),
   "emailNotifications": zod.boolean(),
+  "pushNotifications": zod.boolean(),
+  "phone": zod.string().nullable(),
+  "phoneVerifiedAt": zod.string().nullable(),
   "subscriptionPlan": zod.string(),
   "subscriptionExpiresAt": zod.string().nullish(),
   "documentCredits": zod.number().int(),

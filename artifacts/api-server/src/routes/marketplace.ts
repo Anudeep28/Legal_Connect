@@ -13,6 +13,7 @@ import { availableSlots, categoryNames, lawyerViews } from "../lib/legal";
 import { legalTemplates } from "../data/templates";
 import { supportedLanguages } from "../data/languages";
 import { paymentsEnabled } from "../lib/razorpay";
+import { communicationServices } from "../lib/communication-config";
 
 const router: IRouter = Router();
 
@@ -22,7 +23,7 @@ router.get("/platform", async (_req, res): Promise<void> => {
     name: "Consult with Lawyer",
     demo: rows.some((l) => l.demo),
     paymentsEnabled: paymentsEnabled(),
-    callsEnabled: false,
+    ...communicationServices(),
     aiEnabled: Boolean(process.env.AI_INTEGRATIONS_OPENAI_BASE_URL),
     categories: categoryNames.map(([id, name, description]) => ({ id, name, description, count: rows.filter((l) => l.practiceAreas.includes(name)).length })),
     templates: legalTemplates.map((t) => ({

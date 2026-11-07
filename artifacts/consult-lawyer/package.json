@@ -80,5 +80,8 @@
     "vite": "catalog:",
     "wouter": "^3.3.5",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "twilio-video": "^2.36.1"
   }
 }

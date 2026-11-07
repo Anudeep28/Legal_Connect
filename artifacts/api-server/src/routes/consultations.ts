@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, eq, asc } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { callsEnabled } from "../lib/communication-config";
 import { db, lawyers, consultations, messages, deliverables, reviews, notifications } from "@workspace/db";
 import * as api from "@workspace/api-zod";
 import { requireAccount, HttpError } from "../middlewares/access";
@@ -18,7 +19,7 @@ router.post("/consultations", async (req, res): Promise<void> => {
   const input = api.CreateConsultationBody.parse(req.body);
   if (req.account.role === "admin") throw new HttpError(403, "Use a client account to request consultations.");
   if (!input.topic.trim() || input.topic.trim().length < 3) throw new HttpError(400, "Please describe the legal issue.");
-  if (input.mode === "call") throw new HttpError(503, "Live calling is not connected in this separate version. Please choose chat.");
+  if (input.mode === "call" && !callsEnabled()) throw new HttpError(503, "Twilio calling is not configured. Please choose chat.");
   const [lawyer] = await db.select().from(lawyers).where(and(eq(lawyers.id, input.lawyerId), eq(lawyers.approvalStatus, "approved")));
   if (!lawyer) throw new HttpError(404, "Lawyer profile not found.");
   if (lawyer.ownerId === req.account.id) throw new HttpError(400, "You cannot book your own profile.");

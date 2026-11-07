@@ -50,6 +50,13 @@ export interface Platform {
   demo: boolean;
   paymentsEnabled: boolean;
   callsEnabled: boolean;
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  phoneVerificationEnabled: boolean;
+  recordingEnabled: false;
+  remindersEnabled: boolean;
+  /** @nullable */
+  pushPublicKey?: string | null;
   aiEnabled: boolean;
   categories: Category[];
   templates: Template[];
@@ -84,6 +91,11 @@ export interface Account {
   role: AccountRole;
   status: AccountStatus;
   emailNotifications: boolean;
+  pushNotifications: boolean;
+  /** @nullable */
+  phone: string | null;
+  /** @nullable */
+  phoneVerifiedAt: string | null;
   subscriptionPlan: string;
   /** @nullable */
   subscriptionExpiresAt?: string | null;
@@ -98,6 +110,105 @@ export interface AccountInput {
      */
   name?: string;
   emailNotifications?: boolean;
+  pushNotifications?: boolean;
+}
+
+export interface PhoneInput {
+  /** @pattern ^\+[1-9]\d{7,14}$ */
+  phone: string;
+}
+
+export interface PhoneCodeInput {
+  /** @pattern ^\d{4,10}$ */
+  code: string;
+}
+
+export interface VerificationChallenge {
+  maskedPhone: string;
+  expiresAt: string;
+}
+
+export interface PushEndpointInput {
+  /** @maxLength 2048 */
+  endpoint: string;
+}
+
+export type PushSubscriptionInputKeys = {
+  /**
+     * @minLength 80
+     * @maxLength 100
+     */
+  p256dh: string;
+  /**
+     * @minLength 20
+     * @maxLength 30
+     */
+  auth: string;
+};
+
+export interface PushSubscriptionInput {
+  /** @maxLength 2048 */
+  endpoint: string;
+  keys: PushSubscriptionInputKeys;
+}
+
+export interface ActionResult {
+  ok: boolean;
+}
+
+export const CallConsentInputValue = {
+  microphoneConsent: true,
+  recordingDisabledAcknowledged: true,
+} as const;
+export type CallConsentInput = typeof CallConsentInputValue;
+
+export interface CallAvailability {
+  enabled: boolean;
+  canJoin: boolean;
+  reason: string;
+  recordingEnabled: false;
+  opensAt: string;
+  closesAt: string;
+}
+
+export interface CallAccess {
+  token: string;
+  room: string;
+  expiresAt: string;
+  closesAt: string;
+  recordingEnabled: false;
+}
+
+export type CommunicationDeliveryChannel = typeof CommunicationDeliveryChannel[keyof typeof CommunicationDeliveryChannel];
+
+
+export const CommunicationDeliveryChannel = {
+  email: 'email',
+  push: 'push',
+} as const;
+
+export type CommunicationDeliveryStatus = typeof CommunicationDeliveryStatus[keyof typeof CommunicationDeliveryStatus];
+
+
+export const CommunicationDeliveryStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  retry: 'retry',
+  blocked: 'blocked',
+  accepted: 'accepted',
+  skipped: 'skipped',
+  failed: 'failed',
+} as const;
+
+export interface CommunicationDelivery {
+  id: string;
+  channel: CommunicationDeliveryChannel;
+  status: CommunicationDeliveryStatus;
+  attempts: number;
+  nextAttemptAt: string;
+  /** @nullable */
+  lastError: string | null;
+  createdAt: string;
 }
 
 export type LawyerApprovalStatus = typeof LawyerApprovalStatus[keyof typeof LawyerApprovalStatus];

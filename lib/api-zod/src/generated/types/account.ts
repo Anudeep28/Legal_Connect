@@ -15,6 +15,11 @@ export interface Account {
   role: AccountRole;
   status: AccountStatus;
   emailNotifications: boolean;
+  pushNotifications: boolean;
+  /** @nullable */
+  phone: string | null;
+  /** @nullable */
+  phoneVerifiedAt: string | null;
   subscriptionPlan: string;
   /** @nullable */
   subscriptionExpiresAt?: string | null;

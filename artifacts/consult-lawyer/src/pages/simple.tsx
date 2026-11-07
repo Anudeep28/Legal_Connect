@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CommunicationSettings } from '@/components/communication-settings';
 import { Link, useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, Bell, CheckCheck, Info, Scale, FileText, MessagesSquare, CalendarDays, Mic, ArrowRight } from 'lucide-react';
@@ -121,6 +122,7 @@ export function Settings() {
   );
 }
 function SettingsForm({ me }: { me: Account }) {
+  const platform = useGetPlatform();
   const [name, setName] = useState(me.name);
   const [emails, setEmails] = useState(me.emailNotifications);
   const upd = useUpdateMe();
@@ -140,6 +142,7 @@ function SettingsForm({ me }: { me: Account }) {
       },
     );
   return (
+    <div className="space-y-6">
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="space-y-6 rounded-3xl border bg-card p-6 md:p-8">
         <div>
@@ -152,7 +155,7 @@ function SettingsForm({ me }: { me: Account }) {
           <p className="mt-1.5 text-sm" data-testid="text-email">{me.email}</p>
         </div>
         <label className="flex items-start justify-between gap-6 rounded-2xl border p-4">
-          <span><span className="block font-medium">Email notifications preference</span><span className="text-sm text-muted-foreground">Saves your preference only. Email, push and SMS delivery are not connected in this pilot, so no messages are sent; updates appear in in-app Notifications.</span></span>
+          <span><span className="block font-medium">Email notifications preference</span><span className="text-sm text-muted-foreground">{platform.data?.emailEnabled ? 'Resend is configured. Opt in to outbound updates and appointment reminders. Delivery status is shown below.' : 'Resend is not configured. You can save your preference, but no email can be sent. Updates remain available in in-app Notifications.'}</span></span>
           <Switch checked={emails} onCheckedChange={setEmails} data-testid="switch-email" />
         </label>
         <Button onClick={save} disabled={!dirty || name.trim().length < 1 || upd.isPending} className="rounded-full" data-testid="button-save-settings">{upd.isPending && <Loader2 className="animate-spin" />} Save changes</Button>
@@ -167,6 +170,8 @@ function SettingsForm({ me }: { me: Account }) {
         <Row k="Member since" v={fmtDate(me.createdAt)} />
         {me.role === 'client' && <Link href="/lawyer/profile" className="mt-2 inline-flex items-center gap-1 font-medium text-primary">Apply as a lawyer <ArrowRight className="h-4 w-4" /></Link>}
       </aside>
+    </div>
+    <CommunicationSettings key={me.id} me={me} />
     </div>
   );
 }

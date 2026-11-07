@@ -32,6 +32,7 @@ import { errMsg, fmtDateTime, fmtTime, inr } from '@/lib/format';
 import { exportDocx, exportMarkdown, exportPdf } from '@/lib/export';
 import { usePaymentCheckout } from '@/hooks/use-payment-checkout';
 import { PaymentHistory } from '@/components/payment-history';
+import { ConsultationCall } from '@/components/consultation-call';
 
 export default function ConsultationDetail() {
   const { id = '' } = useParams<{ id: string }>();
@@ -56,6 +57,7 @@ function Inner({ id, me }: { id: string; me: Account }) {
     <div>
       <Header c={c} asClient={asClient} isClient={isClient} />
       {isClient && <ConsultationPayment c={c} />}
+      {c.mode === 'call' && (isClient || me.role === 'lawyer') && <ConsultationCall consultation={c} />}
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.25fr_1fr]">
         <Messages c={c} asClient={asClient} />
         <div className="space-y-6">

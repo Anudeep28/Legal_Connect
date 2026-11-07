@@ -13,4 +13,5 @@ export interface AccountInput {
      */
   name?: string;
   emailNotifications?: boolean;
+  pushNotifications?: boolean;
 }

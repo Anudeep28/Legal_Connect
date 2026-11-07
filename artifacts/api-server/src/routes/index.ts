@@ -7,6 +7,7 @@ import documentsRouter from "./documents";
 import adminRouter from "./admin";
 import writingRouter from "./writing";
 import billingRouter from "./billing";
+import communicationRouter from "./communication";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(documentsRouter);
 router.use(adminRouter);
 router.use(writingRouter);
 router.use(billingRouter);
+router.use(communicationRouter);
 
 export default router;
