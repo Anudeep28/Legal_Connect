@@ -6,6 +6,7 @@
   "scripts": {
     "test:communications": "NODE_ENV=test tsx --test src/lib/__tests__/communications.test.ts",
     "test:ai": "NODE_ENV=test tsx --test src/lib/__tests__/ai-providers.test.ts",
+    "test:policy-disclosures": "NODE_ENV=test tsx --test src/lib/__tests__/policy-disclosures.test.ts",
     "seed": "tsx src/lib/seed.ts",
     "grant-admin": "tsx src/lib/grant-admin.ts",
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
