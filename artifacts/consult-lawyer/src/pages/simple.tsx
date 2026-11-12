@@ -283,7 +283,8 @@ export function ForLawyers() {
 
 /* ---------------- POLICY ---------------- */
 const policyMap: Record<string, { key: string; title: string; context: string }> = {
-  '/privacy': { key: 'privacy', title: 'Privacy Policy', context: 'In this pilot, consultation messages are visible to the client, the chosen advocate and administrators where needed. Audio you dictate is sent for transcription and is not kept as a recording by this app.' },
+  '/privacy': { key: 'privacy', title: 'Privacy Policy', context: 'Consultation messages are visible to the client, the chosen advocate and administrators where needed. Dictation audio is sent to the transcription service for your request; this Platform does not intentionally keep it as an account recording. AI services receive only the text or audio you submit for that request.' },
+  '/disclaimer': { key: 'disclaimer', title: 'Disclaimer', context: 'AI assistance and transcription are available only when the relevant provider is configured. Review AI-generated text and transcripts before relying on them.' },
   '/terms': { key: 'terms', title: 'Terms of Service', context: 'This is a separate pilot. Checkout stays disabled until Razorpay is verified. Illustrative demo profiles cannot take payments. Clients retain rights to their legal content.' },
   '/refund-policy': { key: 'refunds', title: 'Refund & Cancellation Policy', context: 'Owner-selected rules: consultation refunds for lawyer cancellation only; unused document purchases refundable within seven days, subject to mandatory applicable law. Checkout remains disabled pending provider verification.' },
 };
@@ -296,6 +297,7 @@ export function Policy({ path }: { path: string }) {
       <div className="mx-auto max-w-3xl">
         <PageHeader eyebrow="Policies" title={p.title} />
         <Notice icon={<Info />} className="mb-8">{p.context}</Notice>
+        <Notice icon={<Info />} className="mb-8">Pre-launch requirement: qualified legal counsel must review these policies before paid legal engagements are accepted. Confirm that review is complete and replace the registered-address and grievance-officer placeholders with owner-approved details before launch.</Notice>
         <article className="space-y-4 rounded-3xl border bg-card p-6 md:p-10">
           {blocks.slice(1).map((b, i) => {
             const t = b.trim();

@@ -101,25 +101,27 @@ Address: [Company registered address]
 2. PERSONAL DATA WE COLLECT
 
 2.1. Information you provide:
-- Account details: name, email address, mobile number, password (stored as a salted hash)
+- Account details: name, email address, and, if you choose optional phone verification when it is available, your verified mobile number. Clerk handles sign-in credentials; this Platform does not store account passwords.
 - Lawyer credentials: Bar Council name, enrolment number, practice areas, experience, fee, professional biography
-- Consultation content: topics, booking notes, chat messages, call transcripts, voice recordings (processed for transcription)
+- Consultation content: topics, booking notes, chat messages, discussion summaries or transcripts entered by a user, and documents you create, edit, or receive
+- Dictation audio: audio you choose to record in your browser is sent to the Platform for transcription. It is processed for that request and is not intentionally retained by the Platform as an audio recording. When audio conversion is needed, temporary server files are removed after conversion. The resulting transcript may be saved in a document if you choose to use or save it.
 - Documents: legal documents you create, edit, or receive
-- Payment details: transaction references (actual card/bank details are handled entirely by Razorpay and never stored on our servers)
+- Payment details: the Platform stores order and transaction references. If checkout is enabled, Razorpay handles payment credentials; the Platform does not intentionally store card or bank numbers.
 
 2.2. Information collected automatically:
-- Device and browser information, IP address, access timestamps
-- Service usage patterns (pages visited, features used)
+- Operational request information, such as request identifiers, methods, paths, and response status, used to operate and troubleshoot the service. Page-view and advertising analytics are not configured in the current application.
 
 3. PURPOSE OF PROCESSING
 
 We process your personal data for the following purposes under the DPDP Act:
 - To provide, maintain, and improve the Platform
+- To authenticate accounts through Clerk and maintain the corresponding Platform account
 - To verify Lawyer credentials and manage account approvals
-- To process payments through Razorpay
-- To send consultation reminders, booking confirmations, and service notifications
-- To generate AI-assisted document drafts and translations (using DeepSeek API)
-- To transcribe speech to text (using ElevenLabs API)
+- To process payments through Razorpay if checkout is enabled
+- To create in-app notifications and reminders 24 hours and 10 minutes before confirmed, paid consultations. A 24-hour reminder is created only when the booking is confirmed in time. Email and browser push are optional and require both user opt-in and service configuration; provider acceptance does not guarantee arrival. No SMS appointment reminders are sent.
+- To provide optional Twilio phone verification or audio calls only when those features are enabled. Calls are not recorded by this Platform.
+- To generate AI-assisted document drafts and translations from text you submit, using DeepSeek when configured
+- To transcribe dictation audio you submit, using ElevenLabs through a Replit-managed connector when configured
 - To respond to support requests
 - To comply with legal obligations
 
@@ -132,16 +134,16 @@ We process your personal data for the following purposes under the DPDP Act:
 5. DATA SHARING
 
 5.1. With Lawyers/Clients: Consultation details, chat messages, and deliverables are shared between the parties to a consultation as necessary to provide the service.
-5.2. Payment processor: Razorpay processes payments. Their privacy policy governs payment data: https://razorpay.com/privacy/
-5.3. AI service providers: Consultation content may be sent to DeepSeek (for document drafting/translation) and ElevenLabs (for speech transcription). These providers process data under contract and are not permitted to use it for their own purposes.
-5.4. Mobile verification: MSG91 processes your mobile number for OTP verification.
-5.5. Email service: Resend processes your email address to deliver transactional emails.
+5.2. Payment processor: If checkout is enabled, Razorpay processes payments. Its privacy policy is available at https://razorpay.com/privacy/. The Platform stores order and transaction references, not card or bank numbers.
+5.3. AI services: When configured and used, text you submit for drafting or translation is sent to DeepSeek. Dictation audio you submit is sent to ElevenLabs through a Replit-managed connector for transcription. The Platform does not send all consultation content to an AI service automatically. Provider processing, retention, and other terms are governed by the providers' current terms and privacy information; we do not promise that a provider uses submitted content only on our instructions.
+5.4. Authentication: Clerk provides account sign-in and manages sign-in credentials. The Platform receives account identifiers and verified account information needed to operate your Platform account; it does not store your account password.
+5.5. Optional communications: If enabled, Twilio may process your phone number for verification or carry audio-call traffic. Resend may process your email address for opted-in email notifications. Browser push uses the applicable browser/push service. These services are not enabled merely because an account exists. No SMS appointment reminders are sent.
 5.6. We do not sell your personal data. We do not share personal data for advertising purposes.
 5.7. We may disclose data if required by law, court order, or regulatory authority.
 
 6. DATA STORAGE AND SECURITY
 
-6.1. Your data is stored on PostgreSQL databases with encryption in transit (TLS). Passwords are hashed using bcrypt with a cost factor of 12.
+6.1. Platform account and service records are stored in the Platform database. Clerk manages sign-in credentials; this Platform does not store account passwords.
 6.2. We implement reasonable security practices as required under the IT Act, 2000, and the IT Rules, 2011.
 6.3. We use role-based access controls. Admin actions are logged in an audit trail.
 6.4. Despite our measures, no electronic transmission or storage is 100% secure. You use the Platform at your own risk.
@@ -170,7 +172,7 @@ The Platform is intended for users aged 18 and above. We do not knowingly collec
 
 10. CROSS-BORDER DATA TRANSFER
 
-Your data may be processed by AI service providers (DeepSeek, ElevenLabs) whose servers may be located outside India. Such transfers are made in compliance with the DPDP Act and any rules notified thereunder.
+Clerk and any configured AI, communications, payment, hosting, or browser-push providers may process data in locations outside India. Provider locations and terms can change and must be checked for the enabled services. Where applicable, transfers will comply with requirements under the DPDP Act and rules notified under it; qualified legal counsel should confirm the applicable requirements before paid legal engagements are accepted.
 
 11. GRIEVANCE OFFICER
 
@@ -248,7 +250,7 @@ The Consult with Lawyer platform ("Platform") is a technology tool that assists 
 
 3. AI-GENERATED CONTENT
 
-3.1. The Platform uses artificial intelligence for: (a) speech-to-text transcription; (b) document drafting from consultation transcripts; (c) document translation across Indian languages.
+3.1. When the relevant service is configured, the Platform can use AI for: (a) speech-to-text transcription of dictation audio submitted by a user; (b) document drafting from text a Lawyer submits, which may include consultation notes or a transcript; and (c) translation of submitted text into supported languages. Drafting and translation requests use DeepSeek; transcription uses ElevenLabs through a Replit-managed connector. Submitted text or audio is sent to the relevant provider for that request. The Platform does not intentionally retain dictation audio as an account recording; a transcript may be saved in a document.
 3.2. AI-generated content is assistive and may contain errors, omissions, or inaccuracies. It must be reviewed and verified by a qualified legal professional before use in any legal proceeding, court filing, regulatory submission, or contractual engagement.
 3.3. The Company disclaims all liability for consequences arising from the use of AI-generated content without professional review.
 
@@ -274,7 +276,7 @@ To the maximum extent permitted by law, the Company, its directors, employees, a
 
 8. THIRD-PARTY SERVICES
 
-The Platform integrates with third-party services (Razorpay, ElevenLabs, DeepSeek, MSG91, Jitsi). The Company is not responsible for the availability, accuracy, or security of these services. Their respective terms and privacy policies apply.
+The Platform uses Clerk for account sign-in and, when configured, DeepSeek for drafting and translation and ElevenLabs through a Replit-managed connector for transcription. Razorpay checkout, Twilio phone verification or audio calls, Resend email, and browser push are available only when their respective features are enabled. No SMS appointment reminders are sent, and this Platform does not record calls. MSG91 and Jitsi are not used by the current application. Third-party processing and availability are subject to each provider's current terms and privacy information; provider acceptance does not guarantee delivery or receipt.
 
 9. GOVERNING LAW
 

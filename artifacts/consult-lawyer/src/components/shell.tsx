@@ -180,7 +180,7 @@ export function SiteFooter() {
         </div>
         <FooterCol title="Clients" links={[['/lawyers', 'Find a lawyer'], ['/templates', 'Legal templates'], ['/plans', 'Plans']]} />
         <FooterCol title="Advocates" links={[['/for-lawyers', 'Why join'], ['/lawyer/profile', 'Apply'], ['/documents', 'Document workspace']]} />
-        <FooterCol title="Policies" links={[['/terms', 'Terms of service'], ['/privacy', 'Privacy policy'], ['/refund-policy', 'Refund policy']]} />
+        <FooterCol title="Policies" links={[['/terms', 'Terms of service'], ['/privacy', 'Privacy policy'], ['/disclaimer', 'Disclaimer'], ['/refund-policy', 'Refund policy']]} />
       </div>
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-6 py-5 font-mono text-[11px] uppercase tracking-widest text-white/45 md:flex-row md:justify-between">

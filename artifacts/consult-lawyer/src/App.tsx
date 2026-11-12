@@ -181,6 +181,7 @@ function AppRoutes() {
           <Route path="/notifications" component={Notifications} />
           <Route path="/admin" component={Admin} />
           <Route path="/privacy">{() => <Policy path="/privacy" />}</Route>
+          <Route path="/disclaimer">{() => <Policy path="/disclaimer" />}</Route>
           <Route path="/terms">{() => <Policy path="/terms" />}</Route>
           <Route path="/refund-policy">{() => <Policy path="/refund-policy" />}</Route>
           <Route component={NotFound} />
