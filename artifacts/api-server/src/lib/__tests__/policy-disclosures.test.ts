@@ -15,6 +15,18 @@ const simplePagesSource = readFileSync(
   new URL("../../../../consult-lawyer/src/pages/simple.tsx", import.meta.url),
   "utf8",
 );
+const shellSource = readFileSync(
+  new URL("../../../../consult-lawyer/src/components/shell.tsx", import.meta.url),
+  "utf8",
+);
+const policiesSource = readFileSync(
+  new URL("../../../../consult-lawyer/src/data/policies.ts", import.meta.url),
+  "utf8",
+);
+const viteConfigSource = readFileSync(
+  new URL("../../../../consult-lawyer/vite.config.ts", import.meta.url),
+  "utf8",
+);
 
 function readPolicy(name: "privacy" | "disclaimer", nextField?: string): string {
   const boundary = nextField
@@ -51,15 +63,82 @@ test("public privacy and disclaimer disclosures match configured providers", () 
   assert.match(disclaimer, /Razorpay checkout, Twilio phone verification or audio calls, Resend email, and browser push are available only when their respective features are enabled/i);
 });
 
-test("the public disclaimer route renders the disclaimer policy", () => {
-  assert.ok(
-    appSource.includes('<Route path="/disclaimer">{() => <Policy path="/disclaimer" />}</Route>'),
+test("signed-out visitors can open every policy from the footer or directly", () => {
+  const policyRoutes = [
+    {
+      path: "/privacy",
+      footerLabel: "Privacy policy",
+      key: "privacy",
+      title: "Privacy Policy",
+      contentHeading: "PRIVACY POLICY",
+    },
+    {
+      path: "/disclaimer",
+      footerLabel: "Disclaimer",
+      key: "disclaimer",
+      title: "Disclaimer",
+      contentHeading: "DISCLAIMER",
+    },
+    {
+      path: "/terms",
+      footerLabel: "Terms of service",
+      key: "terms",
+      title: "Terms of Service",
+      contentHeading: "TERMS OF SERVICE",
+    },
+    {
+      path: "/refund-policy",
+      footerLabel: "Refund policy",
+      key: "refunds",
+      title: "Refund & Cancellation Policy",
+      contentHeading: "REFUND & CANCELLATION POLICY",
+    },
+  ];
+  const routesStart = appSource.indexOf("function AppRoutes()");
+  const routesEnd = appSource.indexOf("\nfunction ClerkProviderWithRoutes()", routesStart);
+  const appRoutesSource = appSource.slice(routesStart, routesEnd);
+
+  assert.ok(routesStart >= 0 && routesEnd > routesStart, "AppRoutes should be present");
+  assert.doesNotMatch(
+    appRoutesSource,
+    /<Show when="signed-(?:in|out)">/,
+    "policy routes should not be conditional on authentication state",
   );
-  assert.match(
-    simplePagesSource,
-    /'\/disclaimer': \{ key: 'disclaimer', title: 'Disclaimer'/,
-  );
+
+  for (const policy of policyRoutes) {
+    assert.ok(
+      appRoutesSource.includes(
+        `<Route path="${policy.path}">{() => <Policy path="${policy.path}" />}</Route>`,
+      ),
+      `${policy.path} should be directly routable`,
+    );
+    assert.ok(
+      shellSource.includes(`['${policy.path}', '${policy.footerLabel}']`),
+      `${policy.footerLabel} should link to ${policy.path}`,
+    );
+    assert.ok(
+      simplePagesSource.includes(
+        `'${policy.path}': { key: '${policy.key}', title: '${policy.title}'`,
+      ),
+      `${policy.path} should map to the matching page title and content key`,
+    );
+    assert.ok(
+      policiesSource.includes(`${policy.key}: \`${policy.contentHeading}`),
+      `${policy.key} should have policy content`,
+    );
+  }
+
   assert.match(simplePagesSource, /const text = policies\[p\.key\]/);
+  assert.match(simplePagesSource, /<PageHeader eyebrow="Policies" title={p\.title}/);
+});
+
+test("policy routes respect the configured artifact base path", () => {
+  assert.match(
+    appSource,
+    /const basePath = import\.meta\.env\.BASE_URL\.replace\(\/\\\/\$\/, ''\)/,
+  );
+  assert.match(appSource, /<WouterRouter base=\{basePath\}>/);
+  assert.match(viteConfigSource, /base: basePath,/);
 });
 
 test("conditional communication disclosures track the actual feature gates", () => {
