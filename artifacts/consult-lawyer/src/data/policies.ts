@@ -96,7 +96,7 @@ This Privacy Policy explains how Eneru Technologies ("Company", "we", "us") coll
 
 The Company acts as a Data Fiduciary under the DPDP Act. Our contact details:
 Email: privacy@consultwithlawyer.in
-Address: [Company registered address]
+Address: Amanora Park Town, Amanora Gold Tower, Tower 42, Flat 1012, Hadapsar, Pune 411028
 
 2. PERSONAL DATA WE COLLECT
 
@@ -177,7 +177,7 @@ Clerk and any configured AI, communications, payment, hosting, or browser-push p
 11. GRIEVANCE OFFICER
 
 In accordance with the IT Rules, 2011, and the DPDP Act, 2023, our Grievance Officer is:
-Name: [Grievance Officer Name]
+Name: Bhagyashree Patil
 Email: privacy@consultwithlawyer.in
 Response time: We will acknowledge your grievance within 48 hours and resolve it within 30 days.
 
