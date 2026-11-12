@@ -10,6 +10,8 @@ import {
   transcribeWithElevenLabs,
   type ConnectorClient,
 } from "../ai-providers";
+import { supportedLanguages } from "../../data/languages";
+import { buildWritingMessages, type WritingAction } from "../writing-prompts";
 
 const connection: Connection = {
   id: "test-elevenlabs-connection",
@@ -51,6 +53,65 @@ test("DeepSeek drafting calls the configured server-side API and returns its com
   assert.equal(authorization, "Bearer test-only-secret");
   assert.equal(body?.model, "deepseek-flash");
   assert.equal(body?.stream, false);
+});
+
+const fictionalFacts = [
+  "Mira Sen",
+  "18 April 2025",
+  "INR 4,800",
+  "[CASE_REF]",
+];
+const fictionalInput =
+  "Fictional matter: Mira Sen paid INR 4,800 on 18 April 2025. Receipt reference: [CASE_REF].";
+const unsafeCertainty = /\b(guarantee(?:d)?|will win|certain outcome|cannot lose)\b|निश्चित रूप से जीत|गारंटी/iu;
+
+function evaluateWritingFixture(
+  output: string,
+  languageMarker: string,
+): string[] {
+  const issues: string[] = [];
+  if (!output.includes(languageMarker)) issues.push("missing_language");
+  if (fictionalFacts.some((fact) => !output.includes(fact))) issues.push("omitted_fact");
+  if (unsafeCertainty.test(output)) issues.push("unsafe_certainty");
+  return issues;
+}
+
+test("writing prompts and controlled evaluations cover every supported language", () => {
+  const actions: WritingAction[] = ["draft", "translate"];
+
+  for (const language of supportedLanguages) {
+    for (const action of actions) {
+      const messages = buildWritingMessages(action, language.name, fictionalInput);
+      const systemPrompt = messages[0]?.content ?? "";
+
+      assert.match(systemPrompt, new RegExp(`Output in ${language.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+      assert.match(systemPrompt, /Do not claim legal verification or a guaranteed outcome/);
+      assert.equal(messages[1]?.content, fictionalInput);
+      assert.match(systemPrompt, action === "translate"
+        ? /preserving all facts, placeholders, numbers and structure/
+        : /Do not fabricate names, dates/);
+
+      // Controlled fixtures use a native-name marker to test language selection,
+      // not as a claim that this short sample is a fluent translation.
+      const controlledOutput = `${language.nativeName} — ${fictionalFacts.join(" | ")}`;
+      assert.deepEqual(evaluateWritingFixture(controlledOutput, language.nativeName), []);
+    }
+  }
+});
+
+test("writing fixture checks flag missing language, omitted facts, and unsafe certainty", () => {
+  const marker = "हिन्दी";
+  const safeOutput = `${marker} — ${fictionalFacts.join(" | ")}`;
+
+  assert.deepEqual(evaluateWritingFixture(safeOutput.replace(marker, ""), marker), ["missing_language"]);
+  assert.deepEqual(
+    evaluateWritingFixture(safeOutput.replace("INR 4,800", ""), marker),
+    ["omitted_fact"],
+  );
+  assert.deepEqual(
+    evaluateWritingFixture(`${safeOutput} This matter is guaranteed to win.`, marker),
+    ["unsafe_certainty"],
+  );
 });
 
 test("DeepSeek reports missing configuration without making a request", async () => {
