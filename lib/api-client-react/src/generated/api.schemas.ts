@@ -58,6 +58,8 @@ export interface Platform {
   /** @nullable */
   pushPublicKey?: string | null;
   aiEnabled: boolean;
+  draftingEnabled: boolean;
+  dictationEnabled: boolean;
   categories: Category[];
   templates: Template[];
   languages: string[];

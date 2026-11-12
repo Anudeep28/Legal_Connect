@@ -85,7 +85,8 @@ function Editor({ doc }: { doc: Document }) {
   const dirty = title !== saved.title || content !== saved.content || language !== saved.language;
   const template = platform.data?.templates.find((t) => t.id === doc.templateId);
   const languages = platform.data?.languages ?? ['English', 'Hindi'];
-  const aiEnabled = platform.data?.aiEnabled ?? false;
+  const draftingEnabled = platform.data?.draftingEnabled ?? false;
+  const dictationEnabled = platform.data?.dictationEnabled ?? false;
 
   useEffect(() => {
     const h = (e: BeforeUnloadEvent) => {
@@ -274,7 +275,7 @@ function Editor({ doc }: { doc: Document }) {
               </Button>
             </div>
           ) : (
-            <Button variant="outline" size="sm" className="rounded-full" onClick={startRec} disabled={transcribe.isPending || !aiEnabled} title={aiEnabled ? 'Dictate' : 'AI services are not enabled'} data-testid="button-record">
+              <Button variant="outline" size="sm" className="rounded-full" onClick={startRec} disabled={transcribe.isPending || !dictationEnabled} title={dictationEnabled ? 'Dictate' : 'ElevenLabs dictation is not configured'} data-testid="button-record">
               {transcribe.isPending ? <Loader2 className="animate-spin" /> : <Mic />} {transcribe.isPending ? 'Transcribing' : 'Dictate'}
             </Button>
           )}
@@ -283,7 +284,7 @@ function Editor({ doc }: { doc: Document }) {
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="rounded-full" disabled={ai.isPending || !aiEnabled} data-testid="button-ai-menu">
+              <Button variant="outline" size="sm" className="rounded-full" disabled={ai.isPending || !draftingEnabled} data-testid="button-ai-menu">
                 {ai.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} AI assist
               </Button>
             </DropdownMenuTrigger>
@@ -318,7 +319,15 @@ function Editor({ doc }: { doc: Document }) {
         </div>
       </div>
 
-      {!aiEnabled && platform.data && <Notice icon={<Info />} tone="ink" className="mb-4">AI drafting and dictation are not enabled on this server right now. Editing, templates and exports work as usual.</Notice>}
+      {platform.data && (!draftingEnabled || !dictationEnabled) && (
+        <Notice icon={<Info />} tone="ink" className="mb-4">
+          {!draftingEnabled && !dictationEnabled
+            ? 'DeepSeek drafting and ElevenLabs dictation are not both configured on this server. Editing, templates and exports work as usual.'
+            : !draftingEnabled
+              ? 'DeepSeek drafting is not configured on this server. Dictation remains available.'
+              : 'ElevenLabs dictation is not configured on this server. DeepSeek drafting remains available.'}
+        </Notice>
+      )}
 
       <div className={cn('grid gap-4', view === 'split' && 'lg:grid-cols-2')}>
         {view !== 'preview' && (

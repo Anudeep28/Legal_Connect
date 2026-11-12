@@ -703,7 +703,7 @@ components:
         features: { type: array, items: { type: string } }
     Platform:
       type: object
-      required: [name, demo, paymentsEnabled, callsEnabled, emailEnabled, pushEnabled, phoneVerificationEnabled, recordingEnabled, remindersEnabled, aiEnabled, categories, templates, languages, plans, lawyerCount, onlineCount]
+      required: [name, demo, paymentsEnabled, callsEnabled, emailEnabled, pushEnabled, phoneVerificationEnabled, recordingEnabled, remindersEnabled, aiEnabled, draftingEnabled, dictationEnabled, categories, templates, languages, plans, lawyerCount, onlineCount]
       properties:
         name: { type: string }
         demo: { type: boolean }
@@ -716,6 +716,8 @@ components:
         remindersEnabled: { type: boolean }
         pushPublicKey: { type: ["string", "null"] }
         aiEnabled: { type: boolean }
+        draftingEnabled: { type: boolean }
+        dictationEnabled: { type: boolean }
         categories: { type: array, items: { $ref: "#/components/schemas/Category" } }
         templates: { type: array, items: { $ref: "#/components/schemas/Template" } }
         languages: { type: array, items: { type: string } }

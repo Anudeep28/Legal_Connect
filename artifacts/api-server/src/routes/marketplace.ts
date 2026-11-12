@@ -14,17 +14,19 @@ import { legalTemplates } from "../data/templates";
 import { supportedLanguages } from "../data/languages";
 import { paymentsEnabled } from "../lib/razorpay";
 import { communicationServices } from "../lib/communication-config";
+import { isAiAvailable } from "../lib/ai-providers";
 
 const router: IRouter = Router();
 
 router.get("/platform", async (_req, res): Promise<void> => {
   const rows = await db.select().from(lawyers).where(eq(lawyers.approvalStatus, "approved"));
+  const ai = await isAiAvailable();
   res.json(GetPlatformResponse.parse({
     name: "Consult with Lawyer",
     demo: rows.some((l) => l.demo),
     paymentsEnabled: paymentsEnabled(),
     ...communicationServices(),
-    aiEnabled: Boolean(process.env.AI_INTEGRATIONS_OPENAI_BASE_URL),
+    ...ai,
     categories: categoryNames.map(([id, name, description]) => ({ id, name, description, count: rows.filter((l) => l.practiceAreas.includes(name)).length })),
     templates: legalTemplates.map((t) => ({
       ...t,

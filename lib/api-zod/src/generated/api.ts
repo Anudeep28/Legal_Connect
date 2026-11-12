@@ -156,6 +156,8 @@ export const GetPlatformResponse = zod.object({
   "remindersEnabled": zod.boolean(),
   "pushPublicKey": zod.string().nullish(),
   "aiEnabled": zod.boolean(),
+  "draftingEnabled": zod.boolean(),
+  "dictationEnabled": zod.boolean(),
   "categories": zod.array(zod.object({
   "id": zod.string(),
   "name": zod.string(),

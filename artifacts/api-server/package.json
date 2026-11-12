@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test:communications": "NODE_ENV=test tsx --test src/lib/__tests__/communications.test.ts",
+    "test:ai": "NODE_ENV=test tsx --test src/lib/__tests__/ai-providers.test.ts",
     "seed": "tsx src/lib/seed.ts",
     "grant-admin": "tsx src/lib/grant-admin.ts",
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
@@ -16,6 +17,7 @@
   "dependencies": {
     "@clerk/express": "^2.1.87",
     "@clerk/shared": "^4.44.0",
+    "@replit/connectors-sdk": "^0.7.0",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/integrations-openai-ai-server": "workspace:*",
