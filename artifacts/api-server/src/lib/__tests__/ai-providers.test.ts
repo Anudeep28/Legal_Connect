@@ -54,7 +54,7 @@ test("DeepSeek drafting calls the configured server-side API and returns its com
 });
 
 test("DeepSeek reports missing configuration without making a request", async () => {
-  assert.equal(hasDeepSeekKey(undefined), false);
+  assert.equal(hasDeepSeekKey(""), false);
   assert.equal(hasDeepSeekKey("   "), false);
   let called = false;
   await assert.rejects(
