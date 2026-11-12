@@ -297,7 +297,7 @@ export function Policy({ path }: { path: string }) {
       <div className="mx-auto max-w-3xl">
         <PageHeader eyebrow="Policies" title={p.title} />
         <Notice icon={<Info />} className="mb-8">{p.context}</Notice>
-        <Notice icon={<Info />} className="mb-8">Qualified legal counsel has reviewed these policies, and owner-approved contact details are recorded in the Privacy Policy. Checkout remains disabled pending Razorpay verification.</Notice>
+        <Notice icon={<Info />} className="mb-8">These policies are drafts and must be reviewed by qualified legal counsel for this business before use. Owner-approved contact details are recorded in the Privacy Policy. Checkout remains disabled pending Razorpay verification.</Notice>
         <article className="space-y-4 rounded-3xl border bg-card p-6 md:p-10">
           {blocks.slice(1).map((b, i) => {
             const t = b.trim();
