@@ -14,11 +14,16 @@ Verification on 2026-11-14, against the separate app's development environment:
   `refunded`, and its test document credit was withdrawn. No real funds moved.
 - All 14 isolated billing tests passed. They use synthetic provider responses;
   they are not evidence of Razorpay-originated webhook delivery.
-- The public webhook route is reachable and rejects unsigned requests with
-  HTTP 400, as intended. No accepted Razorpay webhook event has been recorded in
-  this app's development database, so provider-originated signed delivery is
-  still unverified. Correct the dedicated Test Mode webhook endpoint and
-  resend a payment or refund event before enabling checkout.
+- An in-workspace request reaches the webhook route and receives HTTP 400 for
+  an unsigned payload, as intended. However, an independent external request
+  reaches Replit's "Log in to access a private app" page instead of the API.
+  The private development access gate blocks provider delivery before the
+  application can log or validate it. See "Private Preview access" below.
+- The owner-provided webhook screenshot shows the expected endpoint, enabled
+  status, and required event subscriptions. Its Test/Live mode is not visible.
+  No accepted Razorpay event has yet been recorded in this app's development
+  database. Keep checkout disabled until a provider-originated signed event
+  reaches the app after external access is configured.
 
 Do not mark verification complete or enable checkout based only on a captured
 payment, processed refund, dashboard settlement status, or a locally fabricated
@@ -27,6 +32,33 @@ Production and Live Mode have not been verified.
 
 Do not connect this app to the original live app's credentials, webhook, or
 database. Nothing here requires changes to the original service.
+
+## Private Preview access
+
+Do not assume an in-workspace health check proves that Razorpay can reach a
+private development URL. Test from an independent unauthenticated client.
+
+To keep Preview private, the owner can create a short-lived external access
+token in Publishing settings, under Security, scoped to **Development**.
+Prefer an `Authorization: Bearer` header where the sending service supports
+custom headers. For a URL-only webhook configuration, Replit also supports
+appending `?project-protection-bypass=<development-token>` to the webhook URL.
+Configure that token-bearing URL privately in Razorpay; never store its actual
+value in source, documentation, chat, screenshots, or logs.
+
+The token allows its holder to reach the private project's development
+endpoints, not only the webhook route. App authentication and Razorpay signature
+validation still apply. Use the shortest practical expiry, revoke after testing,
+and remember that webhook access stops when it expires. This access token is
+separate from `RAZORPAY_WEBHOOK_SECRET`; do not replace the signing secret with it.
+Do not make the project public without the owner's informed approval.
+
+After access is configured, replay an existing Test Mode event or use an
+existing unused test purchase for a controlled refund. No additional payment is
+needed just to diagnose this access restriction.
+
+Official instructions:
+https://docs.replit.com/features/deployment-customization/external-access-tokens
 
 ## Secure configuration, when the owner is ready
 
