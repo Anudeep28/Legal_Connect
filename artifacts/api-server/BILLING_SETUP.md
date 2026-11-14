@@ -57,6 +57,11 @@ private development URL. Test from an independent unauthenticated client.
 
 To keep Preview private, the owner can create a short-lived external access
 token in Publishing settings, under Security, scoped to **Development**.
+These controls require a first publish with deployment access set to Private,
+according to Replit's development-URL documentation. This app is unpublished,
+so do not assume those controls are available or a token was created.
+Publishing or temporarily disabling Private preview requires the owner's
+informed approval; neither has been performed as part of verification.
 Prefer an `Authorization: Bearer` header where the sending service supports
 custom headers. For a URL-only webhook configuration, Replit also supports
 appending `?project-protection-bypass=<development-token>` to the webhook URL.
