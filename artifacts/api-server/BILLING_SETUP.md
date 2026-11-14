@@ -13,10 +13,15 @@ public build. `/api/healthz` returned HTTP 200 with `{"status":"ok"}`, and an
 unsigned POST to `/api/billing/webhook` returned HTTP 400 with
 `Invalid webhook signature.` This proves public routing and signature rejection,
 not successful provider delivery. `/api/platform` reported checkout disabled.
-A read-only production query found the existing new-account Test payment order,
-but no accepted payment events. Update the matching Razorpay Test webhook to the
-published endpoint without a Preview bypass token, then verify actual delivery.
-No Live checkout has been enabled or verified.
+A read-only production query initially found the existing new-account Test
+payment order but no accepted events. After the owner corrected the Test Mode
+webhook URL and republished the owner-access fix, a fresh INR 1000-paise Test
+purchase was paid at 17:50 UTC. Production recorded genuine `payment.captured`
+and `order.paid` webhook events. The purchasing account had exactly one document
+credit after both events, confirming that those two notifications did not
+double-grant the purchase. Refund processing and refund webhook delivery for
+this production-hosted Test purchase remain to be verified.
+No Live checkout has been enabled or verified; general checkout remains disabled.
 
 ### Owner access after first publish
 
@@ -34,9 +39,9 @@ The audit marker makes the grant one-time per target identity: restarts do not
 restore deliberately revoked privileges. Remove the configuration after the
 production grant is confirmed. No HTTP endpoint accepts an admin role override.
 
-This change requires a republish. Until the new startup code has run in
-production and the designated owner has refreshed their account, do not
-claim production administrator access is fixed.
+The owner republished, and a read-only production check confirmed the purchasing
+production identity is an active administrator with one owner-designation audit
+record. The bootstrap grant has been applied in the published environment.
 
 Verification on 2026-11-14, against the separate app's development environment:
 
