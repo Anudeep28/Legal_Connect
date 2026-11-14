@@ -2,9 +2,28 @@
 
 ## Current state
 
-The owner has deferred adding Razorpay credentials. General checkout must remain
-disabled. Automated tests use synthetic provider responses; they are not evidence
-of a real Razorpay payment, capture, refund, or webhook.
+Dedicated Razorpay credentials and a webhook signing secret have been added.
+General checkout remains disabled; `RAZORPAY_CHECKOUT_VERIFIED_MODE` is unset.
+
+Verification on 2026-11-14, against the separate app's development environment:
+
+- The actual Razorpay API confirmed the administrator's ₹10 Test Mode purchase
+  was captured for the matching stored order, amount, and currency.
+- The unused validation purchase was fully refunded through the app's normal
+  refund logic. Razorpay returned a processed refund, the app recorded
+  `refunded`, and its test document credit was withdrawn. No real funds moved.
+- All 14 isolated billing tests passed. They use synthetic provider responses;
+  they are not evidence of Razorpay-originated webhook delivery.
+- The public webhook route is reachable and rejects unsigned requests with
+  HTTP 400, as intended. No accepted Razorpay webhook event has been recorded in
+  this app's development database, so provider-originated signed delivery is
+  still unverified. Correct the dedicated Test Mode webhook endpoint and
+  resend a payment or refund event before enabling checkout.
+
+Do not mark verification complete or enable checkout based only on a captured
+payment, processed refund, dashboard settlement status, or a locally fabricated
+webhook. A real Razorpay-sent signed event must reach this app successfully.
+Production and Live Mode have not been verified.
 
 Do not connect this app to the original live app's credentials, webhook, or
 database. Nothing here requires changes to the original service.
@@ -40,8 +59,10 @@ database. Nothing here requires changes to the original service.
      document entitlements with controlled accounts before wider availability.
 7. Only after these checks pass, set the non-secret
    `RAZORPAY_CHECKOUT_VERIFIED_MODE` to the verified mode (`test` or `live`) using
-   the environment-variable tools. Restart the managed API workflow. A mode
-   mismatch or missing credentials/webhook secret keeps checkout disabled.
+    the environment-variable tools. Preview Test Mode verification belongs in
+    the development environment only; keep production unset until its own
+    verification passes. Restart the managed API workflow. A mode mismatch or
+    missing credentials/webhook secret keeps checkout disabled.
 8. Live mode needs its own verification. Test payments and test entitlements
    must not be mistaken for real revenue. Use isolated test accounts/data and
    explicitly review outstanding test entitlements before switching environments;
