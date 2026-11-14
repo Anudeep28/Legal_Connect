@@ -18,6 +18,26 @@ but no accepted payment events. Update the matching Razorpay Test webhook to the
 published endpoint without a Preview bypass token, then verify actual delivery.
 No Live checkout has been enabled or verified.
 
+### Owner access after first publish
+
+Preview and Production Clerk identities differ, even for the same verified
+email. An imported Preview admin row does not authorize the production identity.
+The owner reported the admin verification panel was missing, and production
+contained both an admin and a client record for the designated email.
+
+`OWNER_ADMIN_BOOTSTRAP_EMAIL` is configured in production only. On startup,
+the server resolves that email against its current Clerk instance, requires
+one matching verified primary email, and grants the target active client
+identity admin access with an audit record. It preserves existing credits,
+orders, and other identities. It refuses suspended and lawyer accounts.
+The audit marker makes the grant one-time per target identity: restarts do not
+restore deliberately revoked privileges. Remove the configuration after the
+production grant is confirmed. No HTTP endpoint accepts an admin role override.
+
+This change requires a republish. Until the new startup code has run in
+production and the designated owner has refreshed their account, do not
+claim production administrator access is fixed.
+
 Verification on 2026-11-14, against the separate app's development environment:
 
 - After the owner replaced the credentials with the webhook account's Test keys,

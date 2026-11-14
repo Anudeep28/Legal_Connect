@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startCommunicationWorker } from "./lib/communication-worker";
+import { bootstrapConfiguredOwner } from "./lib/owner-admin";
 
 const rawPort = process.env["PORT"];
 
@@ -15,6 +16,8 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+await bootstrapConfiguredOwner();
 
 app.listen(port, (err) => {
   if (err) {
