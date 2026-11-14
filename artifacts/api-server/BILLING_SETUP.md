@@ -5,6 +5,19 @@
 Dedicated Razorpay credentials and a webhook signing secret have been added.
 General checkout remains disabled; `RAZORPAY_CHECKOUT_VERIFIED_MODE` is unset.
 
+### Published endpoint
+
+On 2026-11-14 the owner published the app at
+`https://legal-connect-hub.replit.app`. Deployment metadata confirmed a successful
+public build. `/api/healthz` returned HTTP 200 with `{"status":"ok"}`, and an
+unsigned POST to `/api/billing/webhook` returned HTTP 400 with
+`Invalid webhook signature.` This proves public routing and signature rejection,
+not successful provider delivery. `/api/platform` reported checkout disabled.
+A read-only production query found the existing new-account Test payment order,
+but no accepted payment events. Update the matching Razorpay Test webhook to the
+published endpoint without a Preview bypass token, then verify actual delivery.
+No Live checkout has been enabled or verified.
+
 Verification on 2026-11-14, against the separate app's development environment:
 
 - After the owner replaced the credentials with the webhook account's Test keys,
@@ -58,10 +71,11 @@ private development URL. Test from an independent unauthenticated client.
 To keep Preview private, the owner can create a short-lived external access
 token in Publishing settings, under Security, scoped to **Development**.
 These controls require a first publish with deployment access set to Private,
-according to Replit's development-URL documentation. This app is unpublished,
-so do not assume those controls are available or a token was created.
-Publishing or temporarily disabling Private preview requires the owner's
-informed approval; neither has been performed as part of verification.
+according to Replit's development-URL documentation. They were unavailable
+during the earlier unpublished phase. The owner has since published publicly;
+the published webhook endpoint does not need a Replit access token.
+Temporarily disabling Private preview still requires the owner's informed
+approval; keep Preview private when using the published endpoint.
 Prefer an `Authorization: Bearer` header where the sending service supports
 custom headers. For a URL-only webhook configuration, Replit also supports
 appending `?project-protection-bypass=<development-token>` to the webhook URL.
