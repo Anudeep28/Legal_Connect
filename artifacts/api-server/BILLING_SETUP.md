@@ -17,6 +17,12 @@ Verification on 2026-11-14, against the separate app's development environment:
   no webhook POST appeared in application logs and no accepted payment event
   was recorded. Inspect the provider's latest delivery attempt and response;
   do not request another purchase merely to diagnose missing delivery.
+- The owner subsequently found delivery logs: both `payment.captured` and
+  `order.paid` retries returned HTTP 403. No corresponding webhook requests
+  appeared in API logs. The webhook is mounted before Clerk and CSRF middleware;
+  invalid signatures return 400, not 403. The evidence points to rejection
+  before the application. Inspect the failed delivery's response body to
+  identify the rejecting access layer before changing payment credentials.
 - The actual Razorpay API confirmed the administrator's ₹10 Test Mode purchase
   was captured for the matching stored order, amount, and currency.
 - The unused validation purchase was fully refunded through the app's normal
