@@ -7,6 +7,16 @@ General checkout remains disabled; `RAZORPAY_CHECKOUT_VERIFIED_MODE` is unset.
 
 Verification on 2026-11-14, against the separate app's development environment:
 
+- After the owner replaced the credentials with the webhook account's Test keys,
+  provider authentication succeeded. A new ₹10 validation order created at
+  09:27 UTC was paid: browser signature verification returned HTTP 200, and an
+  independent provider lookup confirmed capture, matching order, INR currency,
+  and 1000-paise amount. Existing payment records were preserved.
+- The owner reported that the protected health URL returned JSON in a private
+  browser after adding Development access. Nevertheless, after the new purchase,
+  no webhook POST appeared in application logs and no accepted payment event
+  was recorded. Inspect the provider's latest delivery attempt and response;
+  do not request another purchase merely to diagnose missing delivery.
 - The actual Razorpay API confirmed the administrator's ₹10 Test Mode purchase
   was captured for the matching stored order, amount, and currency.
 - The unused validation purchase was fully refunded through the app's normal
@@ -17,8 +27,9 @@ Verification on 2026-11-14, against the separate app's development environment:
 - An in-workspace request reaches the webhook route and receives HTTP 400 for
   an unsigned payload, as intended. However, an independent external request
   reaches Replit's "Log in to access a private app" page instead of the API.
-  The private development access gate blocks provider delivery before the
-  application can log or validate it. See "Private Preview access" below.
+  This earlier check established that the private development access gate can
+  block provider delivery before the application can log or validate it.
+  See "Private Preview access" below.
 - The owner-provided webhook screenshot shows the expected endpoint, enabled
   status, and required event subscriptions. Its Test/Live mode is not visible.
   No accepted Razorpay event has yet been recorded in this app's development
