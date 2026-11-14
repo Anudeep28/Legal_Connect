@@ -45,3 +45,4 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.production]
+RAZORPAY_CHECKOUT_VERIFIED_MODE = "test"
