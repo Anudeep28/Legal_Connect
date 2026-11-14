@@ -19,8 +19,11 @@ webhook URL and republished the owner-access fix, a fresh INR 1000-paise Test
 purchase was paid at 17:50 UTC. Production recorded genuine `payment.captured`
 and `order.paid` webhook events. The purchasing account had exactly one document
 credit after both events, confirming that those two notifications did not
-double-grant the purchase. Refund processing and refund webhook delivery for
-this production-hosted Test purchase remain to be verified.
+double-grant the purchase. The owner then requested a full refund. At 18:06 UTC,
+production accepted signed `refund.created` and `refund.processed` events.
+The order became `refunded` with a provider refund reference, and the purchasing
+account's document credits returned from one to zero. This completes the
+production-hosted Test Mode capture and full-refund check; no real funds moved.
 No Live checkout has been enabled or verified; general checkout remains disabled.
 
 ### Owner access after first publish
@@ -30,14 +33,16 @@ email. An imported Preview admin row does not authorize the production identity.
 The owner reported the admin verification panel was missing, and production
 contained both an admin and a client record for the designated email.
 
-`OWNER_ADMIN_BOOTSTRAP_EMAIL` is configured in production only. On startup,
+`OWNER_ADMIN_BOOTSTRAP_EMAIL` was configured in production only. On startup,
 the server resolves that email against its current Clerk instance, requires
 one matching verified primary email, and grants the target active client
 identity admin access with an audit record. It preserves existing credits,
 orders, and other identities. It refuses suspended and lawyer accounts.
 The audit marker makes the grant one-time per target identity: restarts do not
-restore deliberately revoked privileges. Remove the configuration after the
-production grant is confirmed. No HTTP endpoint accepts an admin role override.
+restore deliberately revoked privileges. After the grant was confirmed, the
+one-time configuration was removed for future production publishes. The running
+build may retain its startup environment until the next publish; its audit
+marker still prevents repeat grants. No HTTP endpoint accepts an admin role override.
 
 The owner republished, and a read-only production check confirmed the purchasing
 production identity is an active administrator with one owner-designation audit
@@ -83,7 +88,9 @@ Verification on 2026-11-14, against the separate app's development environment:
 Do not mark verification complete or enable checkout based only on a captured
 payment, processed refund, dashboard settlement status, or a locally fabricated
 webhook. A real Razorpay-sent signed event must reach this app successfully.
-Production and Live Mode have not been verified.
+Production-hosted Test Mode payment and refund webhooks have now been verified.
+Live Mode payments and owner-approved real-lawyer consultation acceptance
+remain unverified. This is not approval to open paid engagements.
 
 Do not connect this app to the original live app's credentials, webhook, or
 database. Nothing here requires changes to the original service.
