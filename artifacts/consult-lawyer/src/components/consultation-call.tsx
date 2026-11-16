@@ -117,7 +117,7 @@ export function ConsultationCall({ consultation }: { consultation: Consultation 
   };
   return <section className="mt-6 space-y-4 rounded-3xl border bg-card p-5" data-testid="consultation-call">
     <h2 className="font-display text-xl font-semibold">Private audio consultation</h2>
-    <p className="text-sm text-muted-foreground">Only you and the assigned consultation participant can join. Calls open 10 minutes before the appointment and end at {fmtDateTime(c.endsAt)} IST. Recording is disabled; no call audio is saved by this app.</p>
+    <p className="text-sm text-muted-foreground">Only you and the assigned consultation participant can join. Calls open 10 minutes before the appointment and the join window ends at {fmtDateTime(c.endsAt)} IST. If either person disconnects early, the consultation remains booked and both participants can rejoin before that time. Disconnecting does not mark it complete; the assigned lawyer can mark it complete here, which closes call access. Recording is disabled; no call audio is saved by this app.</p>
     <p role="status" data-testid="call-status">{state}</p>
     {availability.isLoading && <p className="text-sm">Checking call availability…</p>}
     {availability.isError && <p role="alert" className="text-sm text-destructive">{errMsg(availability.error)}</p>}
@@ -125,7 +125,7 @@ export function ConsultationCall({ consultation }: { consultation: Consultation 
     {!connected && <>
       <label className="flex items-start gap-3 text-sm"><input type="checkbox" checked={consent} disabled={busy} onChange={(e) => setConsent(e.target.checked)} data-testid="consent-microphone" />I consent to microphone access and transmission of my audio to the other participant through Twilio for this call.</label>
       <label className="flex items-start gap-3 text-sm"><input type="checkbox" checked={noRecording} disabled={busy} onChange={(e) => setNoRecording(e.target.checked)} data-testid="consent-no-recording" />I understand recording is disabled. I will not record the other participant without their explicit consent.</label>
-      <Button onClick={start} disabled={!availability.data?.canJoin || !consent || !noRecording || busy} data-testid="button-join-call">{busy ? 'Connecting…' : 'Join audio call'}</Button>
+      <Button onClick={start} disabled={!availability.data?.canJoin || !consent || !noRecording || busy} data-testid="button-join-call">{busy ? 'Connecting…' : 'Join or rejoin audio call'}</Button>
       {busy && <Button variant="outline" className="ml-2" onClick={leave}>Cancel connection</Button>}
     </>}
     {connected && <div className="flex flex-wrap gap-2">
