@@ -19,6 +19,8 @@ export const consultations = pgTable("consultations", {
   fee: integer("fee").notNull(),
   transcript: text("transcript").notNull().default(""),
   callRoomSid: text("call_room_sid"),
+  callRecordingMode: text("call_recording_mode").$type<"pending" | "recorded" | "unrecorded">().notNull().default("pending"),
+  callRecordingStopPending: boolean("call_recording_stop_pending").notNull().default(false),
   demo: boolean("demo").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (t) => [
@@ -44,12 +46,26 @@ export const deliverables = pgTable("deliverables", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 });
 
-// Consent is specific to each token issuance. Recording is never enabled.
+// Call recording is an optional, separate opt-in for each booked consultation.
+export const callRecordingConsents = pgTable("consultation_call_recording_consents", {
+  id: text("id").primaryKey(),
+  consultationId: text("consultation_id").notNull().references(() => consultations.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => accounts.id),
+  consent: boolean("consent").notNull(),
+  policyVersion: text("policy_version").notNull().default("call-recording-consent-v1"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow().$onUpdate(() => new Date().toISOString()),
+}, (t) => [
+  uniqueIndex("call_recording_consent_consultation_user").on(t.consultationId, t.userId),
+  index("call_recording_consent_consultation").on(t.consultationId),
+]);
+
+// This consent is specific to each call-token issuance; it does not opt in to recording.
 export const callConsents = pgTable("consultation_call_consents", {
   id: text("id").primaryKey(),
   consultationId: text("consultation_id").notNull().references(() => consultations.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => accounts.id),
-  policyVersion: text("policy_version").notNull().default("audio-only-no-recording-v1"),
+  policyVersion: text("policy_version").notNull().default("audio-call-privacy-v2"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 });
 

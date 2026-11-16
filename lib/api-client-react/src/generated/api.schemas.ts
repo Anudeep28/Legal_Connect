@@ -53,7 +53,7 @@ export interface Platform {
   emailEnabled: boolean;
   pushEnabled: boolean;
   phoneVerificationEnabled: boolean;
-  recordingEnabled: false;
+  recordingEnabled: boolean;
   remindersEnabled: boolean;
   /** @nullable */
   pushPublicKey?: string | null;
@@ -160,15 +160,53 @@ export interface ActionResult {
 
 export const CallConsentInputValue = {
   microphoneConsent: true,
-  recordingDisabledAcknowledged: true,
+  recordingDisclosureAcknowledged: true,
 } as const;
 export type CallConsentInput = typeof CallConsentInputValue;
+
+export interface CallRecordingConsentInput {
+  consent: boolean;
+  stopCall?: boolean;
+}
+
+export type CallRecordingConsentStateMode = typeof CallRecordingConsentStateMode[keyof typeof CallRecordingConsentStateMode];
+
+
+export const CallRecordingConsentStateMode = {
+  pending: 'pending',
+  recorded: 'recorded',
+  unrecorded: 'unrecorded',
+} as const;
+
+export interface CallRecordingConsentState {
+  enabled: boolean;
+  mode: CallRecordingConsentStateMode;
+  /** @nullable */
+  myConsent: boolean | null;
+  /** @nullable */
+  otherConsent: boolean | null;
+}
+
+export type CallAvailabilityRecordingMode = typeof CallAvailabilityRecordingMode[keyof typeof CallAvailabilityRecordingMode];
+
+
+export const CallAvailabilityRecordingMode = {
+  pending: 'pending',
+  recorded: 'recorded',
+  unrecorded: 'unrecorded',
+} as const;
 
 export interface CallAvailability {
   enabled: boolean;
   canJoin: boolean;
   reason: string;
-  recordingEnabled: false;
+  recordingEnabled: boolean;
+  recordingConsentEnabled: boolean;
+  recordingMode: CallAvailabilityRecordingMode;
+  /** @nullable */
+  myRecordingConsent: boolean | null;
+  /** @nullable */
+  otherRecordingConsent: boolean | null;
   opensAt: string;
   closesAt: string;
 }
@@ -178,7 +216,7 @@ export interface CallAccess {
   room: string;
   expiresAt: string;
   closesAt: string;
-  recordingEnabled: false;
+  recordingEnabled: boolean;
 }
 
 export type CommunicationDeliveryChannel = typeof CommunicationDeliveryChannel[keyof typeof CommunicationDeliveryChannel];

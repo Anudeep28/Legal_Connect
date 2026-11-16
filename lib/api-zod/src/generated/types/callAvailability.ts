@@ -5,12 +5,19 @@
  * Consult with Lawyer — independent legal consultation platform.
  * OpenAPI spec version: 1.0.0
  */
+import type { CallAvailabilityRecordingMode } from './callAvailabilityRecordingMode';
 
 export interface CallAvailability {
   enabled: boolean;
   canJoin: boolean;
   reason: string;
-  recordingEnabled: false;
+  recordingEnabled: boolean;
+  recordingConsentEnabled: boolean;
+  recordingMode: CallAvailabilityRecordingMode;
+  /** @nullable */
+  myRecordingConsent: boolean | null;
+  /** @nullable */
+  otherRecordingConsent: boolean | null;
   opensAt: string;
   closesAt: string;
 }

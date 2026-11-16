@@ -110,6 +110,23 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CallAccess" }
+  /consultations/{id}/call/recording-consent:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    post:
+      operationId: setCallRecordingConsent
+      description: Saves or withdraws this participant's per-consultation recording choice. Recording is optional; a no-consent choice locks the consultation to an unrecorded call.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallRecordingConsentInput" }
+      responses:
+        "200":
+          description: Current mutual-consent state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallRecordingConsentState" }
   /healthz:
     get:
       operationId: healthCheck
@@ -712,7 +729,7 @@ components:
         emailEnabled: { type: boolean }
         pushEnabled: { type: boolean }
         phoneVerificationEnabled: { type: boolean }
-        recordingEnabled: { type: boolean, const: false }
+        recordingEnabled: { type: boolean }
         remindersEnabled: { type: boolean }
         pushPublicKey: { type: ["string", "null"] }
         aiEnabled: { type: boolean }
@@ -786,18 +803,36 @@ components:
         ok: { type: boolean }
     CallConsentInput:
       type: object
-      required: [microphoneConsent, recordingDisabledAcknowledged]
+      required: [microphoneConsent, recordingDisclosureAcknowledged]
       properties:
         microphoneConsent: { type: boolean, const: true }
-        recordingDisabledAcknowledged: { type: boolean, const: true }
+        recordingDisclosureAcknowledged: { type: boolean, const: true }
+    CallRecordingConsentInput:
+      type: object
+      required: [consent]
+      properties:
+        consent: { type: boolean }
+        stopCall: { type: boolean, default: false }
+    CallRecordingConsentState:
+      type: object
+      required: [enabled, mode, myConsent, otherConsent]
+      properties:
+        enabled: { type: boolean }
+        mode: { type: string, enum: [pending, recorded, unrecorded] }
+        myConsent: { type: ["boolean", "null"] }
+        otherConsent: { type: ["boolean", "null"] }
     CallAvailability:
       type: object
-      required: [enabled, canJoin, reason, recordingEnabled, opensAt, closesAt]
+      required: [enabled, canJoin, reason, recordingEnabled, recordingConsentEnabled, recordingMode, myRecordingConsent, otherRecordingConsent, opensAt, closesAt]
       properties:
         enabled: { type: boolean }
         canJoin: { type: boolean }
         reason: { type: string }
-        recordingEnabled: { type: boolean, const: false }
+        recordingEnabled: { type: boolean }
+        recordingConsentEnabled: { type: boolean }
+        recordingMode: { type: string, enum: [pending, recorded, unrecorded] }
+        myRecordingConsent: { type: ["boolean", "null"] }
+        otherRecordingConsent: { type: ["boolean", "null"] }
         opensAt: { type: string }
         closesAt: { type: string }
     CallAccess:
@@ -808,7 +843,7 @@ components:
         room: { type: string }
         expiresAt: { type: string }
         closesAt: { type: string }
-        recordingEnabled: { type: boolean, const: false }
+        recordingEnabled: { type: boolean }
     CommunicationDelivery:
       type: object
       required: [id, channel, status, attempts, nextAttemptAt, lastError, createdAt]

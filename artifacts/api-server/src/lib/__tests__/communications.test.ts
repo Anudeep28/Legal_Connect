@@ -4,11 +4,11 @@ import { randomUUID, randomBytes } from "node:crypto";
 import nock from "nock";
 import webPush from "web-push";
 import { eq, inArray } from "drizzle-orm";
-import { db, pool, accounts, lawyers, consultations, notifications, communicationDeliveries, callConsents, pushSubscriptions } from "@workspace/db";
+import { db, pool, accounts, lawyers, consultations, notifications, communicationDeliveries, callConsents, callRecordingConsents, pushSubscriptions } from "@workspace/db";
 import { callEligibility, isParticipant, reminderDue, retryAllowed, retryDelay, validPushEndpoint, phoneApproved, HOUR, MINUTE } from "../communication-policy";
-import { callsEnabled, emailEnabled, phoneVerificationEnabled, pushEnabled } from "../communication-config";
+import { callsEnabled, callRecordingEnabled, emailEnabled, phoneVerificationEnabled, pushEnabled } from "../communication-config";
 import { scheduleReminders, queueOutbound, claimDelivery, deliver } from "../communication-worker";
-import { issueCallAccess } from "../consultation-calls";
+import { issueCallAccess, saveCallRecordingConsent } from "../consultation-calls";
 
 // Synthetic fixtures only. No real provider traffic or application flags are changed.
 assert.equal(process.env.NODE_ENV, "test");
@@ -23,6 +23,7 @@ const originalFetch = globalThis.fetch;
 
 before(async () => {
   process.env.TWILIO_CALLS_ENABLED = "false";
+  process.env.TWILIO_CALL_RECORDING_ENABLED = "false";
   process.env.TWILIO_VERIFY_ENABLED = "false";
   process.env.EMAIL_DELIVERY_ENABLED = "false";
   process.env.PUSH_DELIVERY_ENABLED = "false";
@@ -86,6 +87,7 @@ async function refreshed(id: string) {
 test("service flags stay disabled without explicit activation", () => {
   assert.equal(callsEnabled(), false); assert.equal(emailEnabled(), false);
   assert.equal(phoneVerificationEnabled(), false); assert.equal(pushEnabled(), false);
+  assert.equal(callRecordingEnabled(), false);
 });
 test("participant checks exclude non-participants, including administrators", () => {
   const c = { userId: clientId, lawyerOwnerId };
@@ -200,6 +202,63 @@ test("Twilio room tokens are restricted to participants and record explicit cons
   const consents = await db.select().from(callConsents).where(eq(callConsents.consultationId, c.id));
   assert.equal(consents.length, 1); assert.equal(consents[0].userId, clientId);
   assert.ok(provider.isDone());
+});
+
+test("record-enabled rooms require both per-consultation choices; withdrawal closes the room", async () => {
+  process.env.TWILIO_CALLS_ENABLED = "true";
+  process.env.TWILIO_CALL_RECORDING_ENABLED = "true";
+  const c = await consultation(5 * MINUTE);
+  await assert.rejects(saveCallRecordingConsent(await account(outsiderId), c.id, true), { status: 403 });
+
+  const clientChoice = await saveCallRecordingConsent(await account(clientId), c.id, true);
+  assert.equal(clientChoice.mode, "pending");
+  assert.equal(clientChoice.myConsent, true);
+  assert.equal(clientChoice.otherConsent, null);
+  await assert.rejects(issueCallAccess(await account(clientId), c.id), { status: 409 });
+
+  const lawyerChoice = await saveCallRecordingConsent(await account(lawyerOwnerId), c.id, true);
+  assert.equal(lawyerChoice.mode, "pending");
+  assert.equal(lawyerChoice.myConsent, true);
+  assert.equal(lawyerChoice.otherConsent, true);
+
+  const roomSid = `RM${"4".repeat(32)}`;
+  const createRoom = nock("https://video.twilio.com")
+    .post("/v1/Rooms", (body) => String(body.RecordParticipantsOnConnect) === "true")
+    .reply(201, { sid: roomSid, unique_name: "recording-room", status: "in-progress", record_participants_on_connect: true });
+  const access = await issueCallAccess(await account(clientId), c.id);
+  assert.equal(access.recordingEnabled, true);
+  assert.ok(createRoom.isDone());
+
+  const closeRoom = nock("https://video.twilio.com")
+    .post(`/v1/Rooms/${roomSid}`, (body) => String(body.Status) === "completed")
+    .reply(200, { sid: roomSid, status: "completed" });
+  const withdrawn = await saveCallRecordingConsent(await account(clientId), c.id, false);
+  assert.equal(withdrawn.mode, "unrecorded");
+  assert.equal(withdrawn.myConsent, false);
+  assert.equal(withdrawn.otherConsent, true);
+  assert.ok(closeRoom.isDone());
+  const [closed] = await db.select().from(consultations).where(eq(consultations.id, c.id));
+  assert.equal(closed.callRoomSid, null);
+  assert.equal(closed.callRecordingStopPending, false);
+  assert.equal(closed.callRecordingMode, "unrecorded");
+  assert.equal((await db.select().from(callRecordingConsents).where(eq(callRecordingConsents.consultationId, c.id))).length, 2);
+});
+
+test("a decline locks the consultation to an unrecorded room", async () => {
+  process.env.TWILIO_CALLS_ENABLED = "true";
+  process.env.TWILIO_CALL_RECORDING_ENABLED = "true";
+  const c = await consultation(5 * MINUTE);
+  const declined = await saveCallRecordingConsent(await account(clientId), c.id, false);
+  assert.equal(declined.mode, "unrecorded");
+  await assert.rejects(saveCallRecordingConsent(await account(lawyerOwnerId), c.id, true), { status: 409 });
+
+  const roomSid = `RM${"5".repeat(32)}`;
+  const createRoom = nock("https://video.twilio.com")
+    .post("/v1/Rooms", (body) => String(body.RecordParticipantsOnConnect) === "false")
+    .reply(201, { sid: roomSid, unique_name: "unrecorded-room", status: "in-progress", record_participants_on_connect: false });
+  const access = await issueCallAccess(await account(lawyerOwnerId), c.id);
+  assert.equal(access.recordingEnabled, false);
+  assert.ok(createRoom.isDone());
 });
 
 test("competing workers claim distinct jobs and reclaim expired leases", async () => {

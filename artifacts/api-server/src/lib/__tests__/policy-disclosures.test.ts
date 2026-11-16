@@ -28,7 +28,7 @@ const viteConfigSource = readFileSync(
   "utf8",
 );
 
-function readPolicy(name: "privacy" | "disclaimer", nextField?: string): string {
+function readPolicy(name: "terms" | "privacy" | "disclaimer", nextField?: string): string {
   const boundary = nextField
     ? `,\\n\\n  ${nextField}:`
     : `,\\n};`;
@@ -162,6 +162,7 @@ test("policy routes respect the configured artifact base path", () => {
 test("conditional communication disclosures track the actual feature gates", () => {
   const envKeys = [
     "TWILIO_CALLS_ENABLED",
+    "TWILIO_CALL_RECORDING_ENABLED",
     "TWILIO_VERIFY_ENABLED",
     "TWILIO_ACCOUNT_SID",
     "TWILIO_AUTH_TOKEN",
@@ -177,8 +178,6 @@ test("conditional communication disclosures track the actual feature gates", () 
     "VAPID_PRIVATE_KEY",
     "VAPID_SUBJECT",
   ] as const;
-  const originalValues = new Map(envKeys.map((key) => [key, process.env[key]]));
-
   try {
     for (const key of envKeys) delete process.env[key];
     assert.deepEqual(communicationServices(), {
@@ -219,9 +218,6 @@ test("conditional communication disclosures track the actual feature gates", () 
       remindersEnabled: true,
     });
   } finally {
-    for (const [key, value] of originalValues) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
+    for (const key of envKeys) delete process.env[key];
   }
 });

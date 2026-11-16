@@ -17,7 +17,7 @@ export interface Platform {
   emailEnabled: boolean;
   pushEnabled: boolean;
   phoneVerificationEnabled: boolean;
-  recordingEnabled: false;
+  recordingEnabled: boolean;
   remindersEnabled: boolean;
   /** @nullable */
   pushPublicKey?: string | null;

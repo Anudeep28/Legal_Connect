@@ -8,6 +8,6 @@
 
 export const CallConsentInputValue = {
   microphoneConsent: true,
-  recordingDisabledAcknowledged: true,
+  recordingDisclosureAcknowledged: true,
 } as const;
 export type CallConsentInput = typeof CallConsentInputValue;

@@ -5,6 +5,11 @@ export function callsEnabled() {
     process.env.TWILIO_API_KEY_SID && process.env.TWILIO_API_KEY_SECRET,
   );
 }
+// Opt-in recording is separately gated and is off unless an operator explicitly
+// enables it after policy, billing and provider-retention review.
+export function callRecordingEnabled() {
+  return process.env.TWILIO_CALL_RECORDING_ENABLED === "true" && callsEnabled();
+}
 export function phoneVerificationEnabled() {
   return process.env.TWILIO_VERIFY_ENABLED === "true" && Boolean(
     process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_VERIFY_SERVICE_SID,
@@ -32,7 +37,7 @@ export function communicationServices() {
     emailEnabled: emailEnabled(),
     pushEnabled: pushEnabled(),
     pushPublicKey: pushEnabled() ? process.env.VAPID_PUBLIC_KEY : null,
-    recordingEnabled: false,
+    recordingEnabled: callRecordingEnabled(),
     remindersEnabled: true,
   };
 }

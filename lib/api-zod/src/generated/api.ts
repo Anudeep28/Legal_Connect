@@ -112,7 +112,11 @@ export const GetConsultationCallResponse = zod.object({
   "enabled": zod.boolean(),
   "canJoin": zod.boolean(),
   "reason": zod.string(),
-  "recordingEnabled": zod.literal(false),
+  "recordingEnabled": zod.boolean(),
+  "recordingConsentEnabled": zod.boolean(),
+  "recordingMode": zod.enum(['pending', 'recorded', 'unrecorded']),
+  "myRecordingConsent": zod.boolean().nullable(),
+  "otherRecordingConsent": zod.boolean().nullable(),
   "opensAt": zod.string(),
   "closesAt": zod.string()
 })
@@ -127,7 +131,7 @@ export const JoinConsultationCallParams = zod.object({
 
 export const JoinConsultationCallBody = zod.object({
   "microphoneConsent": zod.literal(true),
-  "recordingDisabledAcknowledged": zod.literal(true)
+  "recordingDisclosureAcknowledged": zod.literal(true)
 })
 
 export const JoinConsultationCallResponse = zod.object({
@@ -135,7 +139,32 @@ export const JoinConsultationCallResponse = zod.object({
   "room": zod.string(),
   "expiresAt": zod.string(),
   "closesAt": zod.string(),
-  "recordingEnabled": zod.literal(false)
+  "recordingEnabled": zod.boolean()
+})
+
+
+/**
+ * Saves or withdraws this participant's per-consultation recording choice. Recording is optional; a no-consent choice locks the consultation to an unrecorded call.
+ */
+
+
+
+export const SetCallRecordingConsentParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const setCallRecordingConsentBodyStopCallDefault = false;
+
+export const SetCallRecordingConsentBody = zod.object({
+  "consent": zod.boolean(),
+  "stopCall": zod.boolean().default(setCallRecordingConsentBodyStopCallDefault)
+})
+
+export const SetCallRecordingConsentResponse = zod.object({
+  "enabled": zod.boolean(),
+  "mode": zod.enum(['pending', 'recorded', 'unrecorded']),
+  "myConsent": zod.boolean().nullable(),
+  "otherConsent": zod.boolean().nullable()
 })
 
 
@@ -152,7 +181,7 @@ export const GetPlatformResponse = zod.object({
   "emailEnabled": zod.boolean(),
   "pushEnabled": zod.boolean(),
   "phoneVerificationEnabled": zod.boolean(),
-  "recordingEnabled": zod.literal(false),
+  "recordingEnabled": zod.boolean(),
   "remindersEnabled": zod.boolean(),
   "pushPublicKey": zod.string().nullish(),
   "aiEnabled": zod.boolean(),

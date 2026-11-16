@@ -4,7 +4,7 @@ import webPush from "web-push";
 import {
   db, accounts, consultations, lawyers, notifications, pushSubscriptions, communicationDeliveries,
 } from "@workspace/db";
-import { emailEnabled, pushEnabled, publicAppUrl } from "./communication-config";
+import { callRecordingEnabled, emailEnabled, pushEnabled, publicAppUrl } from "./communication-config";
 import { HOUR, MINUTE, reminderDue, retryAllowed, retryDelay, validPushEndpoint } from "./communication-policy";
 import { closeCallRoom } from "./consultation-calls";
 import { logger } from "./logger";
@@ -179,10 +179,12 @@ export async function deliver(job: Delivery) {
 
 export async function closeExpiredCalls() {
   const rows = await db.select({ c: consultations, ownerId: lawyers.ownerId, approval: lawyers.approvalStatus }).from(consultations)
-    .innerJoin(lawyers, eq(lawyers.id, consultations.lawyerId)).where(sql`${consultations.callRoomSid} IS NOT NULL`);
+    .innerJoin(lawyers, eq(lawyers.id, consultations.lawyerId))
+    .where(sql`${consultations.callRoomSid} IS NOT NULL OR ${consultations.callRecordingStopPending} = true`);
   for (const { c, ownerId, approval } of rows) {
     const participants = await db.select().from(accounts).where(inArray(accounts.id, [c.userId, ownerId || ""]));
-    if (c.status !== "booked" || c.paymentStatus !== "paid" || new Date(c.endsAt).getTime() <= Date.now() ||
+    if (c.callRecordingStopPending || (c.callRecordingMode === "recorded" && !callRecordingEnabled()) ||
+      c.status !== "booked" || c.paymentStatus !== "paid" || new Date(c.endsAt).getTime() <= Date.now() ||
       approval !== "approved" || participants.length !== 2 || participants.some((a) => a.status !== "active")) {
       try { await closeCallRoom(c.id); }
       catch { logger.warn({ consultationId: c.id }, "Could not close Twilio room; retrying on next worker tick"); }

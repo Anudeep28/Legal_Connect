@@ -11,5 +11,5 @@ export interface CallAccess {
   room: string;
   expiresAt: string;
   closesAt: string;
-  recordingEnabled: false;
+  recordingEnabled: boolean;
 }
