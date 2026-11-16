@@ -39,6 +39,7 @@ function readPolicy(name: "privacy" | "disclaimer", nextField?: string): string 
 }
 
 const privacy = readPolicy("privacy", "refunds");
+const terms = readPolicy("terms", "privacy");
 const disclaimer = readPolicy("disclaimer");
 
 test("public privacy and disclaimer disclosures match configured providers", () => {
@@ -61,6 +62,23 @@ test("public privacy and disclaimer disclosures match configured providers", () 
   assert.match(privacy, /Resend may process your email address/i);
   assert.match(privacy, /Browser push uses the applicable browser\/push service/i);
   assert.match(disclaimer, /Razorpay checkout, Twilio phone verification or audio calls, Resend email, and browser push are available only when their respective features are enabled/i);
+});
+
+test("call recording is disclosed as disabled and requires both participants' consent", () => {
+  assert.match(terms, /both the Client and Lawyer give separate, affirmative consent/i);
+  assert.match(terms, /If either participant declines, the call may proceed without recording/i);
+  assert.match(privacy, /Call recording requires a separate affirmative choice from both the Client and Lawyer for each consultation/i);
+  assert.match(privacy, /This call-recording feature is not currently active/i);
+  assert.match(privacy, /Twilio may process your phone number for verification, carry audio-call traffic, and store call audio tracks/i);
+  assert.match(privacy, /ElevenLabs may process those audio tracks to produce a transcript/i);
+  assert.match(privacy, /call recording will remain disabled until they are confirmed/i);
+  assert.match(disclaimer, /Call recording is not currently active/i);
+  assert.match(disclaimer, /if either declines, the call may proceed unrecorded/i);
+  assert.match(simplePagesSource, /Call recording is not currently active; if enabled, it requires separate consent from both the client and lawyer/i);
+  assert.doesNotMatch(
+    `${terms}\n${privacy}\n${disclaimer}`,
+    /Calls are not recorded by this Platform|this Platform does not record calls/i,
+  );
 });
 
 test("signed-out visitors can open every policy from the footer or directly", () => {

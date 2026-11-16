@@ -5,7 +5,7 @@
 export const policies: Record<string, string> = {
   terms: `TERMS OF SERVICE
 
-Last updated: 8 October 2026
+Last updated: 17 November 2026
 
 These Terms of Service ("Terms") govern your use of the Consult with Lawyer platform ("Platform"), operated by Eneru Technologies ("Company", "we", "us"). By creating an account or using any part of the Platform you agree to be bound by these Terms. If you do not agree, do not use the Platform.
 
@@ -28,7 +28,7 @@ You must be at least 18 years of age and legally competent to enter into a contr
 
 4. PLATFORM SERVICES
 
-4.1. Consult with Lawyer provides: (a) AI-powered speech-to-text transcription for legal document creation; (b) pre-built Indian legal document templates; (c) a marketplace connecting Clients with verified Lawyers for paid consultations; (d) AI-assisted document drafting from consultation transcripts.
+4.1. Consult with Lawyer provides: (a) optional AI-powered speech-to-text transcription for legal document creation; (b) pre-built Indian legal document templates; (c) a marketplace connecting Clients with verified Lawyers for paid consultations; (d) AI-assisted document drafting from consultation transcripts; and (e) when enabled, an optional call-recording and transcription workflow subject to the separate consent requirements in these Terms and the Privacy Policy.
 4.2. The Platform is a technology intermediary. We do not practise law and do not provide legal advice.
 4.3. AI-generated content (transcriptions, drafts, translations) is assistive only. Lawyers are responsible for reviewing, editing, and verifying all documents before use.
 
@@ -37,7 +37,8 @@ You must be at least 18 years of age and legally competent to enter into a contr
 5.1. Consultations are private sessions between a Client and a Lawyer. The Company is not a party to any professional engagement arising from a consultation.
 5.2. Whether a consultation gives rise to an advocate-client relationship is determined solely by the applicable provisions of the Advocates Act, 1961, and Bar Council of India Rules. The Platform does not create such a relationship by itself.
 5.3. Lawyers set their own fees. The total fee (including any document add-on) is displayed before booking and processed via Razorpay.
-5.4. Saving a request does not charge you or confirm an appointment. A real lawyer can accept only after payment is captured and verified by the server. Illustrative profiles cannot accept payments. Calls remain unavailable until a calling provider is connected.
+5.4. Saving a request does not charge you or confirm an appointment. A real lawyer can accept only after payment is captured and verified by the server. Illustrative profiles cannot accept payments. Calling and recording features are available only when enabled by the Company.
+5.5. Call recording is optional and is not a condition of booking or joining a consultation. If the recording feature is enabled, recording starts only after both the Client and Lawyer give separate, affirmative consent for that consultation. If either participant declines, the call may proceed without recording. A participant may withdraw consent during a call; the recording must then stop, and the call may continue without recording if technically available. A transcript may be created from the recording and made available to the consultation participants. Do not include information in a recorded call that you do not want processed for transcription.
 
 6. PAYMENTS AND SUBSCRIPTION
 
@@ -50,7 +51,7 @@ You must be at least 18 years of age and legally competent to enter into a contr
 7. INTELLECTUAL PROPERTY
 
 7.1. The Platform, its software, design, and branding are the intellectual property of the Company.
-7.2. Clients retain rights to their legal content, including supplied facts, consultation content and documents created for or delivered to them, subject to applicable law and third-party rights. The Company does not acquire ownership of client legal content. You grant a limited licence to store, process and transmit content solely to provide the requested service. Private consultation content is available only to the participants and authorized administrators as needed to administer the service; private lawyer workspace drafts remain accessible only to their account owner. Published templates and the Platform software remain separate from client content.
+7.2. Clients retain rights to their legal content, including supplied facts, consultation content, call recordings and transcripts, and documents created for or delivered to them, subject to applicable law and third-party rights. The Company does not acquire ownership of client legal content. You grant a limited licence to store, process and transmit content solely to provide the requested service, including recording and transcription only when both consultation participants have opted in. Private consultation content is available only to the participants and authorized administrators as needed to administer the service; private lawyer workspace drafts remain accessible only to their account owner. Published templates and the Platform software remain separate from client content.
 7.3. Templates provided on the Platform may be used for your legal practice but may not be redistributed or resold.
 
 8. PROHIBITED CONDUCT
@@ -88,7 +89,7 @@ For questions about these Terms, contact us at support@consultwithlawyer.in.`,
 
   privacy: `PRIVACY POLICY
 
-Last updated: 12 November 2026
+Last updated: 17 November 2026
 
 This Privacy Policy explains how Eneru Technologies ("Company", "we", "us") collects, uses, stores, and protects your personal data when you use the Consult with Lawyer platform ("Platform"). This policy is drafted in accordance with the Digital Personal Data Protection Act, 2023 ("DPDP Act"), the Information Technology Act, 2000, and the Information Technology (Reasonable Security Practices and Procedures and Sensitive Personal Data or Information) Rules, 2011.
 
@@ -105,6 +106,7 @@ Address: Amanora Park Town, Amanora Gold Tower, Tower 42, Flat 1012, Hadapsar, P
 - Lawyer credentials: Bar Council name, enrolment number, practice areas, experience, fee, professional biography
 - Consultation content: topics, booking notes, chat messages, discussion summaries or transcripts entered by a user, and documents you create, edit, or receive
 - Dictation audio: audio you choose to record in your browser is sent to the Platform for transcription. It is processed for that request and is not intentionally retained by the Platform as an audio recording. When audio conversion is needed, temporary server files are removed after conversion. The resulting transcript may be saved in a document if you choose to use or save it.
+- Call recording and transcription data (only when that feature is enabled and both participants consent): audio tracks from the consultation call, the resulting transcript, and records of each participant's consent or withdrawal. This call-recording feature is not currently active.
 - Documents: legal documents you create, edit, or receive
 - Payment details: the Platform stores order and transaction references. If checkout is enabled, Razorpay handles payment credentials; the Platform does not intentionally store card or bank numbers.
 
@@ -119,7 +121,8 @@ We process your personal data for the following purposes under the DPDP Act:
 - To verify Lawyer credentials and manage account approvals
 - To process payments through Razorpay if checkout is enabled
 - To create in-app notifications and reminders 24 hours and 10 minutes before confirmed, paid consultations. A 24-hour reminder is created only when the booking is confirmed in time. Email and browser push are optional and require both user opt-in and service configuration; provider acceptance does not guarantee arrival. No SMS appointment reminders are sent.
-- To provide optional Twilio phone verification or audio calls only when those features are enabled. Calls are not recorded by this Platform.
+- To provide optional Twilio phone verification or audio calls when those features are enabled
+- If call recording is enabled, to record and transcribe a consultation only after both participants have separately consented for that call; if either declines or withdraws consent, recording will not start or will be stopped
 - To generate AI-assisted document drafts and translations from text you submit, using DeepSeek when configured
 - To transcribe dictation audio you submit, using ElevenLabs through a Replit-managed connector when configured
 - To respond to support requests
@@ -130,6 +133,7 @@ We process your personal data for the following purposes under the DPDP Act:
 4.1. By creating an account, you provide consent for the processing described in this policy.
 4.2. You may withdraw consent at any time by contacting us at privacy@consultwithlawyer.in. Withdrawal does not affect the lawfulness of processing done before withdrawal.
 4.3. Certain processing is necessary for performing the contract (providing the service) and cannot be opted out of while using the Platform.
+4.4. Call recording requires a separate affirmative choice from both the Client and Lawyer for each consultation. Consent to use the Platform or join an audio call is not consent to record it. If either participant declines, the call can continue without recording. Either participant may withdraw consent during the call; recording will be stopped and the call may continue without recording if technically available. The consent choice and its time may be retained to document the choice and operate the service.
 
 5. DATA SHARING
 
@@ -141,7 +145,7 @@ Dictation audio you submit is sent to ElevenLabs through a Replit-managed connec
 
 The Platform does not send all consultation content to an AI service automatically. The Replit connector acts as an intermediary for ElevenLabs requests; the public connector information reviewed does not establish the request-content processing location or retention period. See https://docs.replit.com/features/integrations/overview. We do not promise that any AI provider uses submitted content only on our instructions, that provider logging or model improvement is disabled, or that a particular region or deletion period applies.
 5.4. Authentication: Clerk provides account sign-in and manages sign-in credentials. The Platform receives account identifiers and verified account information needed to operate your Platform account; it does not store your account password. Clerk's published Data Processing Addendum says it processes Customer Personal Data to provide the services under the agreement, while it may process account information as a separate controller for account administration and permitted service operations. It allows processing wherever Clerk or its subprocessors maintain facilities and provides for deletion of remaining Customer Personal Data within 90 days after the applicable agreement ends. This is not a per-record retention schedule, and the region and specific agreement applicable to this Platform's Clerk tenant have not been confirmed. See https://clerk.com/legal/dpa.
-5.5. Optional communications: If enabled, Twilio may process your phone number for verification or carry audio-call traffic. Resend may process your email address for opted-in email notifications. Browser push uses the applicable browser/push service. These services are not enabled merely because an account exists; the provider, region, and retention terms depend on the enabled configuration and must be checked before activation. No SMS appointment reminders are sent.
+5.5. Optional communications and call recording: If enabled, Twilio may process your phone number for verification, carry audio-call traffic, and store call audio tracks when both participants consent to recording. If call recording is enabled, ElevenLabs may process those audio tracks to produce a transcript. The transcript is not sent to DeepSeek automatically; a Lawyer must separately request AI drafting from consultation content. Resend may process your email address for opted-in email notifications. Browser push uses the applicable browser/push service. These services are not enabled merely because an account exists. Provider locations, terms, and retention depend on the actual configuration and must be checked before activation. No SMS appointment reminders are sent.
 5.6. We do not sell your personal data. We do not share personal data for advertising purposes.
 5.7. We may disclose data if required by law, court order, or regulatory authority.
 
@@ -156,8 +160,9 @@ The Platform does not send all consultation content to an AI service automatical
 
 7.1. Account data: retained while your account is active, and for up to 3 years after deletion for legal compliance.
 7.2. Consultation transcripts and chat messages: retained for 1 year after the consultation, or longer if required by any pending legal proceeding.
-7.3. Payment records: retained for 8 years as required under the Income Tax Act, 1961, and GST regulations.
-7.4. Documents: retained while your account is active. Exported documents remain with you.
+7.3. Call recordings, if the feature is enabled: intended to be retained only as long as needed to complete transcription and then deleted from the recording provider where supported. Provider-side backups or records may remain under that provider's terms. The exact retention and deletion controls have not yet been verified; call recording will remain disabled until they are confirmed.
+7.4. Payment records: retained for 8 years as required under the Income Tax Act, 1961, and GST regulations.
+7.5. Documents: retained while your account is active. Exported documents remain with you.
 
 8. YOUR RIGHTS UNDER THE DPDP ACT
 
@@ -178,7 +183,7 @@ The Platform is intended for users aged 18 and above. We do not knowingly collec
 
 The providers' published materials indicate that data may be processed outside India. DeepSeek's general Privacy Policy identifies the People's Republic of China for processing and storage; ElevenLabs identifies the United States as its standard storage location and offers separately configured Enterprise locations, with possible processing outside a selected location; Clerk's Data Processing Addendum permits processing wherever it or its subprocessors maintain facilities. These general statements do not confirm the region, account settings, agreement, or full processing path used for this Platform. ElevenLabs requests also pass through a Replit-managed connector, and the public connector information reviewed does not specify the processing region or request-content retention.
 
-Razorpay checkout, Twilio communications, Resend email, and browser push are conditional services. Their regions and retention terms must be checked against the actual configuration and applicable provider terms before they are enabled; this policy does not claim a particular region or retention period for them. Provider locations and terms can change. Where applicable, transfers will comply with requirements under the DPDP Act and rules notified under it. Qualified legal counsel must confirm the applicable transfer basis, notices, and safeguards before sensitive client matter data is sent to these providers or paid legal engagements are accepted.
+Razorpay checkout, Twilio communications and call recordings, Resend email, and browser push are conditional services. Their regions and retention terms must be checked against the actual configuration and applicable provider terms before they are enabled; this policy does not claim a particular region or provider retention period for them. Provider locations and terms can change. Where applicable, transfers will comply with requirements under the DPDP Act and rules notified under it. Qualified legal counsel must confirm the applicable transfer basis, notices, and safeguards before sensitive client matter data is sent to these providers or paid legal engagements are accepted.
 
 11. GRIEVANCE OFFICER
 
@@ -256,7 +261,7 @@ The Consult with Lawyer platform ("Platform") is a technology tool that assists 
 
 3. AI-GENERATED CONTENT
 
-3.1. When the relevant service is configured, the Platform can use AI for: (a) speech-to-text transcription of dictation audio submitted by a user; (b) document drafting from text a Lawyer submits, which may include consultation notes or a transcript; and (c) translation of submitted text into supported languages. Drafting and translation requests use DeepSeek; transcription uses ElevenLabs through a Replit-managed connector. Submitted text or audio is sent to the relevant provider for that request. The Platform does not intentionally retain dictation audio as an account recording; a transcript may be saved in a document.
+3.1. When the relevant service is configured, the Platform can use AI for: (a) speech-to-text transcription of dictation audio submitted by a user; (b) transcription of a consultation call only when call recording is enabled and both participants separately consent; (c) document drafting from text a Lawyer submits, which may include consultation notes or a transcript; and (d) translation of submitted text into supported languages. Drafting and translation requests use DeepSeek; transcription uses ElevenLabs through a Replit-managed connector. Submitted text or audio is sent to the relevant provider for that request. Call transcripts are not sent to DeepSeek automatically; a Lawyer must request a draft. The call-recording feature is not currently active, and the Platform does not intentionally retain dictation audio as an account recording.
 3.2. AI-generated content is assistive and may contain errors, omissions, or inaccuracies. It must be reviewed and verified by a qualified legal professional before use in any legal proceeding, court filing, regulatory submission, or contractual engagement.
 3.3. The Company disclaims all liability for consequences arising from the use of AI-generated content without professional review.
 
@@ -282,7 +287,7 @@ To the maximum extent permitted by law, the Company, its directors, employees, a
 
 8. THIRD-PARTY SERVICES
 
-The Platform uses Clerk for account sign-in and, when configured, DeepSeek for drafting and translation and ElevenLabs through a Replit-managed connector for transcription. Razorpay checkout, Twilio phone verification or audio calls, Resend email, and browser push are available only when their respective features are enabled. No SMS appointment reminders are sent, and this Platform does not record calls. MSG91 and Jitsi are not used by the current application. Third-party processing and availability are subject to each provider's current terms and privacy information; provider acceptance does not guarantee delivery or receipt.
+The Platform uses Clerk for account sign-in and, when configured, DeepSeek for drafting and translation and ElevenLabs through a Replit-managed connector for transcription. Razorpay checkout, Twilio phone verification or audio calls, Resend email, and browser push are available only when their respective features are enabled. Call recording is not currently active. If enabled in the future, a consultation will be recorded only after both participants separately consent; if either declines, the call may proceed unrecorded. Twilio may process and store the audio tracks for that recording, and ElevenLabs may process them to create a transcript. No SMS appointment reminders are sent. MSG91 and Jitsi are not used by the current application. Third-party processing and availability are subject to each provider's current terms and privacy information; provider acceptance does not guarantee delivery or receipt.
 
 9. GOVERNING LAW
 
