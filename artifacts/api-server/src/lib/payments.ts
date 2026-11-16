@@ -39,6 +39,20 @@ export async function createOrder(account: Account, input: Checkout, adminValida
   const config = adminValidation ? credentials() : requireCheckout();
   if (adminValidation && !process.env.RAZORPAY_WEBHOOK_SECRET)
     throw new HttpError(503, "Configure the webhook signing secret before running payment verification.");
+  // A lost callback/webhook must not send a client back to a captured order.
+  // Reconcile outside the transaction: applyCaptured obtains its own account lock.
+  if (input.plan === "consultation" && input.consultationId) {
+    const [pending] = await db.select().from(paymentOrders).where(and(
+      eq(paymentOrders.userId, account.id), eq(paymentOrders.kind, "consultation"),
+      eq(paymentOrders.consultationId, input.consultationId),
+      eq(paymentOrders.mode, config.mode), eq(paymentOrders.status, "pending"),
+    )).orderBy(desc(paymentOrders.createdAt)).limit(1);
+    if (pending) {
+      const reconciled = await reconcileOrder(pending);
+      if (reconciled.status !== "pending")
+        throw new HttpError(409, "Razorpay has already captured or refunded this booking's payment. Its status has been updated; do not pay again. For a different appointment, create a new consultation request.");
+    }
+  }
   return db.transaction(async (tx) => {
     const locked = await lockAccount(tx, account.id);
     let amount: number;

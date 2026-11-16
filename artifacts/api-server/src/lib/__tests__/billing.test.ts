@@ -299,6 +299,22 @@ test("consultations use snapshot fee, block demo payments and follow lawyer canc
   });
   const o = await createOrder(client, { plan: "consultation", consultationId: id });
   assert.equal(o.amount, 180000);
+  const retry = await createOrder(client, { plan: "consultation", consultationId: id });
+  assert.equal(retry.providerOrderId, o.providerOrderId);
+  const secondId = randomUUID();
+  await db.insert(consultations).values({
+    id: secondId, userId: client.id, lawyerId, topic: "Second appointment", mode: "chat", package: "consultation_only",
+    fee: 999, startsAt: new Date(Date.now() + 2 * DAY).toISOString(), endsAt: new Date(Date.now() + 2 * DAY + 1800000).toISOString(),
+  });
+  const second = await createOrder(client, { plan: "consultation", consultationId: secondId });
+  assert.notEqual(second.providerOrderId, o.providerOrderId);
+  assert.equal(second.amount, 99900);
+  // Provider capture succeeded but neither browser verification nor webhook arrived.
+  payment(second);
+  await assert.rejects(createOrder(client, { plan: "consultation", consultationId: secondId }), /already captured or refunded/);
+  assert.equal((await ownOrder(client.id, second.id)).status, "paid");
+  const [secondConsultation] = await db.select().from(consultations).where(eq(consultations.id, secondId));
+  assert.equal(secondConsultation.paymentStatus, "paid");
   const [pending] = await db.select().from(consultations).where(eq(consultations.id, id));
   assert.equal(pending.paymentStatus, "pending");
   await applyCaptured(payment(o));
