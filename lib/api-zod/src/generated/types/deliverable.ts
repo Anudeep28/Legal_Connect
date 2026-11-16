@@ -14,4 +14,6 @@ export interface Deliverable {
   content: string;
   status: DeliverableStatus;
   createdAt: string;
+  /** @nullable */
+  lawyerReviewedAt: string | null;
 }

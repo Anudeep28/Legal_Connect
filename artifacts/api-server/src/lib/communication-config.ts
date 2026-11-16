@@ -8,7 +8,11 @@ export function callsEnabled() {
 // Opt-in recording is separately gated and is off unless an operator explicitly
 // enables it after policy, billing and provider-retention review.
 export function callRecordingEnabled() {
-  return process.env.TWILIO_CALL_RECORDING_ENABLED === "true" && callsEnabled();
+  return process.env.TWILIO_CALL_RECORDING_ENABLED === "true" && callsEnabled() && Boolean(publicAppUrl());
+}
+export function callRecordingCallbackUrl() {
+  const base = publicAppUrl();
+  return base ? `${base}/api/communications/twilio-video-recordings` : null;
 }
 export function phoneVerificationEnabled() {
   return process.env.TWILIO_VERIFY_ENABLED === "true" && Boolean(

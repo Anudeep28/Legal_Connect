@@ -35,6 +35,12 @@ import type {
   CallConsentInput,
   CallRecordingConsentInput,
   CallRecordingConsentState,
+  CallRecordingLanguageInput,
+  CallRecordingLanguageResponse,
+  CallTranscriptDraftInput,
+  CallTranscriptDraftResponse,
+  CallTranscriptSession,
+  CallTranscriptUpdate,
   ChargeApproval,
   CheckoutInput,
   CheckoutOrder,
@@ -854,6 +860,269 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getSetCallRecordingConsentMutationOptions(options), queryClient);
+    }
+
+export const getUpdateCallRecordingLanguageUrl = (id: string,) => {
+
+
+
+
+  return `/api/consultations/${id}/call/recording-language`
+}
+
+export const updateCallRecordingLanguage = async (id: string,
+    callRecordingLanguageInput: CallRecordingLanguageInput, options?: Parameters<typeof customFetch>[1]): Promise<CallRecordingLanguageResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CallRecordingLanguageResponse>(getUpdateCallRecordingLanguageUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(callRecordingLanguageInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateCallRecordingLanguageMutationKey = () => ['updateCallRecordingLanguage'] as const;
+
+export const getUpdateCallRecordingLanguageMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCallRecordingLanguage>>, TError,UpdateCallRecordingLanguageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCallRecordingLanguage>>, TError,UpdateCallRecordingLanguageMutationVariables, TContext> => {
+
+const mutationKey = getUpdateCallRecordingLanguageMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCallRecordingLanguage>>, UpdateCallRecordingLanguageMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateCallRecordingLanguage(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCallRecordingLanguageMutationResult = NonNullable<Awaited<ReturnType<typeof updateCallRecordingLanguage>>>
+    export type UpdateCallRecordingLanguageMutationBody = BodyType<CallRecordingLanguageInput>
+    export type UpdateCallRecordingLanguageMutationError = ErrorType<unknown>
+    export type UpdateCallRecordingLanguageMutationVariables = {id: string;data: BodyType<CallRecordingLanguageInput>}
+
+    export const useUpdateCallRecordingLanguage = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCallRecordingLanguage>>, TError,UpdateCallRecordingLanguageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateCallRecordingLanguage>>,
+        TError,
+        UpdateCallRecordingLanguageMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateCallRecordingLanguageMutationOptions(options), queryClient);
+    }
+
+export const getListCallTranscriptsUrl = (id: string,) => {
+
+
+
+
+  return `/api/consultations/${id}/call-transcripts`
+}
+
+export const listCallTranscripts = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<CallTranscriptSession[]> => {
+
+  return customFetch<CallTranscriptSession[]>(getListCallTranscriptsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCallTranscriptsQueryKey = (id: string,) => {
+    return [
+    `/api/consultations/${id}/call-transcripts`
+    ] as const;
+    }
+
+
+export const getListCallTranscriptsQueryOptions = <TData = Awaited<ReturnType<typeof listCallTranscripts>>, TError = ErrorType<unknown>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCallTranscripts>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCallTranscriptsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCallTranscripts>>> = ({ signal }) => listCallTranscripts(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCallTranscripts>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListCallTranscriptsQueryResult = NonNullable<Awaited<ReturnType<typeof listCallTranscripts>>>
+export type ListCallTranscriptsQueryError = ErrorType<unknown>
+
+
+export function useListCallTranscripts<TData = Awaited<ReturnType<typeof listCallTranscripts>>, TError = ErrorType<unknown>>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCallTranscripts>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCallTranscripts>>,
+          TError,
+          Awaited<ReturnType<typeof listCallTranscripts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCallTranscripts<TData = Awaited<ReturnType<typeof listCallTranscripts>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCallTranscripts>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCallTranscripts>>,
+          TError,
+          Awaited<ReturnType<typeof listCallTranscripts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCallTranscripts<TData = Awaited<ReturnType<typeof listCallTranscripts>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCallTranscripts>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListCallTranscripts<TData = Awaited<ReturnType<typeof listCallTranscripts>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCallTranscripts>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListCallTranscriptsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateCallTranscriptUrl = (id: string,
+    sessionId: string,) => {
+
+
+
+
+  return `/api/consultations/${id}/call-transcripts/${sessionId}`
+}
+
+export const updateCallTranscript = async (id: string,
+    sessionId: string,
+    callTranscriptUpdate: CallTranscriptUpdate, options?: Parameters<typeof customFetch>[1]): Promise<CallTranscriptSession> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CallTranscriptSession>(getUpdateCallTranscriptUrl(id,sessionId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(callTranscriptUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateCallTranscriptMutationKey = () => ['updateCallTranscript'] as const;
+
+export const getUpdateCallTranscriptMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCallTranscript>>, TError,UpdateCallTranscriptMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCallTranscript>>, TError,UpdateCallTranscriptMutationVariables, TContext> => {
+
+const mutationKey = getUpdateCallTranscriptMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCallTranscript>>, UpdateCallTranscriptMutationVariables> = (props) => {
+          const {id,sessionId,data} = props ?? {};
+
+          return  updateCallTranscript(id,sessionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCallTranscriptMutationResult = NonNullable<Awaited<ReturnType<typeof updateCallTranscript>>>
+    export type UpdateCallTranscriptMutationBody = BodyType<CallTranscriptUpdate>
+    export type UpdateCallTranscriptMutationError = ErrorType<unknown>
+    export type UpdateCallTranscriptMutationVariables = {id: string;sessionId: string;data: BodyType<CallTranscriptUpdate>}
+
+    export const useUpdateCallTranscript = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCallTranscript>>, TError,UpdateCallTranscriptMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateCallTranscript>>,
+        TError,
+        UpdateCallTranscriptMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateCallTranscriptMutationOptions(options), queryClient);
     }
 
 export const getHealthCheckUrl = () => {
@@ -3325,6 +3594,94 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getTranscribeAudioMutationOptions(options), queryClient);
+    }
+
+export const getDraftFromCallTranscriptUrl = (id: string,
+    sessionId: string,) => {
+
+
+
+
+  return `/api/writing/consultations/${id}/call-transcripts/${sessionId}/draft`
+}
+
+/**
+ * Creates a private AI draft preview from a lawyer-edited transcript and selected legal template. Does not create or deliver a document.
+ */
+export const draftFromCallTranscript = async (id: string,
+    sessionId: string,
+    callTranscriptDraftInput: CallTranscriptDraftInput, options?: Parameters<typeof customFetch>[1]): Promise<CallTranscriptDraftResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CallTranscriptDraftResponse>(getDraftFromCallTranscriptUrl(id,sessionId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(callTranscriptDraftInput)
+  }
+);}
+
+
+
+
+
+export const getDraftFromCallTranscriptMutationKey = () => ['draftFromCallTranscript'] as const;
+
+export const getDraftFromCallTranscriptMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof draftFromCallTranscript>>, TError,DraftFromCallTranscriptMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof draftFromCallTranscript>>, TError,DraftFromCallTranscriptMutationVariables, TContext> => {
+
+const mutationKey = getDraftFromCallTranscriptMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof draftFromCallTranscript>>, DraftFromCallTranscriptMutationVariables> = (props) => {
+          const {id,sessionId,data} = props ?? {};
+
+          return  draftFromCallTranscript(id,sessionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DraftFromCallTranscriptMutationResult = NonNullable<Awaited<ReturnType<typeof draftFromCallTranscript>>>
+    export type DraftFromCallTranscriptMutationBody = BodyType<CallTranscriptDraftInput>
+    export type DraftFromCallTranscriptMutationError = ErrorType<unknown>
+    export type DraftFromCallTranscriptMutationVariables = {id: string;sessionId: string;data: BodyType<CallTranscriptDraftInput>}
+
+    export const useDraftFromCallTranscript = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof draftFromCallTranscript>>, TError,DraftFromCallTranscriptMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof draftFromCallTranscript>>,
+        TError,
+        DraftFromCallTranscriptMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDraftFromCallTranscriptMutationOptions(options), queryClient);
     }
 
 export const getListNotificationsUrl = () => {

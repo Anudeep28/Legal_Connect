@@ -187,6 +187,80 @@ export interface CallRecordingConsentState {
   otherConsent: boolean | null;
 }
 
+export interface CallRecordingLanguageInput {
+  /**
+     * @minLength 2
+     * @maxLength 8
+     */
+  languageCode: string;
+}
+
+export interface CallRecordingLanguageResponse {
+  languageCode: string;
+}
+
+export type CallTranscriptWordSpeaker = typeof CallTranscriptWordSpeaker[keyof typeof CallTranscriptWordSpeaker];
+
+
+export const CallTranscriptWordSpeaker = {
+  client: 'client',
+  lawyer: 'lawyer',
+} as const;
+
+export interface CallTranscriptWord {
+  text: string;
+  /** @minimum 0 */
+  startSeconds: number;
+  /** @minimum 0 */
+  endSeconds: number;
+  speaker: CallTranscriptWordSpeaker;
+  /** @nullable */
+  languageCode?: string | null;
+}
+
+export type CallTranscriptSessionStatus = typeof CallTranscriptSessionStatus[keyof typeof CallTranscriptSessionStatus];
+
+
+export const CallTranscriptSessionStatus = {
+  recording: 'recording',
+  processing: 'processing',
+  ready: 'ready',
+  failed: 'failed',
+  withdrawn: 'withdrawn',
+} as const;
+
+export interface CallTranscriptSession {
+  id: string;
+  consultationId: string;
+  status: CallTranscriptSessionStatus;
+  generatedTranscript: string;
+  editedTranscript: string;
+  detectedLanguages: string[];
+  createdAt: string;
+  /** @nullable */
+  completedAt: string | null;
+}
+
+export interface CallTranscriptUpdate {
+  /** @maxLength 100000 */
+  editedTranscript: string;
+}
+
+export interface CallTranscriptDraftInput {
+  templateId: string;
+  /**
+     * @minLength 2
+     * @maxLength 32
+     */
+  language: string;
+  dataUseAcknowledged: true;
+}
+
+export interface CallTranscriptDraftResponse {
+  title: string;
+  content: string;
+}
+
 export type CallAvailabilityRecordingMode = typeof CallAvailabilityRecordingMode[keyof typeof CallAvailabilityRecordingMode];
 
 
@@ -195,6 +269,12 @@ export const CallAvailabilityRecordingMode = {
   recorded: 'recorded',
   unrecorded: 'unrecorded',
 } as const;
+
+export type CallAvailabilityRecordingLanguageOptionsItem = {
+  code: string;
+  name: string;
+  nativeName: string;
+};
 
 export interface CallAvailability {
   enabled: boolean;
@@ -207,6 +287,9 @@ export interface CallAvailability {
   myRecordingConsent: boolean | null;
   /** @nullable */
   otherRecordingConsent: boolean | null;
+  recordingLanguageCode: string;
+  recordingLanguageEditable: boolean;
+  recordingLanguageOptions: CallAvailabilityRecordingLanguageOptionsItem[];
   opensAt: string;
   closesAt: string;
 }
@@ -393,6 +476,7 @@ export interface Consultation {
   endsAt: string;
   fee: number;
   transcript: string;
+  callRecordingLanguageCode: string;
   demo: boolean;
   createdAt: string;
 }
@@ -483,6 +567,8 @@ export interface Deliverable {
   content: string;
   status: DeliverableStatus;
   createdAt: string;
+  /** @nullable */
+  lawyerReviewedAt: string | null;
 }
 
 export type DeliverableInputStatus = typeof DeliverableInputStatus[keyof typeof DeliverableInputStatus];
@@ -502,6 +588,7 @@ export interface DeliverableInput {
   /** @maxLength 100000 */
   content: string;
   status: DeliverableInputStatus;
+  reviewConfirmed: boolean;
 }
 
 export interface Review {

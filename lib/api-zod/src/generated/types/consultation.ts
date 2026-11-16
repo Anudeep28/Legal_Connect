@@ -27,6 +27,7 @@ export interface Consultation {
   endsAt: string;
   fee: number;
   transcript: string;
+  callRecordingLanguageCode: string;
   demo: boolean;
   createdAt: string;
 }

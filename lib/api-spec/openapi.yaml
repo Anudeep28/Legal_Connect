@@ -127,6 +127,50 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CallRecordingConsentState" }
+  /consultations/{id}/call/recording-language:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    patch:
+      operationId: updateCallRecordingLanguage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallRecordingLanguageInput" }
+      responses:
+        "200":
+          description: Saved language preference
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallRecordingLanguageResponse" }
+  /consultations/{id}/call-transcripts:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      operationId: listCallTranscripts
+      responses:
+        "200":
+          description: Private transcripts for the assigned lawyer
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CallTranscriptSession" } }
+  /consultations/{id}/call-transcripts/{sessionId}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: sessionId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: updateCallTranscript
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallTranscriptUpdate" }
+      responses:
+        "200":
+          description: Updated private transcript
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallTranscriptSession" }
   /healthz:
     get:
       operationId: healthCheck
@@ -457,6 +501,24 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TextResult" }
+  /writing/consultations/{id}/call-transcripts/{sessionId}/draft:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: sessionId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: draftFromCallTranscript
+      description: Creates a private AI draft preview from a lawyer-edited transcript and selected legal template. Does not create or deliver a document.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallTranscriptDraftInput" }
+      responses:
+        "200":
+          description: Draft preview for lawyer review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallTranscriptDraftResponse" }
   /notifications:
     get:
       operationId: listNotifications
@@ -821,9 +883,58 @@ components:
         mode: { type: string, enum: [pending, recorded, unrecorded] }
         myConsent: { type: ["boolean", "null"] }
         otherConsent: { type: ["boolean", "null"] }
+    CallRecordingLanguageInput:
+      type: object
+      required: [languageCode]
+      properties:
+        languageCode: { type: string, minLength: 2, maxLength: 8 }
+    CallRecordingLanguageResponse:
+      type: object
+      required: [languageCode]
+      properties:
+        languageCode: { type: string }
+    CallTranscriptWord:
+      type: object
+      required: [text, startSeconds, endSeconds, speaker]
+      properties:
+        text: { type: string }
+        startSeconds: { type: number, minimum: 0 }
+        endSeconds: { type: number, minimum: 0 }
+        speaker: { type: string, enum: [client, lawyer] }
+        languageCode: { type: string, nullable: true }
+    CallTranscriptSession:
+      type: object
+      required: [id, consultationId, status, generatedTranscript, editedTranscript, detectedLanguages, createdAt, completedAt]
+      properties:
+        id: { type: string }
+        consultationId: { type: string }
+        status: { type: string, enum: [recording, processing, ready, failed, withdrawn] }
+        generatedTranscript: { type: string }
+        editedTranscript: { type: string }
+        detectedLanguages: { type: array, items: { type: string } }
+        createdAt: { type: string }
+        completedAt: { type: string, nullable: true }
+    CallTranscriptUpdate:
+      type: object
+      required: [editedTranscript]
+      properties:
+        editedTranscript: { type: string, maxLength: 100000 }
+    CallTranscriptDraftInput:
+      type: object
+      required: [templateId, language, dataUseAcknowledged]
+      properties:
+        templateId: { type: string }
+        language: { type: string, minLength: 2, maxLength: 32 }
+        dataUseAcknowledged: { type: boolean, const: true }
+    CallTranscriptDraftResponse:
+      type: object
+      required: [title, content]
+      properties:
+        title: { type: string }
+        content: { type: string }
     CallAvailability:
       type: object
-      required: [enabled, canJoin, reason, recordingEnabled, recordingConsentEnabled, recordingMode, myRecordingConsent, otherRecordingConsent, opensAt, closesAt]
+      required: [enabled, canJoin, reason, recordingEnabled, recordingConsentEnabled, recordingMode, myRecordingConsent, otherRecordingConsent, recordingLanguageCode, recordingLanguageEditable, recordingLanguageOptions, opensAt, closesAt]
       properties:
         enabled: { type: boolean }
         canJoin: { type: boolean }
@@ -833,6 +944,17 @@ components:
         recordingMode: { type: string, enum: [pending, recorded, unrecorded] }
         myRecordingConsent: { type: ["boolean", "null"] }
         otherRecordingConsent: { type: ["boolean", "null"] }
+        recordingLanguageCode: { type: string }
+        recordingLanguageEditable: { type: boolean }
+        recordingLanguageOptions:
+          type: array
+          items:
+            type: object
+            required: [code, name, nativeName]
+            properties:
+              code: { type: string }
+              name: { type: string }
+              nativeName: { type: string }
         opensAt: { type: string }
         closesAt: { type: string }
     CallAccess:
@@ -898,7 +1020,7 @@ components:
         online: { type: boolean }
     Consultation:
       type: object
-      required: [id, userId, clientName, lawyerId, lawyerName, lawyerAvatar, topic, notes, mode, package, status, paymentStatus, startsAt, endsAt, fee, transcript, demo, createdAt]
+      required: [id, userId, clientName, lawyerId, lawyerName, lawyerAvatar, topic, notes, mode, package, status, paymentStatus, startsAt, endsAt, fee, transcript, callRecordingLanguageCode, demo, createdAt]
       properties:
         id: { type: string }
         userId: { type: string }
@@ -916,6 +1038,7 @@ components:
         endsAt: { type: string }
         fee: { type: integer }
         transcript: { type: string }
+        callRecordingLanguageCode: { type: string }
         demo: { type: boolean }
         createdAt: { type: string }
     ConsultationInput:
@@ -950,7 +1073,7 @@ components:
         content: { type: string, minLength: 1, maxLength: 5000 }
     Deliverable:
       type: object
-      required: [id, consultationId, title, content, status, createdAt]
+      required: [id, consultationId, title, content, status, createdAt, lawyerReviewedAt]
       properties:
         id: { type: string }
         consultationId: { type: string }
@@ -958,13 +1081,15 @@ components:
         content: { type: string }
         status: { type: string, enum: [draft, delivered] }
         createdAt: { type: string }
+        lawyerReviewedAt: { type: string, nullable: true }
     DeliverableInput:
       type: object
-      required: [title, content, status]
+      required: [title, content, status, reviewConfirmed]
       properties:
         title: { type: string, minLength: 1, maxLength: 200 }
         content: { type: string, maxLength: 100000 }
         status: { type: string, enum: [draft, delivered] }
+        reviewConfirmed: { type: boolean }
     Review:
       type: object
       required: [id, consultationId, lawyerId, clientName, rating, comment, visible, moderationReason, createdAt]

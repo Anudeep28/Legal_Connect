@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, integer, boolean, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, uniqueIndex, index, jsonb } from "drizzle-orm/pg-core";
 import { accounts } from "./accounts";
 import { lawyers } from "./lawyers";
 
@@ -21,6 +21,7 @@ export const consultations = pgTable("consultations", {
   callRoomSid: text("call_room_sid"),
   callRecordingMode: text("call_recording_mode").$type<"pending" | "recorded" | "unrecorded">().notNull().default("pending"),
   callRecordingStopPending: boolean("call_recording_stop_pending").notNull().default(false),
+  callRecordingLanguageCode: text("call_recording_language_code").notNull().default("auto"),
   demo: boolean("demo").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (t) => [
@@ -43,6 +44,7 @@ export const deliverables = pgTable("deliverables", {
   title: text("title").notNull(),
   content: text("content").notNull().default(""),
   status: text("status").$type<"draft" | "delivered">().notNull().default("draft"),
+  lawyerReviewedAt: timestamp("lawyer_reviewed_at", { withTimezone: true, mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 });
 
@@ -58,6 +60,56 @@ export const callRecordingConsents = pgTable("consultation_call_recording_consen
 }, (t) => [
   uniqueIndex("call_recording_consent_consultation_user").on(t.consultationId, t.userId),
   index("call_recording_consent_consultation").on(t.consultationId),
+]);
+
+export type CallTranscriptWord = {
+  text: string;
+  startSeconds: number;
+  endSeconds: number;
+  speaker: "client" | "lawyer";
+  languageCode?: string;
+};
+
+export const callRecordingSessions = pgTable("consultation_call_recording_sessions", {
+  id: text("id").primaryKey(),
+  consultationId: text("consultation_id").notNull().references(() => consultations.id, { onDelete: "cascade" }),
+  roomSid: text("room_sid").notNull(),
+  languageCode: text("language_code").notNull().default("auto"),
+  status: text("status").$type<"recording" | "processing" | "ready" | "failed" | "withdrawn">().notNull().default("recording"),
+  roomEndedAt: timestamp("room_ended_at", { withTimezone: true, mode: "string" }),
+  generatedTranscript: text("generated_transcript").notNull().default(""),
+  editedTranscript: text("edited_transcript").notNull().default(""),
+  detectedLanguages: jsonb("detected_languages").$type<string[]>().notNull().default([]),
+  processingError: text("processing_error").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow().$onUpdate(() => new Date().toISOString()),
+}, (t) => [
+  uniqueIndex("call_recording_session_room").on(t.roomSid),
+  index("call_recording_session_consultation").on(t.consultationId, t.createdAt),
+]);
+
+export const callRecordingTracks = pgTable("consultation_call_recording_tracks", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull().references(() => callRecordingSessions.id, { onDelete: "cascade" }),
+  recordingSid: text("recording_sid").notNull(),
+  participantId: text("participant_id").notNull().references(() => accounts.id),
+  speaker: text("speaker").$type<"client" | "lawyer">().notNull(),
+  trackSid: text("track_sid"),
+  status: text("status").$type<"queued" | "processing" | "processing_delete_pending" | "transcribed_delete_pending" | "failed_delete_pending" | "transcribed" | "failed">().notNull().default("queued"),
+  mediaOffsetMs: integer("media_offset_ms").notNull().default(0),
+  durationSeconds: integer("duration_seconds"),
+  detectedLanguage: text("detected_language"),
+  transcriptWords: jsonb("transcript_words").$type<CallTranscriptWord[]>().notNull().default([]),
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("last_error").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow().$onUpdate(() => new Date().toISOString()),
+  transcribedAt: timestamp("transcribed_at", { withTimezone: true, mode: "string" }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "string" }),
+}, (t) => [
+  uniqueIndex("call_recording_track_recording_sid").on(t.recordingSid),
+  index("call_recording_track_queue").on(t.status, t.createdAt),
+  index("call_recording_track_session").on(t.sessionId),
 ]);
 
 // This consent is specific to each call-token issuance; it does not opt in to recording.

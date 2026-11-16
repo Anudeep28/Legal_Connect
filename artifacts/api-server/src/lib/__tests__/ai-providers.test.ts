@@ -7,6 +7,7 @@ import {
   ProviderConfigurationError,
   ProviderRequestError,
   requestDeepSeek,
+  transcribeCallTrackWithElevenLabs,
   transcribeWithElevenLabs,
   type ConnectorClient,
 } from "../ai-providers";
@@ -184,6 +185,39 @@ test("ElevenLabs receives transient audio in multipart form through the connecte
   assert.equal(language, "hi");
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(fileText, "wav-audio-bytes");
+});
+
+test("call transcription uses multilingual Scribe v3 with word timings", async () => {
+  let receivedForm: FormData | undefined;
+  const transcript = await transcribeCallTrackWithElevenLabs(
+    Buffer.from("call-audio-bytes"),
+    "wav",
+    {
+      languageCode: "mr",
+      secondaryLanguageCodes: ["en", "mr"],
+      client: fakeConnector({
+        onProxy: (_path, options) => { receivedForm = options?.body as FormData; },
+        proxyResponse: Response.json({
+          text: "नमस्कार, hello",
+          language_code: "mr",
+          words: [
+            { text: "नमस्कार", start: 0.2, end: 0.8, language_code: "mr" },
+            { text: "hello", start: 1.1, end: 1.5, language_code: "en" },
+          ],
+        }),
+      }),
+    },
+  );
+  assert.equal(receivedForm?.get("model_id"), "scribe_v3");
+  assert.equal(receivedForm?.get("language_code"), "mr");
+  assert.deepEqual(receivedForm?.getAll("secondary_language_codes"), ["en"]);
+  assert.equal(receivedForm?.get("timestamps_granularity"), "word");
+  assert.equal(receivedForm?.get("diarize"), "false");
+  assert.equal(transcript.languageCode, "mr");
+  assert.deepEqual(transcript.words, [
+    { text: "नमस्कार", startSeconds: 0.2, endSeconds: 0.8, languageCode: "mr" },
+    { text: "hello", startSeconds: 1.1, endSeconds: 1.5, languageCode: "en" },
+  ]);
 });
 
 test("ElevenLabs missing connection is reported before a provider request", async () => {

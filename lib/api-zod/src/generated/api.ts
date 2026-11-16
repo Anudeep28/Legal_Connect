@@ -117,6 +117,13 @@ export const GetConsultationCallResponse = zod.object({
   "recordingMode": zod.enum(['pending', 'recorded', 'unrecorded']),
   "myRecordingConsent": zod.boolean().nullable(),
   "otherRecordingConsent": zod.boolean().nullable(),
+  "recordingLanguageCode": zod.string(),
+  "recordingLanguageEditable": zod.boolean(),
+  "recordingLanguageOptions": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "nativeName": zod.string()
+})),
   "opensAt": zod.string(),
   "closesAt": zod.string()
 })
@@ -165,6 +172,75 @@ export const SetCallRecordingConsentResponse = zod.object({
   "mode": zod.enum(['pending', 'recorded', 'unrecorded']),
   "myConsent": zod.boolean().nullable(),
   "otherConsent": zod.boolean().nullable()
+})
+
+
+
+
+
+export const UpdateCallRecordingLanguageParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const updateCallRecordingLanguageBodyLanguageCodeMin = 2;
+export const updateCallRecordingLanguageBodyLanguageCodeMax = 8;
+
+
+
+export const UpdateCallRecordingLanguageBody = zod.object({
+  "languageCode": zod.string().min(updateCallRecordingLanguageBodyLanguageCodeMin).max(updateCallRecordingLanguageBodyLanguageCodeMax)
+})
+
+export const UpdateCallRecordingLanguageResponse = zod.object({
+  "languageCode": zod.string()
+})
+
+
+
+
+
+export const ListCallTranscriptsParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const ListCallTranscriptsResponseItem = zod.object({
+  "id": zod.string(),
+  "consultationId": zod.string(),
+  "status": zod.enum(['recording', 'processing', 'ready', 'failed', 'withdrawn']),
+  "generatedTranscript": zod.string(),
+  "editedTranscript": zod.string(),
+  "detectedLanguages": zod.array(zod.string()),
+  "createdAt": zod.string(),
+  "completedAt": zod.string().nullable()
+})
+export const ListCallTranscriptsResponse = zod.array(ListCallTranscriptsResponseItem)
+
+
+
+
+
+export const UpdateCallTranscriptParams = zod.object({
+  "id": zod.coerce.string().min(1),
+  "sessionId": zod.coerce.string()
+})
+
+export const updateCallTranscriptBodyEditedTranscriptMax = 100000;
+
+
+
+export const UpdateCallTranscriptBody = zod.object({
+  "editedTranscript": zod.string().max(updateCallTranscriptBodyEditedTranscriptMax)
+})
+
+export const UpdateCallTranscriptResponse = zod.object({
+  "id": zod.string(),
+  "consultationId": zod.string(),
+  "status": zod.enum(['recording', 'processing', 'ready', 'failed', 'withdrawn']),
+  "generatedTranscript": zod.string(),
+  "editedTranscript": zod.string(),
+  "detectedLanguages": zod.array(zod.string()),
+  "createdAt": zod.string(),
+  "completedAt": zod.string().nullable()
 })
 
 
@@ -477,6 +553,7 @@ export const ListConsultationsResponseItem = zod.object({
   "endsAt": zod.string(),
   "fee": zod.number().int(),
   "transcript": zod.string(),
+  "callRecordingLanguageCode": zod.string(),
   "demo": zod.boolean(),
   "createdAt": zod.string()
 })
@@ -516,6 +593,7 @@ export const CreateConsultationResponse = zod.object({
   "endsAt": zod.string(),
   "fee": zod.number().int(),
   "transcript": zod.string(),
+  "callRecordingLanguageCode": zod.string(),
   "demo": zod.boolean(),
   "createdAt": zod.string()
 })
@@ -545,6 +623,7 @@ export const GetConsultationResponse = zod.object({
   "endsAt": zod.string(),
   "fee": zod.number().int(),
   "transcript": zod.string(),
+  "callRecordingLanguageCode": zod.string(),
   "demo": zod.boolean(),
   "createdAt": zod.string()
 })
@@ -583,6 +662,7 @@ export const UpdateConsultationResponse = zod.object({
   "endsAt": zod.string(),
   "fee": zod.number().int(),
   "transcript": zod.string(),
+  "callRecordingLanguageCode": zod.string(),
   "demo": zod.boolean(),
   "createdAt": zod.string()
 })
@@ -644,7 +724,8 @@ export const ListDeliverablesResponseItem = zod.object({
   "title": zod.string(),
   "content": zod.string(),
   "status": zod.enum(['draft', 'delivered']),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "lawyerReviewedAt": zod.string().nullable()
 })
 export const ListDeliverablesResponse = zod.array(ListDeliverablesResponseItem)
 
@@ -665,7 +746,8 @@ export const createDeliverableBodyContentMax = 100000;
 export const CreateDeliverableBody = zod.object({
   "title": zod.string().min(1).max(createDeliverableBodyTitleMax),
   "content": zod.string().max(createDeliverableBodyContentMax),
-  "status": zod.enum(['draft', 'delivered'])
+  "status": zod.enum(['draft', 'delivered']),
+  "reviewConfirmed": zod.boolean()
 })
 
 export const CreateDeliverableResponse = zod.object({
@@ -674,7 +756,8 @@ export const CreateDeliverableResponse = zod.object({
   "title": zod.string(),
   "content": zod.string(),
   "status": zod.enum(['draft', 'delivered']),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "lawyerReviewedAt": zod.string().nullable()
 })
 
 
@@ -694,7 +777,8 @@ export const updateDeliverableBodyContentMax = 100000;
 export const UpdateDeliverableBody = zod.object({
   "title": zod.string().min(1).max(updateDeliverableBodyTitleMax),
   "content": zod.string().max(updateDeliverableBodyContentMax),
-  "status": zod.enum(['draft', 'delivered'])
+  "status": zod.enum(['draft', 'delivered']),
+  "reviewConfirmed": zod.boolean()
 })
 
 export const UpdateDeliverableResponse = zod.object({
@@ -703,7 +787,8 @@ export const UpdateDeliverableResponse = zod.object({
   "title": zod.string(),
   "content": zod.string(),
   "status": zod.enum(['draft', 'delivered']),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "lawyerReviewedAt": zod.string().nullable()
 })
 
 
@@ -888,6 +973,34 @@ export const TranscribeAudioBody = zod.object({
 
 export const TranscribeAudioResponse = zod.object({
   "text": zod.string()
+})
+
+
+/**
+ * Creates a private AI draft preview from a lawyer-edited transcript and selected legal template. Does not create or deliver a document.
+ */
+
+
+
+export const DraftFromCallTranscriptParams = zod.object({
+  "id": zod.coerce.string().min(1),
+  "sessionId": zod.coerce.string()
+})
+
+export const draftFromCallTranscriptBodyLanguageMin = 2;
+export const draftFromCallTranscriptBodyLanguageMax = 32;
+
+
+
+export const DraftFromCallTranscriptBody = zod.object({
+  "templateId": zod.string(),
+  "language": zod.string().min(draftFromCallTranscriptBodyLanguageMin).max(draftFromCallTranscriptBodyLanguageMax),
+  "dataUseAcknowledged": zod.literal(true)
+})
+
+export const DraftFromCallTranscriptResponse = zod.object({
+  "title": zod.string(),
+  "content": zod.string()
 })
 
 

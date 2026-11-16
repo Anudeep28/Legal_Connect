@@ -194,7 +194,7 @@ test("Twilio room tokens are restricted to participants and record explicit cons
       assert.equal(String(body.RecordParticipantsOnConnect), "false"); assert.equal(String(body.MaxParticipants), "2"); return true;
     })
     .reply(201, { sid: roomSid, unique_name: "synthetic-room", status: "in-progress", record_participants_on_connect: false });
-  const access = await issueCallAccess(await account(clientId), c.id);
+  const access = await issueCallAccess(await account(clientId), c.id, { hasTranscriptionConnection: async () => true });
   assert.equal(access.room, roomSid); assert.equal(access.recordingEnabled, false);
   const payload = JSON.parse(Buffer.from(access.token.split(".")[1], "base64url").toString());
   assert.equal(payload.grants.identity, clientId); assert.equal(payload.grants.video.room, roomSid);
@@ -242,6 +242,21 @@ test("record-enabled rooms require both per-consultation choices; withdrawal clo
   assert.equal(closed.callRecordingStopPending, false);
   assert.equal(closed.callRecordingMode, "unrecorded");
   assert.equal((await db.select().from(callRecordingConsents).where(eq(callRecordingConsents.consultationId, c.id))).length, 2);
+});
+
+test("recording rooms are not created when the transcription provider is unavailable", async () => {
+  process.env.TWILIO_CALLS_ENABLED = "true";
+  process.env.TWILIO_CALL_RECORDING_ENABLED = "true";
+  const c = await consultation(5 * MINUTE);
+  await saveCallRecordingConsent(await account(clientId), c.id, true);
+  await saveCallRecordingConsent(await account(lawyerOwnerId), c.id, true);
+  await assert.rejects(
+    issueCallAccess(await account(clientId), c.id, { hasTranscriptionConnection: async () => false }),
+    { status: 503 },
+  );
+  const [unchanged] = await db.select().from(consultations).where(eq(consultations.id, c.id));
+  assert.equal(unchanged.callRoomSid, null);
+  assert.equal(unchanged.callRecordingMode, "pending");
 });
 
 test("a decline locks the consultation to an unrecorded room", async () => {

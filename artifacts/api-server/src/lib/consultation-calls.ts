@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import twilio from "twilio";
 import { and, eq, inArray } from "drizzle-orm";
-import { db, consultations, lawyers, accounts, callConsents, callRecordingConsents } from "@workspace/db";
+import { db, consultations, lawyers, accounts, callConsents, callRecordingConsents, callRecordingSessions } from "@workspace/db";
 import { HttpError, type Account } from "../middlewares/access";
-import { callsEnabled, callRecordingEnabled } from "./communication-config";
+import { callsEnabled, callRecordingEnabled, callRecordingCallbackUrl } from "./communication-config";
 import { callEligibility, isParticipant } from "./communication-policy";
 import { callFailureDetails, type CallPreparationStage } from "./call-diagnostics";
+import { hasElevenLabsConnection } from "./ai-providers";
+import { supportedLanguages } from "../data/languages";
 import { logger } from "./logger";
 
 export function twilioClient() {
@@ -87,8 +89,31 @@ export async function saveCallRecordingConsent(account: Account, consultationId:
   return recordingConsentState(account, consultationId, mode);
 }
 
-export async function issueCallAccess(account: Account, id: string) {
+export async function saveCallRecordingLanguage(account: Account, consultationId: string, languageCode: string) {
+  if (!callRecordingEnabled()) throw new HttpError(503, "Call recording is not available; the call will remain unrecorded.");
+  if (languageCode !== "auto" && !supportedLanguages.some((language) => language.code === languageCode))
+    throw new HttpError(400, "Select a supported conversation language.");
+  return db.transaction(async (tx) => {
+    const [c] = await tx.select().from(consultations).where(eq(consultations.id, consultationId)).for("update");
+    if (!c) throw new HttpError(404, "Consultation not found.");
+    const [lawyer] = await tx.select().from(lawyers).where(eq(lawyers.id, c.lawyerId));
+    if (!lawyer || lawyer.ownerId !== account.id)
+      throw new HttpError(403, "Only the assigned lawyer can select the recording language.");
+    if (c.callRecordingMode !== "pending" || c.callRoomSid)
+      throw new HttpError(409, "The recording language can only be changed before the call starts.");
+    await tx.update(consultations).set({ callRecordingLanguageCode: languageCode })
+      .where(eq(consultations.id, consultationId));
+    return { languageCode };
+  });
+}
+
+export async function issueCallAccess(
+  account: Account,
+  id: string,
+  options: { hasTranscriptionConnection?: () => Promise<boolean> } = {},
+) {
   if (!callsEnabled()) throw new HttpError(503, "Twilio calling is not configured. No call was placed.");
+  const hasTranscriptionConnection = options.hasTranscriptionConnection ?? hasElevenLabsConnection;
   return db.transaction(async (tx) => {
     // Serialize room creation against acceptance/cancellation and concurrent joins.
     const [c] = await tx.select().from(consultations).where(eq(consultations.id, id)).for("update");
@@ -109,6 +134,8 @@ export async function issueCallAccess(account: Account, id: string) {
       const lawyerChoice = choices.find((choice) => choice.userId === lawyer.ownerId)?.consent;
       if (c.callRecordingMode === "pending") {
         if (clientChoice === true && lawyerChoice === true) {
+          if (!callRecordingCallbackUrl()) throw new HttpError(503, "Secure recording callbacks are not configured. The call remains unrecorded.");
+          if (!await hasTranscriptionConnection()) throw new HttpError(503, "ElevenLabs transcription is unavailable. No recording call was started.");
           await tx.update(consultations).set({ callRecordingMode: "recorded" }).where(eq(consultations.id, id));
           shouldRecord = true;
         } else if (clientChoice === false || lawyerChoice === false) {
@@ -119,7 +146,11 @@ export async function issueCallAccess(account: Account, id: string) {
       } else if (c.callRecordingMode === "recorded") {
         if (clientChoice !== true || lawyerChoice !== true) {
           await tx.update(consultations).set({ callRecordingMode: "unrecorded" }).where(eq(consultations.id, id));
-        } else shouldRecord = true;
+        } else {
+          if (!callRecordingCallbackUrl()) throw new HttpError(503, "Secure recording callbacks are not configured. The call remains unrecorded.");
+          if (!await hasTranscriptionConnection()) throw new HttpError(503, "ElevenLabs transcription is unavailable. No recording call was started.");
+          shouldRecord = true;
+        }
       }
     } else if (c.callRecordingMode === "recorded") {
       // Turning off the feature flag also prevents any further recording rooms.
@@ -136,11 +167,21 @@ export async function issueCallAccess(account: Account, id: string) {
         room = await client.video.v1.rooms.create({
           uniqueName: `consultation-${randomUUID()}`, type: "group",
           maxParticipants: 2, recordParticipantsOnConnect: shouldRecord,
+          audioOnly: true,
+          ...(shouldRecord ? { statusCallback: callRecordingCallbackUrl()!, statusCallbackMethod: "POST" as const } : {}),
           maxParticipantDuration: Math.max(1, Math.ceil((new Date(c.endsAt).getTime() - Date.now()) / 1000)),
           emptyRoomTimeout: 5, unusedRoomTimeout: 5,
         });
         stage = "save-room";
         await tx.update(consultations).set({ callRoomSid: room.sid }).where(eq(consultations.id, id));
+        if (shouldRecord) {
+          await tx.insert(callRecordingSessions).values({
+            id: randomUUID(),
+            consultationId: id,
+            roomSid: room.sid,
+            languageCode: c.callRecordingLanguageCode || "auto",
+          }).onConflictDoNothing({ target: callRecordingSessions.roomSid });
+        }
       }
       if (room.recordParticipantsOnConnect !== shouldRecord) {
         stage = "close-recording-room";
