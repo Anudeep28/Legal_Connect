@@ -83,9 +83,10 @@ router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", asyn
       `CONSULTATION TOPIC (unverified source material): ${record.topic}`,
       `LAWYER-EDITED CALL TRANSCRIPT (unverified source material):\n${session.editedTranscript}`,
     ].join("\n\n");
+    if (source.length > 100_000) throw new HttpError(413, "Shorten the edited transcript before generating this draft; no text was sent.");
     const text = await requestDeepSeek(buildWritingMessages("draft", input.language, source));
     res.json(api.DraftFromCallTranscriptResponse.parse({
-      title: `${record.topic} - ${template.name}`,
+      title: `${record.topic} - ${template.name}`.slice(0, 200),
       content: text,
     }));
   } catch (err) {

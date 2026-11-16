@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, integer, boolean, timestamp, uniqueIndex, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, uniqueIndex, index, jsonb, doublePrecision } from "drizzle-orm/pg-core";
 import { accounts } from "./accounts";
 import { lawyers } from "./lawyers";
 
@@ -77,6 +77,7 @@ export const callRecordingSessions = pgTable("consultation_call_recording_sessio
   languageCode: text("language_code").notNull().default("auto"),
   status: text("status").$type<"recording" | "processing" | "ready" | "failed" | "withdrawn">().notNull().default("recording"),
   roomEndedAt: timestamp("room_ended_at", { withTimezone: true, mode: "string" }),
+  inventoryComplete: boolean("inventory_complete").notNull().default(false),
   generatedTranscript: text("generated_transcript").notNull().default(""),
   editedTranscript: text("edited_transcript").notNull().default(""),
   detectedLanguages: jsonb("detected_languages").$type<string[]>().notNull().default([]),
@@ -96,7 +97,7 @@ export const callRecordingTracks = pgTable("consultation_call_recording_tracks",
   speaker: text("speaker").$type<"client" | "lawyer">().notNull(),
   trackSid: text("track_sid"),
   status: text("status").$type<"queued" | "processing" | "processing_delete_pending" | "transcribed_delete_pending" | "failed_delete_pending" | "transcribed" | "failed">().notNull().default("queued"),
-  mediaOffsetMs: integer("media_offset_ms").notNull().default(0),
+  mediaOffsetMs: doublePrecision("media_offset_ms").notNull().default(0),
   durationSeconds: integer("duration_seconds"),
   detectedLanguage: text("detected_language"),
   transcriptWords: jsonb("transcript_words").$type<CallTranscriptWord[]>().notNull().default([]),

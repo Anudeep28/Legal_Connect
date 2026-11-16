@@ -161,6 +161,7 @@ The Platform does not send all consultation content to an AI service automatical
 7.1. Account data: retained while your account is active, and for up to 3 years after deletion for legal compliance.
 7.2. Consultation transcripts and chat messages: retained for 1 year after the consultation, or longer if required by any pending legal proceeding.
 7.3. Call recordings, if the feature is enabled: the Platform requests deletion from Twilio after transcription succeeds. If transcription fails, it retries up to three times and then requests deletion; failed deletion requests are retried by the Platform. The Platform does not store the raw call audio in its database. Twilio may retain provider-side backups or records under its terms, so deletion from the active media resource does not guarantee immediate removal of every provider copy. Call recording is disabled by default and must not be enabled until the configured provider terms and applicable legal requirements have been reviewed.
+For unprocessed call audio, the Platform also requests deletion once the recording session is 24 hours old. A background check reconciles completed rooms with Twilio to recover missed recording callbacks. These requests depend on the Platform and provider being available; failed requests are retried rather than treated as confirmed deletion.
 7.4. Payment records: retained for 8 years as required under the Income Tax Act, 1961, and GST regulations.
 7.5. Documents: retained while your account is active. Exported documents remain with you.
 

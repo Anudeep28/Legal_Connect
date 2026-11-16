@@ -23,3 +23,9 @@ replacement credentials or pretending the services are active.
 
 **How to apply:** Leave activation gated, distinguish synthetic tests from live
 verification, and offer connection again only when the owner is ready to activate.
+
+For call-to-document work the owner chose “Opt-in post-call transcript” and “Build now, keep disabled,” and requested policies describing call recording with consent.
+
+**Why:** Building the capability and revising disclosures are not permission to start recording real consultations.
+
+**How to apply:** Preserve default-off recording until separately authorized. Keep transcript review and explicit lawyer-controlled document delivery; validate a controlled provider call before claiming live readiness.

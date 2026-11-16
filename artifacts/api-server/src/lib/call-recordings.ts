@@ -17,13 +17,14 @@ import { logger } from "./logger";
 const MAX_RECORDING_BYTES = 100 * 1024 * 1024;
 const MAX_TRANSCRIPT_CHARS = 100_000;
 const MAX_TRANSCRIPTION_ATTEMPTS = 3;
+export const CALL_AUDIO_RETENTION_MS = 24 * 60 * 60_000;
 const ROOM_RECORDING_CALLBACK = "/api/communications/twilio-video-recordings";
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function validSid(value: string, prefix: "RM" | "RE") {
+function validSid(value: string, prefix: "RM" | "RT") {
   return new RegExp(`^${prefix}[0-9a-fA-F]{32}$`).test(value);
 }
 
@@ -63,8 +64,8 @@ async function storeTwilioCallback(body: Record<string, unknown>) {
   const [session] = await db.select().from(callRecordingSessions).where(eq(callRecordingSessions.roomSid, roomSid));
   if (!session) {
     const recordingSid = stringValue(body.RecordingSid);
-    if (validSid(recordingSid, "RE") && event === "recording-completed") {
-      await removeTwilioRecording(recordingSid).catch(() => undefined);
+    if (validSid(recordingSid, "RT") && event === "recording-completed") {
+      await removeTwilioRecording(recordingSid);
     }
     return;
   }
@@ -78,7 +79,7 @@ async function storeTwilioCallback(body: Record<string, unknown>) {
   }
 
   const recordingSid = stringValue(body.RecordingSid);
-  if (!validSid(recordingSid, "RE")) return;
+  if (!validSid(recordingSid, "RT")) return;
 
   if (event === "recording-failed") {
     await db.update(callRecordingSessions).set({ status: "failed", processingError: "recording_failed" })
@@ -96,8 +97,7 @@ async function storeTwilioCallback(body: Record<string, unknown>) {
       const participant = await twilioClient().video.v1.rooms(roomSid).participants(participantSid).fetch();
       identity = participant.identity;
     } catch {
-      await removeTwilioRecording(recordingSid).catch(() => undefined);
-      return;
+      throw new Error("participant_identity_lookup_failed");
     }
   }
   const speaker = identity === consultation?.userId ? "client" : identity && identity === lawyer?.ownerId ? "lawyer" : null;
@@ -106,7 +106,7 @@ async function storeTwilioCallback(body: Record<string, unknown>) {
   if (!consultation || !lawyer || !speaker ||
     (trackKind && trackKind !== "audio") ||
     (container && container !== "mka")) {
-    await removeTwilioRecording(recordingSid).catch(() => undefined);
+    await removeTwilioRecording(recordingSid);
     return;
   }
 
@@ -117,7 +117,7 @@ async function storeTwilioCallback(body: Record<string, unknown>) {
     consentRows.some((row) => row.userId === lawyer.ownerId && row.consent);
   const [participant] = await db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, identity));
   if (!participant) {
-    await removeTwilioRecording(recordingSid).catch(() => undefined);
+    await removeTwilioRecording(recordingSid);
     return;
   }
 
@@ -280,7 +280,7 @@ export function formatCallTranscript(words: CallTranscriptWord[]) {
 
 async function finishSessionIfReady(sessionId: string) {
   const [session] = await db.select().from(callRecordingSessions).where(eq(callRecordingSessions.id, sessionId));
-  if (!session || !session.roomEndedAt || ["ready", "failed", "withdrawn"].includes(session.status)) return;
+  if (!session || !session.roomEndedAt || !session.inventoryComplete || ["ready", "failed", "withdrawn"].includes(session.status)) return;
   const tracks = await db.select().from(callRecordingTracks).where(eq(callRecordingTracks.sessionId, sessionId));
   if (!tracks.length) {
     await db.update(callRecordingSessions).set({ status: "failed", processingError: "no_audio_tracks" })
@@ -294,7 +294,10 @@ async function finishSessionIfReady(sessionId: string) {
       .where(eq(callRecordingSessions.id, sessionId));
     return;
   }
-  const words = transcribed.flatMap((track) => track.transcriptWords);
+  const origin = Math.min(...transcribed.map((track) => track.mediaOffsetMs)) / 1000;
+  const words = transcribed.flatMap((track) => track.transcriptWords.map((word) => ({
+    ...word, startSeconds: Math.max(0, word.startSeconds - origin), endSeconds: Math.max(0, word.endSeconds - origin),
+  })));
   const transcript = formatCallTranscript(words);
   if (!transcript || transcript.length > MAX_TRANSCRIPT_CHARS) {
     await db.update(callRecordingSessions).set({ status: "failed", processingError: "transcript_invalid" })
@@ -315,7 +318,10 @@ async function finishSessionIfReady(sessionId: string) {
   }).where(eq(callRecordingSessions.id, sessionId));
 }
 
-export async function processCallRecordingQueue(limit = 5) {
+export async function processCallRecordingQueue(
+  limit = 5,
+  options: { transcribe?: typeof transcribeCallTrackWithElevenLabs } = {},
+) {
   for (let count = 0; count < limit; count++) {
     const claimed = await claimTrack();
     if (!claimed) return;
@@ -352,12 +358,13 @@ export async function processCallRecordingQueue(limit = 5) {
         consultation.status !== "cancelled" && lawyer &&
         consentRows.some((row) => row.userId === consultation.userId && row.consent) &&
         consentRows.some((row) => row.userId === lawyer.ownerId && row.consent);
-      if (!mutualConsent || session.status === "withdrawn") {
+      const expired = Date.now() - new Date(session.createdAt).getTime() >= CALL_AUDIO_RETENTION_MS;
+      if (!mutualConsent || session.status === "withdrawn" || expired) {
         await db.update(callRecordingTracks).set({
-          status: "failed_delete_pending", lastError: "consent_withdrawn", updatedAt: new Date().toISOString(),
+          status: "failed_delete_pending", lastError: expired ? "retention_expired" : "consent_withdrawn", updatedAt: new Date().toISOString(),
         }).where(eq(callRecordingTracks.id, track.id));
         await db.update(callRecordingSessions).set({
-          status: "withdrawn", processingError: "consent_withdrawn", updatedAt: new Date().toISOString(),
+          status: expired ? "failed" : "withdrawn", processingError: expired ? "retention_expired" : "consent_withdrawn", updatedAt: new Date().toISOString(),
         }).where(eq(callRecordingSessions.id, session.id));
         continue;
       }
@@ -374,7 +381,7 @@ export async function processCallRecordingQueue(limit = 5) {
           const compatible = await ensureCompatibleAudio(raw);
           if (compatible.buffer.length > MAX_RECORDING_BYTES) throw new Error("recording_too_large");
           const secondaryLanguageCodes = ["en", "mr"].filter((code) => code !== session.languageCode);
-          const result = await transcribeCallTrackWithElevenLabs(compatible.buffer, compatible.format, {
+          const result = await (options.transcribe ?? transcribeCallTrackWithElevenLabs)(compatible.buffer, compatible.format, {
             languageCode: session.languageCode,
             secondaryLanguageCodes,
           });
@@ -385,7 +392,19 @@ export async function processCallRecordingQueue(limit = 5) {
           };
         },
         async ({ result, transcriptWords }) => {
-          await db.update(callRecordingTracks).set({
+          await db.transaction(async (tx) => {
+            // Consent may have been withdrawn while the provider was transcribing.
+            // Serialize saving against the same consultation lock used by withdrawal.
+            const [current] = await tx.select().from(consultations)
+              .where(eq(consultations.id, session.consultationId)).for("update");
+            const choices = await tx.select().from(callRecordingConsents)
+              .where(eq(callRecordingConsents.consultationId, session.consultationId));
+            if (current?.callRecordingMode !== "recorded" || current.status === "cancelled" ||
+              !choices.some((choice) => choice.userId === current.userId && choice.consent) ||
+              !choices.some((choice) => choice.userId === lawyer?.ownerId && choice.consent)) {
+              throw new Error("consent_withdrawn");
+            }
+            await tx.update(callRecordingTracks).set({
             status: "transcribed_delete_pending",
             mediaOffsetMs: Number(recording.offset) || 0,
             durationSeconds: Number(recording.duration) || null,
@@ -395,7 +414,8 @@ export async function processCallRecordingQueue(limit = 5) {
             attempts: track.attempts + 1,
             lastError: "",
             updatedAt: new Date().toISOString(),
-          }).where(eq(callRecordingTracks.id, track.id));
+            }).where(eq(callRecordingTracks.id, track.id));
+          });
         },
         () => removeTwilioRecording(track.recordingSid),
       );
@@ -408,7 +428,7 @@ export async function processCallRecordingQueue(limit = 5) {
       }
     } catch (error) {
       const attempts = track.attempts + 1;
-      const terminal = attempts >= MAX_TRANSCRIPTION_ATTEMPTS;
+      const terminal = attempts >= MAX_TRANSCRIPTION_ATTEMPTS || (error as Error).message === "consent_withdrawn";
       await db.update(callRecordingTracks).set({
         status: terminal ? "failed_delete_pending" : "queued",
         attempts,
@@ -443,6 +463,68 @@ export async function transcribePersistThenDelete<T>(
   }
 }
 
+// Callbacks can arrive out of order or be missed. A completed-room inventory is
+// required before declaring a transcript complete, and also recovers missed media.
+export async function reconcileCallRecordingSessions(now = Date.now()) {
+  const sessions = await db.select().from(callRecordingSessions).where(and(
+    eq(callRecordingSessions.inventoryComplete, false),
+    lte(callRecordingSessions.updatedAt, new Date(now - 60_000).toISOString()),
+  )).orderBy(callRecordingSessions.updatedAt).limit(5);
+  for (const session of sessions) {
+    try {
+      const client = twilioClient();
+      const [consultation] = await db.select().from(consultations).where(eq(consultations.id, session.consultationId));
+      const expired = now - new Date(session.createdAt).getTime() >= CALL_AUDIO_RETENTION_MS;
+      const discard = expired || consultation?.callRecordingMode !== "recorded" || consultation.status === "cancelled";
+      let room = await client.video.v1.rooms(session.roomSid).fetch();
+      if (discard && room.status !== "completed") room = await client.video.v1.rooms(session.roomSid).update({ status: "completed" });
+      if (room.status !== "completed") {
+        await db.update(callRecordingSessions).set({ updatedAt: new Date(now).toISOString() }).where(eq(callRecordingSessions.id, session.id));
+        continue;
+      }
+      const recordings = await client.video.v1.recordings.list({ groupingSid: [session.roomSid], pageSize: 100 });
+      let complete = true;
+      let inventoryFailed = false;
+      for (const recording of recordings) {
+        if (recording.status === "processing") { complete = false; continue; }
+        if (discard || recording.type !== "audio") {
+          if (recording.status !== "deleted") await removeTwilioRecording(recording.sid);
+          await db.update(callRecordingTracks).set({
+            status: "failed", lastError: expired ? "retention_expired" : "consent_withdrawn",
+            deletedAt: new Date(now).toISOString(),
+          }).where(eq(callRecordingTracks.recordingSid, recording.sid));
+          continue;
+        }
+        if (recording.status === "completed") {
+          await storeTwilioCallback({
+            StatusCallbackEvent: "recording-completed", RoomSid: session.roomSid,
+            RecordingSid: recording.sid, ParticipantSid: recording.groupingSids?.participant_sid,
+            SourceSid: recording.sourceSid, TrackKind: "audio", Container: recording.containerFormat,
+          });
+        } else {
+          const [known] = await db.select().from(callRecordingTracks).where(eq(callRecordingTracks.recordingSid, recording.sid));
+          if (!known?.transcribedAt) {
+            inventoryFailed = true;
+            await db.update(callRecordingSessions).set({ status: "failed", processingError: "recording_unavailable" })
+              .where(eq(callRecordingSessions.id, session.id));
+          }
+        }
+      }
+      await db.update(callRecordingSessions).set({
+        inventoryComplete: complete, roomEndedAt: session.roomEndedAt ?? new Date(now).toISOString(),
+        ...(discard ? { status: expired ? "failed" as const : "withdrawn" as const } : inventoryFailed ? { status: "failed" as const } : session.status === "recording" ? { status: "processing" as const } : {}),
+        updatedAt: new Date(now).toISOString(),
+      }).where(eq(callRecordingSessions.id, session.id));
+      await finishSessionIfReady(session.id);
+    } catch {
+      // Do not mark the inventory complete or forget media when discovery/deletion fails.
+      await db.update(callRecordingSessions).set({ updatedAt: new Date(now).toISOString() })
+        .where(eq(callRecordingSessions.id, session.id));
+      logger.warn({ sessionId: session.id }, "Recording reconciliation will retry");
+    }
+  }
+}
+
 export async function listPrivateCallTranscripts(consultationId: string) {
   const rows = await db.select().from(callRecordingSessions).where(eq(callRecordingSessions.consultationId, consultationId))
     .orderBy(callRecordingSessions.createdAt);
@@ -463,6 +545,7 @@ export async function callRecordingTick() {
   if (workerRunning) return;
   workerRunning = true;
   try {
+    await reconcileCallRecordingSessions();
     await processCallRecordingQueue(1);
   } catch {
     logger.error("Call recording worker failed; saved work will be retried");

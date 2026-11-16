@@ -72,6 +72,8 @@ test("call recording is disclosed as disabled and requires both participants' co
   assert.match(privacy, /Twilio may process your phone number for verification, carry audio-call traffic, and store call audio tracks/i);
   assert.match(privacy, /ElevenLabs may process those audio tracks to produce a transcript/i);
   assert.match(privacy, /must not be enabled until the configured provider terms and applicable legal requirements have been reviewed/i);
+  assert.match(privacy, /recording session is 24 hours old/i);
+  assert.match(privacy, /failed deletion requests are retried/i);
   assert.match(disclaimer, /Call recording is disabled by default/i);
   assert.match(disclaimer, /if either declines, the call may proceed unrecorded/i);
   assert.match(simplePagesSource, /Call recording is disabled by default; if enabled, it requires separate consent from both the client and lawyer/i);
