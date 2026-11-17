@@ -3,3 +3,4 @@
 - [Communication providers](communication-providers.md) — owner chose Resend and Twilio verification; evaluate the original repo’s calling service before choosing Twilio calls.
 - [External webhook access](external-webhook-access.md) — private Preview may pass in-workspace checks while external callbacks hit Replit login; verify externally.
 - [Production admin access](production-admin-access.md) — resolve the current verified identity; an imported Preview admin row does not authorize production sign-in.
+- [DeepSeek API account](deepseek-api-account.md) — app uses the standard Open Platform account; use its public API terms unless a separate written agreement is supplied.
