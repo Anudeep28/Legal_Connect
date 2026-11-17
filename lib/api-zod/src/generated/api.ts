@@ -1142,6 +1142,88 @@ export const RecordAdminLegalReviewResponse = zod.object({
 })
 
 
+export const GetAdminTwilioUsageBudgetResponse = zod.object({
+  "enabled": zod.boolean(),
+  "budgetAmount": zod.number().nullable(),
+  "budgetCurrency": zod.string(),
+  "warningPercent": zod.number().int(),
+  "lookupStatus": zod.enum(['not_checked', 'checking', 'success', 'partial', 'no_data', 'failed', 'not_configured']),
+  "currentSpend": zod.number().nullable(),
+  "usageCurrency": zod.string().nullable(),
+  "participantMinutes": zod.number().nullable(),
+  "periodStart": zod.string().nullable(),
+  "periodEnd": zod.string().nullable(),
+  "usageAsOf": zod.coerce.date().nullable(),
+  "lastAttemptAt": zod.coerce.date().nullable(),
+  "lastSuccessAt": zod.coerce.date().nullable(),
+  "providerConfigured": zod.boolean(),
+  "dataDelayed": zod.boolean(),
+  "currencyMatches": zod.boolean(),
+  "periodCurrent": zod.boolean(),
+  "alertLevel": zod.enum(['none', 'approaching', 'reached'])
+})
+
+
+export const updateAdminTwilioUsageBudgetBodyBudgetAmountMin = 0.01;
+export const updateAdminTwilioUsageBudgetBodyBudgetAmountMax = 1000000000;
+
+export const updateAdminTwilioUsageBudgetBodyBudgetCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+export const updateAdminTwilioUsageBudgetBodyWarningPercentMin = 50;
+export const updateAdminTwilioUsageBudgetBodyWarningPercentMax = 95;
+
+
+
+export const UpdateAdminTwilioUsageBudgetBody = zod.object({
+  "enabled": zod.boolean(),
+  "budgetAmount": zod.number().min(updateAdminTwilioUsageBudgetBodyBudgetAmountMin).max(updateAdminTwilioUsageBudgetBodyBudgetAmountMax).nullable(),
+  "budgetCurrency": zod.string().regex(updateAdminTwilioUsageBudgetBodyBudgetCurrencyRegExp),
+  "warningPercent": zod.number().int().min(updateAdminTwilioUsageBudgetBodyWarningPercentMin).max(updateAdminTwilioUsageBudgetBodyWarningPercentMax)
+})
+
+export const UpdateAdminTwilioUsageBudgetResponse = zod.object({
+  "enabled": zod.boolean(),
+  "budgetAmount": zod.number().nullable(),
+  "budgetCurrency": zod.string(),
+  "warningPercent": zod.number().int(),
+  "lookupStatus": zod.enum(['not_checked', 'checking', 'success', 'partial', 'no_data', 'failed', 'not_configured']),
+  "currentSpend": zod.number().nullable(),
+  "usageCurrency": zod.string().nullable(),
+  "participantMinutes": zod.number().nullable(),
+  "periodStart": zod.string().nullable(),
+  "periodEnd": zod.string().nullable(),
+  "usageAsOf": zod.coerce.date().nullable(),
+  "lastAttemptAt": zod.coerce.date().nullable(),
+  "lastSuccessAt": zod.coerce.date().nullable(),
+  "providerConfigured": zod.boolean(),
+  "dataDelayed": zod.boolean(),
+  "currencyMatches": zod.boolean(),
+  "periodCurrent": zod.boolean(),
+  "alertLevel": zod.enum(['none', 'approaching', 'reached'])
+})
+
+
+export const RefreshAdminTwilioUsageBudgetResponse = zod.object({
+  "enabled": zod.boolean(),
+  "budgetAmount": zod.number().nullable(),
+  "budgetCurrency": zod.string(),
+  "warningPercent": zod.number().int(),
+  "lookupStatus": zod.enum(['not_checked', 'checking', 'success', 'partial', 'no_data', 'failed', 'not_configured']),
+  "currentSpend": zod.number().nullable(),
+  "usageCurrency": zod.string().nullable(),
+  "participantMinutes": zod.number().nullable(),
+  "periodStart": zod.string().nullable(),
+  "periodEnd": zod.string().nullable(),
+  "usageAsOf": zod.coerce.date().nullable(),
+  "lastAttemptAt": zod.coerce.date().nullable(),
+  "lastSuccessAt": zod.coerce.date().nullable(),
+  "providerConfigured": zod.boolean(),
+  "dataDelayed": zod.boolean(),
+  "currencyMatches": zod.boolean(),
+  "periodCurrent": zod.boolean(),
+  "alertLevel": zod.enum(['none', 'approaching', 'reached'])
+})
+
+
 export const ListAdminUsersResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),

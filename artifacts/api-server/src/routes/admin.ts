@@ -7,6 +7,7 @@ import { requireAccount, requireAdmin, requireOwnerAdmin, isOwnerDesignatedAdmin
 import { lawyerViews } from "../lib/legal";
 import { paymentsEnabled } from "../lib/razorpay";
 import { getLegalReviewApproval } from "../lib/legal-review";
+import { getTwilioUsageBudgetState, refreshTwilioUsageBudget, saveTwilioUsageBudgetConfig } from "../lib/twilio-usage-budget";
 
 const router: IRouter = Router();
 router.use("/admin", requireAccount, requireAdmin);
@@ -97,6 +98,21 @@ router.put("/admin/legal-review", requireOwnerAdmin, async (req, res): Promise<v
       approvedAt: approval.approvedAt,
     },
   }));
+});
+router.get("/admin/twilio-usage-budget", requireOwnerAdmin, async (_req, res): Promise<void> => {
+  const state = await getTwilioUsageBudgetState();
+  res.set("Cache-Control", "no-store").json(api.GetAdminTwilioUsageBudgetResponse.parse(state));
+});
+router.put("/admin/twilio-usage-budget", requireOwnerAdmin, async (req, res): Promise<void> => {
+  const input = api.UpdateAdminTwilioUsageBudgetBody.parse(req.body);
+  if (input.enabled && (input.budgetAmount === null || input.budgetAmount <= 0))
+    throw new HttpError(400, "Enter a positive monthly budget before enabling alerts.");
+  const state = await saveTwilioUsageBudgetConfig(input, req.account.id);
+  res.set("Cache-Control", "no-store").json(api.UpdateAdminTwilioUsageBudgetResponse.parse(state));
+});
+router.post("/admin/twilio-usage-budget/refresh", requireOwnerAdmin, async (req, res): Promise<void> => {
+  const state = await refreshTwilioUsageBudget({ force: true, ownerId: req.account.id });
+  res.set("Cache-Control", "no-store").json(api.RefreshAdminTwilioUsageBudgetResponse.parse(state));
 });
 router.get("/admin/users", async (_req, res): Promise<void> => {
   res.json(api.ListAdminUsersResponse.parse(await db.select().from(accounts).orderBy(desc(accounts.createdAt))));

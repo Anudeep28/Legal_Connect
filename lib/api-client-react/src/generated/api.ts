@@ -30,6 +30,7 @@ import type {
   ActionResult,
   AdminLegalReview,
   AdminOverview,
+  AdminTwilioUsageBudget,
   AudioInput,
   CallAccess,
   CallAvailability,
@@ -74,6 +75,7 @@ import type {
   ReviewModeration,
   ServiceError,
   TextResult,
+  TwilioUsageBudgetInput,
   UserModeration,
   VerificationChallenge,
   WritingAllowance,
@@ -4215,6 +4217,251 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getRecordAdminLegalReviewMutationOptions(options), queryClient);
+    }
+
+export const getGetAdminTwilioUsageBudgetUrl = () => {
+
+
+
+
+  return `/api/admin/twilio-usage-budget`
+}
+
+export const getAdminTwilioUsageBudget = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminTwilioUsageBudget> => {
+
+  return customFetch<AdminTwilioUsageBudget>(getGetAdminTwilioUsageBudgetUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminTwilioUsageBudgetQueryKey = () => {
+    return [
+    `/api/admin/twilio-usage-budget`
+    ] as const;
+    }
+
+
+export const getGetAdminTwilioUsageBudgetQueryOptions = <TData = Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminTwilioUsageBudgetQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>> = ({ signal }) => getAdminTwilioUsageBudget({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAdminTwilioUsageBudgetQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>>
+export type GetAdminTwilioUsageBudgetQueryError = ErrorType<void>
+
+
+export function useGetAdminTwilioUsageBudget<TData = Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminTwilioUsageBudget<TData = Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminTwilioUsageBudget<TData = Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetAdminTwilioUsageBudget<TData = Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminTwilioUsageBudget>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAdminTwilioUsageBudgetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAdminTwilioUsageBudgetUrl = () => {
+
+
+
+
+  return `/api/admin/twilio-usage-budget`
+}
+
+export const updateAdminTwilioUsageBudget = async (twilioUsageBudgetInput: TwilioUsageBudgetInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminTwilioUsageBudget> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminTwilioUsageBudget>(getUpdateAdminTwilioUsageBudgetUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(twilioUsageBudgetInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminTwilioUsageBudgetMutationKey = () => ['updateAdminTwilioUsageBudget'] as const;
+
+export const getUpdateAdminTwilioUsageBudgetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminTwilioUsageBudget>>, TError,UpdateAdminTwilioUsageBudgetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminTwilioUsageBudget>>, TError,UpdateAdminTwilioUsageBudgetMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAdminTwilioUsageBudgetMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminTwilioUsageBudget>>, UpdateAdminTwilioUsageBudgetMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAdminTwilioUsageBudget(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminTwilioUsageBudgetMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminTwilioUsageBudget>>>
+    export type UpdateAdminTwilioUsageBudgetMutationBody = BodyType<TwilioUsageBudgetInput>
+    export type UpdateAdminTwilioUsageBudgetMutationError = ErrorType<void>
+    export type UpdateAdminTwilioUsageBudgetMutationVariables = {data: BodyType<TwilioUsageBudgetInput>}
+
+    export const useUpdateAdminTwilioUsageBudget = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminTwilioUsageBudget>>, TError,UpdateAdminTwilioUsageBudgetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminTwilioUsageBudget>>,
+        TError,
+        UpdateAdminTwilioUsageBudgetMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAdminTwilioUsageBudgetMutationOptions(options), queryClient);
+    }
+
+export const getRefreshAdminTwilioUsageBudgetUrl = () => {
+
+
+
+
+  return `/api/admin/twilio-usage-budget/refresh`
+}
+
+export const refreshAdminTwilioUsageBudget = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminTwilioUsageBudget> => {
+
+  return customFetch<AdminTwilioUsageBudget>(getRefreshAdminTwilioUsageBudgetUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRefreshAdminTwilioUsageBudgetMutationKey = () => ['refreshAdminTwilioUsageBudget'] as const;
+
+export const getRefreshAdminTwilioUsageBudgetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshAdminTwilioUsageBudget>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof refreshAdminTwilioUsageBudget>>, TError,void, TContext> => {
+
+const mutationKey = getRefreshAdminTwilioUsageBudgetMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof refreshAdminTwilioUsageBudget>>, void> = () => {
+
+
+          return  refreshAdminTwilioUsageBudget(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RefreshAdminTwilioUsageBudgetMutationResult = NonNullable<Awaited<ReturnType<typeof refreshAdminTwilioUsageBudget>>>
+
+    export type RefreshAdminTwilioUsageBudgetMutationError = ErrorType<void>
+
+
+    export const useRefreshAdminTwilioUsageBudget = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshAdminTwilioUsageBudget>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof refreshAdminTwilioUsageBudget>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRefreshAdminTwilioUsageBudgetMutationOptions(options), queryClient);
     }
 
 export const getListAdminUsersUrl = () => {

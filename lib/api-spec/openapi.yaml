@@ -581,6 +581,45 @@ paths:
               schema: { $ref: "#/components/schemas/AdminLegalReview" }
         "403":
           description: Only the owner-designated administrator may record approval
+  /admin/twilio-usage-budget:
+    get:
+      operationId: getAdminTwilioUsageBudget
+      responses:
+        "200":
+          description: Owner-configured monthly Twilio Video alert budget and latest provider usage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTwilioUsageBudget" }
+        "403":
+          description: Only the owner-designated administrator may view call usage
+    put:
+      operationId: updateAdminTwilioUsageBudget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TwilioUsageBudgetInput" }
+      responses:
+        "200":
+          description: Updated monthly usage alert settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTwilioUsageBudget" }
+        "400":
+          description: Invalid budget or warning threshold
+        "403":
+          description: Only the owner-designated administrator may configure alerts
+  /admin/twilio-usage-budget/refresh:
+    post:
+      operationId: refreshAdminTwilioUsageBudget
+      responses:
+        "200":
+          description: Latest posted provider usage, or a safe status when lookup fails
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTwilioUsageBudget" }
+        "403":
+          description: Only the owner-designated administrator may request a lookup
   /admin/users:
     get:
       operationId: listAdminUsers
@@ -890,6 +929,38 @@ components:
           oneOf:
             - { $ref: "#/components/schemas/LegalCounselApproval" }
             - { type: "null" }
+    TwilioUsageBudgetInput:
+      type: object
+      required: [enabled, budgetAmount, budgetCurrency, warningPercent]
+      properties:
+        enabled: { type: boolean }
+        budgetAmount: { type: ["number", "null"], minimum: 0.01, maximum: 1000000000 }
+        budgetCurrency: { type: string, pattern: "^[A-Z]{3}$" }
+        warningPercent: { type: integer, minimum: 50, maximum: 95 }
+    AdminTwilioUsageBudget:
+      type: object
+      required: [enabled, budgetAmount, budgetCurrency, warningPercent, lookupStatus, currentSpend, usageCurrency, participantMinutes, periodStart, periodEnd, usageAsOf, lastAttemptAt, lastSuccessAt, providerConfigured, dataDelayed, currencyMatches, periodCurrent, alertLevel]
+      properties:
+        enabled: { type: boolean }
+        budgetAmount: { type: ["number", "null"] }
+        budgetCurrency: { type: string }
+        warningPercent: { type: integer }
+        lookupStatus:
+          type: string
+          enum: [not_checked, checking, success, partial, no_data, failed, not_configured]
+        currentSpend: { type: ["number", "null"] }
+        usageCurrency: { type: ["string", "null"] }
+        participantMinutes: { type: ["number", "null"] }
+        periodStart: { type: ["string", "null"] }
+        periodEnd: { type: ["string", "null"] }
+        usageAsOf: { type: ["string", "null"], format: date-time }
+        lastAttemptAt: { type: ["string", "null"], format: date-time }
+        lastSuccessAt: { type: ["string", "null"], format: date-time }
+        providerConfigured: { type: boolean }
+        dataDelayed: { type: boolean }
+        currencyMatches: { type: boolean }
+        periodCurrent: { type: boolean }
+        alertLevel: { type: string, enum: [none, approaching, reached] }
     Account:
       type: object
       required: [id, name, email, role, status, emailNotifications, pushNotifications, phone, phoneVerifiedAt, subscriptionPlan, documentCredits, createdAt]

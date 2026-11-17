@@ -5,6 +5,10 @@ export function callsEnabled() {
     process.env.TWILIO_API_KEY_SID && process.env.TWILIO_API_KEY_SECRET,
   );
 }
+// Usage Records require Account SID + Auth Token; API key credentials are not needed.
+export function twilioUsageLookupConfigured() {
+  return Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
+}
 // Opt-in recording is separately gated and is off unless an operator explicitly
 // enables it after policy, billing and provider-retention review.
 export function callRecordingEnabled() {

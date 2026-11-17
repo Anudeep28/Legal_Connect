@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test:communications": "NODE_ENV=test tsx --test src/lib/__tests__/communications.test.ts src/lib/__tests__/call-diagnostics.test.ts src/lib/__tests__/call-recordings.test.ts",
+    "test:twilio-usage": "NODE_ENV=test tsx --test src/lib/__tests__/twilio-usage-budget.test.ts",
     "test:ai": "NODE_ENV=test tsx --test src/lib/__tests__/ai-providers.test.ts src/routes/writing.test.ts",
     "test:policy-disclosures": "NODE_ENV=test tsx --test src/lib/__tests__/policy-disclosures.test.ts",
     "test:health": "NODE_ENV=test tsx --test src/routes/health.test.ts",

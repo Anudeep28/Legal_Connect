@@ -3,7 +3,7 @@ import twilio from "twilio";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, consultations, lawyers, accounts, callConsents, callRecordingConsents, callRecordingSessions } from "@workspace/db";
 import { HttpError, type Account } from "../middlewares/access";
-import { callsEnabled, callRecordingEnabled, callRecordingCallbackUrl } from "./communication-config";
+import { callsEnabled, callRecordingEnabled, callRecordingCallbackUrl, twilioUsageLookupConfigured } from "./communication-config";
 import { callEligibility, isParticipant } from "./communication-policy";
 import { callFailureDetails, type CallPreparationStage } from "./call-diagnostics";
 import { hasElevenLabsConnection } from "./ai-providers";
@@ -12,6 +12,83 @@ import { logger } from "./logger";
 
 export function twilioClient() {
   return twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN, { timeout: 10_000, autoRetry: false });
+}
+
+export type TwilioVideoUsageSnapshot = {
+  status: "success" | "partial" | "no_data";
+  spend: string | null;
+  currency: string | null;
+  participantMinutes: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  asOf: string | null;
+};
+
+function usageDate(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : null;
+}
+
+function usageTimestamp(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
+/**
+ * Reads Twilio's posted monthly Programmable Video total (pv) and the
+ * Group Room participant-minute record. The total is provider-priced, not an
+ * estimate derived from room duration or the published per-minute rate.
+ */
+export async function getTwilioVideoUsage(): Promise<TwilioVideoUsageSnapshot> {
+  if (!twilioUsageLookupConfigured()) throw new Error("twilio_usage_not_configured");
+  const records = await twilioClient().usage.records.thisMonth.list({
+    includeSubaccounts: false,
+    pageSize: 1000,
+    limit: 1000,
+  });
+  const videoTotals = records.filter((record) => record.category === "pv");
+  const participantRecords = records.filter((record) => record.category === "group-rooms-participant-minutes");
+  const datedRecords = videoTotals.length ? videoTotals : participantRecords;
+  const periodStart = usageDate(datedRecords[0]?.startDate);
+  const periodEnd = usageDate(datedRecords[0]?.endDate);
+  const asOf = datedRecords
+    .map((record) => usageTimestamp(record.asOf))
+    .filter((value): value is string => value !== null)
+    .sort()
+    .at(-1) ?? null;
+  const participantValues = participantRecords.map((record) => Number(record.usage));
+  const participantMinutes = participantValues.length && participantValues.every(Number.isFinite)
+    ? participantValues.reduce((sum, value) => sum + value, 0).toFixed(4)
+    : null;
+
+  if (!videoTotals.length) {
+    return {
+      status: participantRecords.length ? "partial" : "no_data",
+      spend: null,
+      currency: null,
+      participantMinutes,
+      periodStart,
+      periodEnd,
+      asOf,
+    };
+  }
+
+  const currencies = new Set(videoTotals.map((record) => record.priceUnit.trim().toUpperCase()));
+  const prices = videoTotals.map((record) => Number(record.price));
+  if (currencies.size !== 1 || [...currencies][0]?.length !== 3 || prices.some((price) => !Number.isFinite(price)))
+    throw new Error("twilio_usage_record_invalid");
+
+  return {
+    status: "success",
+    spend: prices.reduce((sum, price) => sum + price, 0).toFixed(6),
+    currency: [...currencies][0],
+    participantMinutes,
+    periodStart,
+    periodEnd,
+    asOf,
+  };
 }
 
 async function recordingConsentState(account: Account, consultationId: string, mode: "pending" | "recorded" | "unrecorded") {

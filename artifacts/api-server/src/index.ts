@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startCommunicationWorker } from "./lib/communication-worker";
 import { startCallRecordingWorker } from "./lib/call-recordings";
 import { bootstrapConfiguredOwner } from "./lib/owner-admin";
+import { startTwilioUsageBudgetWorker } from "./lib/twilio-usage-budget";
 
 const rawPort = process.env["PORT"];
 
@@ -29,4 +30,5 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
   startCommunicationWorker();
   startCallRecordingWorker();
+  startTwilioUsageBudgetWorker();
 });

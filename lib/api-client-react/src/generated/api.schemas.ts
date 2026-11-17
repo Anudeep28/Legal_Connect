@@ -136,6 +136,75 @@ export interface AdminLegalReview {
   approval: LegalCounselApproval | null;
 }
 
+export interface TwilioUsageBudgetInput {
+  enabled: boolean;
+  /**
+     * @minimum 0.01
+     * @maximum 1000000000
+     * @nullable
+     */
+  budgetAmount: number | null;
+  /** @pattern ^[A-Z]{3}$ */
+  budgetCurrency: string;
+  /**
+     * @minimum 50
+     * @maximum 95
+     */
+  warningPercent: number;
+}
+
+export type AdminTwilioUsageBudgetLookupStatus = typeof AdminTwilioUsageBudgetLookupStatus[keyof typeof AdminTwilioUsageBudgetLookupStatus];
+
+
+export const AdminTwilioUsageBudgetLookupStatus = {
+  not_checked: 'not_checked',
+  checking: 'checking',
+  success: 'success',
+  partial: 'partial',
+  no_data: 'no_data',
+  failed: 'failed',
+  not_configured: 'not_configured',
+} as const;
+
+export type AdminTwilioUsageBudgetAlertLevel = typeof AdminTwilioUsageBudgetAlertLevel[keyof typeof AdminTwilioUsageBudgetAlertLevel];
+
+
+export const AdminTwilioUsageBudgetAlertLevel = {
+  none: 'none',
+  approaching: 'approaching',
+  reached: 'reached',
+} as const;
+
+export interface AdminTwilioUsageBudget {
+  enabled: boolean;
+  /** @nullable */
+  budgetAmount: number | null;
+  budgetCurrency: string;
+  warningPercent: number;
+  lookupStatus: AdminTwilioUsageBudgetLookupStatus;
+  /** @nullable */
+  currentSpend: number | null;
+  /** @nullable */
+  usageCurrency: string | null;
+  /** @nullable */
+  participantMinutes: number | null;
+  /** @nullable */
+  periodStart: string | null;
+  /** @nullable */
+  periodEnd: string | null;
+  /** @nullable */
+  usageAsOf: string | null;
+  /** @nullable */
+  lastAttemptAt: string | null;
+  /** @nullable */
+  lastSuccessAt: string | null;
+  providerConfigured: boolean;
+  dataDelayed: boolean;
+  currencyMatches: boolean;
+  periodCurrent: boolean;
+  alertLevel: AdminTwilioUsageBudgetAlertLevel;
+}
+
 export type AccountRole = typeof AccountRole[keyof typeof AccountRole];
 
 
