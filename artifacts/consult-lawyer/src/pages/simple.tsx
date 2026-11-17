@@ -321,8 +321,8 @@ export function Policy({ path }: { path: string }) {
         <article className="space-y-4 rounded-3xl border bg-card p-6 md:p-10">
           {blocks.slice(1).map((b, i) => {
             const t = b.trim();
-            if (/^\d+\.\s+[A-Z][A-Z\s&,'()-]+$/.test(t)) return <h2 key={i} className="pt-4 text-xl font-semibold">{t}</h2>;
-            return <p key={i} className="whitespace-pre-line text-[14.5px] leading-relaxed text-foreground/85">{t}</p>;
+            if (/^\d+\.\s+[A-Z][A-Z\s&,'()-]+$/.test(t)) return <h2 key={i} className="break-words pt-4 text-xl font-semibold">{t}</h2>;
+            return <p key={i} className="break-words whitespace-pre-line text-[14.5px] leading-relaxed text-foreground/85">{t}</p>;
           })}
         </article>
       </div>
