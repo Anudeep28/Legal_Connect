@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import { rateLimit } from "express-rate-limit";
 import * as api from "@workspace/api-zod";
 import { and, eq } from "drizzle-orm";
@@ -17,7 +17,6 @@ import {
   transcribeWithElevenLabs,
 } from "../lib/ai-providers";
 
-const router: IRouter = Router();
 const aiLimit = rateLimit({
   windowMs: 60 * 60 * 1000,
   limit: 30,
@@ -26,10 +25,23 @@ const aiLimit = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many AI requests in a short time. Please retry after the time in the Retry-After response header. Your daily allowance resets separately at midnight UTC." },
 });
+
+export function createWritingRouter(dependencies: {
+  authMiddlewares?: RequestHandler[];
+  hasDeepSeekKey?: typeof hasDeepSeekKey;
+  requestDeepSeek?: typeof requestDeepSeek;
+  getAiUsage?: typeof getAiUsage;
+  reserveAiAttempt?: typeof reserveAiAttempt;
+} = {}): IRouter {
+const router: IRouter = Router();
 const active = new Set<string>();
-router.use("/writing", requireAccount, requireLawyer);
+const aiKeyReady = dependencies.hasDeepSeekKey ?? hasDeepSeekKey;
+const completeWithAi = dependencies.requestDeepSeek ?? requestDeepSeek;
+const readUsage = dependencies.getAiUsage ?? getAiUsage;
+const reserveUsage = dependencies.reserveAiAttempt ?? reserveAiAttempt;
+router.use("/writing", ...(dependencies.authMiddlewares ?? [requireAccount, requireLawyer]));
 router.get("/writing/usage", async (req, res) => {
-  res.json(api.GetWritingUsageResponse.parse(await getAiUsage(req.account.id)));
+  res.json(api.GetWritingUsageResponse.parse(await readUsage(req.account.id)));
 });
 router.use("/writing", aiLimit);
 
@@ -44,12 +56,12 @@ router.post("/writing/assist", async (req, res): Promise<void> => {
   const input = api.AssistWritingBody.parse(req.body);
   if (!input.text.trim()) throw new HttpError(400, "Enter text or case facts first.");
   if (!supportedLanguages.some((l) => l.name === input.language || l.code === input.language)) throw new HttpError(400, "Please select a supported language.");
-  if (!hasDeepSeekKey()) throw new HttpError(503, "DeepSeek drafting is not configured. Your document has not been changed.");
+  if (!aiKeyReady()) throw new HttpError(503, "DeepSeek drafting is not configured. Your document has not been changed.");
   if (active.has(req.account.id)) throw new HttpError(429, "An AI request is already running. Please wait for it to finish.");
   active.add(req.account.id);
   try {
-    await reserveAiAttempt(req.account.id, "drafting");
-    const text = await requestDeepSeek(buildWritingMessages(input.action, input.language, input.text));
+    await reserveUsage(req.account.id, "drafting");
+    const text = await completeWithAi(buildWritingMessages(input.action, input.language, input.text));
     res.json(api.AssistWritingResponse.parse({ text }));
   } catch (err) {
     if (err instanceof HttpError) throw err;
@@ -65,7 +77,7 @@ router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", asyn
     throw new HttpError(400, "Acknowledge that the transcript and template will be sent to DeepSeek before generating a draft.");
   if (!supportedLanguages.some((language) => language.name === input.language || language.code === input.language))
     throw new HttpError(400, "Please select a supported language.");
-  if (!hasDeepSeekKey()) throw new HttpError(503, "DeepSeek drafting is not configured. No draft was created.");
+  if (!aiKeyReady()) throw new HttpError(503, "DeepSeek drafting is not configured. No draft was created.");
   if (active.has(req.account.id)) throw new HttpError(429, "An AI request is already running. Please wait for it to finish.");
 
   const record = await accessibleConsultation(req.account, id);
@@ -90,8 +102,8 @@ router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", asyn
       `LAWYER-EDITED CALL TRANSCRIPT (unverified source material):\n${session.editedTranscript}`,
     ].join("\n\n");
     if (source.length > 100_000) throw new HttpError(413, "Shorten the edited transcript before generating this draft; no text was sent.");
-    await reserveAiAttempt(req.account.id, "drafting");
-    const text = await requestDeepSeek(buildWritingMessages("draft", input.language, source));
+    await reserveUsage(req.account.id, "drafting");
+    const text = await completeWithAi(buildWritingMessages("draft", input.language, source));
     res.json(api.DraftFromCallTranscriptResponse.parse({
       title: `${record.topic} - ${template.name}`.slice(0, 200),
       content: text,
@@ -117,7 +129,7 @@ router.post("/writing/transcribe", async (req, res): Promise<void> => {
     const { buffer, format } = await ensureCompatibleAudio(bytes);
     if (buffer.length > 24 * 1024 * 1024) throw new HttpError(400, "The recording is too long. Please record a shorter segment.");
     const language = supportedLanguages.find((l) => l.name === input.language || l.code === input.language)?.code;
-    await reserveAiAttempt(req.account.id, "transcription");
+    await reserveUsage(req.account.id, "transcription");
     const text = await transcribeWithElevenLabs(buffer, format, language);
     if (!text.trim()) throw new HttpError(422, "No speech could be recognized. Please try again.");
     res.json(api.TranscribeAudioResponse.parse({ text }));
@@ -127,4 +139,7 @@ router.post("/writing/transcribe", async (req, res): Promise<void> => {
     providerError(err);
   } finally { active.delete(req.account.id); }
 });
-export default router;
+return router;
+}
+
+export default createWritingRouter();
