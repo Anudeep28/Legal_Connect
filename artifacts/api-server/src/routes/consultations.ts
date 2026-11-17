@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import { and, eq, asc } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { callsEnabled } from "../lib/communication-config";
@@ -8,8 +8,9 @@ import { requireAccount, HttpError } from "../middlewares/access";
 import { accessibleConsultation, consultationRows, availableSlots, notify } from "../lib/legal";
 import { lockAccount } from "../lib/payments";
 
+export function createConsultationsRouter(dependencies: { authMiddlewares?: RequestHandler[] } = {}) {
 const router: IRouter = Router();
-router.use(["/consultations", "/deliverables"], requireAccount);
+router.use(["/consultations", "/deliverables"], ...(dependencies.authMiddlewares ?? [requireAccount]));
 
 router.get("/consultations", async (req, res): Promise<void> => {
   res.json(api.ListConsultationsResponse.parse(await consultationRows(req.account)));
@@ -226,4 +227,8 @@ router.post("/consultations/:id/review", async (req, res): Promise<void> => {
   res.status(201).json(api.CreateReviewResponse.parse(review));
 });
 
+return router;
+}
+
+const router = createConsultationsRouter();
 export default router;

@@ -337,7 +337,11 @@ export async function processCallRecordingQueue(
           updatedAt: new Date().toISOString(),
         }).where(eq(callRecordingTracks.id, track.id));
         if (status === "failed") {
-          await db.update(callRecordingSessions).set({ status: "failed", processingError: track.lastError || "transcription_failed" })
+          const withdrawn = track.lastError === "consent_withdrawn";
+          await db.update(callRecordingSessions).set({
+            status: withdrawn ? "withdrawn" : "failed",
+            processingError: track.lastError || "transcription_failed",
+          })
             .where(eq(callRecordingSessions.id, session.id));
         }
       } catch {
@@ -433,17 +437,18 @@ export async function processCallRecordingQueue(
     } catch (error) {
       const attempts = track.attempts + 1;
       const quotaExceeded = (error as { status?: number }).status === 429;
-      const terminal = attempts >= MAX_TRANSCRIPTION_ATTEMPTS || (error as Error).message === "consent_withdrawn" || quotaExceeded;
+      const consentWithdrawn = (error as Error).message === "consent_withdrawn";
+      const terminal = attempts >= MAX_TRANSCRIPTION_ATTEMPTS || consentWithdrawn || quotaExceeded;
       await db.update(callRecordingTracks).set({
         status: terminal ? "failed_delete_pending" : "queued",
         attempts,
-        lastError: quotaExceeded ? "daily_usage_limit" : terminal ? "transcription_failed" : "provider_retry",
+        lastError: quotaExceeded ? "daily_usage_limit" : consentWithdrawn ? "consent_withdrawn" : terminal ? "transcription_failed" : "provider_retry",
         updatedAt: new Date().toISOString(),
       }).where(eq(callRecordingTracks.id, track.id));
       if (terminal) {
         await db.update(callRecordingSessions).set({
-          status: "failed",
-          processingError: quotaExceeded ? "daily_usage_limit" : "transcription_failed",
+          status: consentWithdrawn ? "withdrawn" : "failed",
+          processingError: quotaExceeded ? "daily_usage_limit" : consentWithdrawn ? "consent_withdrawn" : "transcription_failed",
           updatedAt: new Date().toISOString(),
         }).where(eq(callRecordingSessions.id, session.id));
       }
