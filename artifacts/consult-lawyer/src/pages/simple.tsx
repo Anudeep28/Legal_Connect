@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CommunicationSettings } from '@/components/communication-settings';
 import { Link, useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
@@ -285,19 +285,39 @@ export function ForLawyers() {
 const policyMap: Record<string, { key: string; title: string; context: string }> = {
   '/privacy': { key: 'privacy', title: 'Privacy Policy', context: 'Consultation messages are visible to the client, the chosen advocate and administrators where needed. Dictation audio is separate from call audio and is processed for your transcription request. Call recording is disabled by default; if enabled, it requires separate consent from both the client and lawyer for each call. If either declines, the call may proceed unrecorded. Call audio is sent to ElevenLabs for transcription only when both participants have opted in, and the transcript remains private to the assigned lawyer unless included in a document the lawyer explicitly publishes.' },
   '/disclaimer': { key: 'disclaimer', title: 'Disclaimer', context: 'AI assistance and transcription are available only when the relevant provider is configured. Review AI-generated text and transcripts before relying on them.' },
-  '/terms': { key: 'terms', title: 'Terms of Service', context: 'This is a separate pilot. Checkout stays disabled until Razorpay is verified. Illustrative demo profiles cannot take payments. Clients retain rights to their legal content.' },
-  '/refund-policy': { key: 'refunds', title: 'Refund & Cancellation Policy', context: 'Owner-selected rules: consultation refunds for lawyer cancellation only; unused document purchases refundable within seven days, subject to mandatory applicable law. Checkout remains disabled pending provider verification.' },
+  '/terms': { key: 'terms', title: 'Terms of Service', context: 'This is a separate pilot. Paid consultation checkout stays disabled until both Razorpay verification and qualified-counsel approval are recorded. Illustrative demo profiles cannot take payments. Clients retain rights to their legal content.' },
+  '/refund-policy': { key: 'refunds', title: 'Refund & Cancellation Policy', context: 'Owner-selected rules: consultation refunds for lawyer cancellation only; unused document purchases refundable within seven days, subject to mandatory applicable law. Paid consultation checkout remains closed until Razorpay verification and counsel approval are complete.' },
 };
 export function Policy({ path }: { path: string }) {
   const p = policyMap[path];
-  const text = policies[p.key] ?? '';
+  const platform = useGetPlatform();
+  const text = useMemo(() => {
+    let content = policies[p.key] ?? '';
+    const contacts = platform.data?.policyContacts;
+    if (contacts) {
+      content = content
+        .replace(
+          'Name: Bhagyashree Patil\nEmail: privacy@consultwithlawyer.in',
+          `Name: ${contacts.grievanceOfficerName}\nEmail: ${contacts.grievanceOfficerEmail}`,
+        )
+        .replaceAll('support@consultwithlawyer.in', contacts.supportContactEmail)
+        .replaceAll('privacy@consultwithlawyer.in', contacts.privacyContactEmail)
+        .replaceAll('Amanora Park Town, Amanora Gold Tower, Tower 42, Flat 1012, Hadapsar, Pune 411028', contacts.privacyContactAddress)
+        .replaceAll('Bhagyashree Patil', contacts.grievanceOfficerName);
+    }
+    return content;
+  }, [p.key, platform.data?.policyContacts]);
   const blocks = text.split(/\n\s*\n/);
   return (
     <AppPage>
       <div className="mx-auto max-w-3xl">
         <PageHeader eyebrow="Policies" title={p.title} />
         <Notice icon={<Info />} className="mb-8">{p.context}</Notice>
-        <Notice icon={<Info />} className="mb-8">These policies are drafts and must be reviewed by qualified legal counsel for this business before use. Owner-approved contact details are recorded in the Privacy Policy. Checkout remains disabled pending Razorpay verification.</Notice>
+        <Notice icon={<Info />} className="mb-8">
+          {platform.data?.legalReviewComplete
+            ? <>These policies and contact details have a recorded qualified-counsel approval. Paid consultation checkout also requires Razorpay verification.</>
+            : <>These policies and contact details are drafts pending qualified-counsel approval. Paid consultation checkout remains closed until counsel approval and Razorpay verification are both complete.</>}
+        </Notice>
         <article className="space-y-4 rounded-3xl border bg-card p-6 md:p-10">
           {blocks.slice(1).map((b, i) => {
             const t = b.trim();

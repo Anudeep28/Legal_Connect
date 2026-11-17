@@ -15,16 +15,29 @@ import { supportedLanguages } from "../data/languages";
 import { paymentsEnabled } from "../lib/razorpay";
 import { communicationServices } from "../lib/communication-config";
 import { isAiAvailable } from "../lib/ai-providers";
+import { getLegalReviewApproval } from "../lib/legal-review";
 
 const router: IRouter = Router();
 
 router.get("/platform", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(lawyers).where(eq(lawyers.approvalStatus, "approved"));
-  const ai = await isAiAvailable();
+  const [rows, ai, legalApproval] = await Promise.all([
+    db.select().from(lawyers).where(eq(lawyers.approvalStatus, "approved")),
+    isAiAvailable(),
+    getLegalReviewApproval(),
+  ]);
   res.json(GetPlatformResponse.parse({
     name: "Consult with Lawyer",
     demo: rows.some((l) => l.demo),
     paymentsEnabled: paymentsEnabled(),
+    legalReviewComplete: Boolean(legalApproval),
+    paidConsultationsEnabled: paymentsEnabled() && Boolean(legalApproval),
+    policyContacts: legalApproval ? {
+      supportContactEmail: legalApproval.supportContactEmail,
+      privacyContactEmail: legalApproval.privacyContactEmail,
+      privacyContactAddress: legalApproval.privacyContactAddress,
+      grievanceOfficerName: legalApproval.grievanceOfficerName,
+      grievanceOfficerEmail: legalApproval.grievanceOfficerEmail,
+    } : null,
     ...communicationServices(),
     ...ai,
     categories: categoryNames.map(([id, name, description]) => ({ id, name, description, count: rows.filter((l) => l.practiceAreas.includes(name)).length })),

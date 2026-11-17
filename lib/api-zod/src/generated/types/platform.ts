@@ -5,6 +5,7 @@
  * Consult with Lawyer — independent legal consultation platform.
  * OpenAPI spec version: 1.0.0
  */
+import type { ApprovedPolicyContacts } from './approvedPolicyContacts';
 import type { Category } from './category';
 import type { Plan } from './plan';
 import type { Template } from './template';
@@ -13,6 +14,9 @@ export interface Platform {
   name: string;
   demo: boolean;
   paymentsEnabled: boolean;
+  legalReviewComplete: boolean;
+  paidConsultationsEnabled: boolean;
+  policyContacts: ApprovedPolicyContacts | null;
   callsEnabled: boolean;
   emailEnabled: boolean;
   pushEnabled: boolean;

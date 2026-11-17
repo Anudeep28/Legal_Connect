@@ -1,23 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, Users, Scale, Hourglass, MessagesSquare, CheckCheck, FileText, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Users, Scale, Hourglass, MessagesSquare, CheckCheck, FileText, Eye, EyeOff, ShieldCheck, Info } from 'lucide-react';
 import {
   useGetAdminOverview, getGetAdminOverviewQueryKey,
   useListAdminUsers, getListAdminUsersQueryKey, useModerateUser,
   useListAdminLawyers, getListAdminLawyersQueryKey, useModerateLawyer,
   useListAdminReviews, getListAdminReviewsQueryKey, useModerateReview,
+  useGetAdminLegalReview, getGetAdminLegalReviewQueryKey, useRecordAdminLegalReview,
+  getGetPlatformQueryKey,
   getListLawyersQueryKey, getListLawyerReviewsQueryKey,
-  type UserModerationStatus, type LawyerModerationApprovalStatus,
+  type UserModerationStatus, type LawyerModerationApprovalStatus, type LegalCounselApprovalInput,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Guard } from '@/components/guard';
 import { AppPage } from '@/components/shell';
-import { DemoTag, EmptyState, ErrorState, ListSkeleton, PageHeader, PersonAvatar, Stars } from '@/components/kit';
+import { DemoTag, EmptyState, ErrorState, ListSkeleton, Notice, PageHeader, PersonAvatar, Stars } from '@/components/kit';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { errMsg, fmtDate, inr } from '@/lib/format';
@@ -28,22 +33,113 @@ export default function Admin() {
       <Guard roles={['admin']}>
         {() => (
           <>
-            <PageHeader eyebrow="Administration" title="Platform oversight" sub="Every action requires a reason and is enforced on the server." />
+            <PageHeader eyebrow="Administration" title="Platform oversight" sub="Owner-controlled changes are recorded and enforced on the server." />
             <Tabs defaultValue="overview">
               <TabsList className="mb-6 h-auto flex-wrap rounded-full bg-secondary p-1">
-                {['overview', 'lawyers', 'users', 'reviews'].map((t) => (
-                  <TabsTrigger key={t} value={t} className="rounded-full px-4 capitalize data-[state=active]:bg-card" data-testid={`tab-admin-${t}`}>{t === 'lawyers' ? 'Lawyer approvals' : t}</TabsTrigger>
+                {['overview', 'lawyers', 'users', 'reviews', 'legal-review'].map((t) => (
+                  <TabsTrigger key={t} value={t} className="rounded-full px-4 capitalize data-[state=active]:bg-card" data-testid={`tab-admin-${t}`}>{t === 'lawyers' ? 'Lawyer approvals' : t === 'legal-review' ? 'Legal approval' : t}</TabsTrigger>
                 ))}
               </TabsList>
               <TabsContent value="overview"><Overview /></TabsContent>
               <TabsContent value="lawyers"><LawyersTab /></TabsContent>
               <TabsContent value="users"><UsersTab /></TabsContent>
               <TabsContent value="reviews"><ReviewsTab /></TabsContent>
+              <TabsContent value="legal-review"><LegalReviewTab /></TabsContent>
             </Tabs>
           </>
         )}
       </Guard>
     </AppPage>
+  );
+}
+
+type CounselForm = Omit<LegalCounselApprovalInput, 'confirmApproval'>;
+const initialCounselForm: CounselForm = {
+  counselName: '',
+  barCouncil: '',
+  enrollmentNumber: '',
+  counselEmail: '',
+  supportContactEmail: 'support@consultwithlawyer.in',
+  privacyContactEmail: 'privacy@consultwithlawyer.in',
+  privacyContactAddress: 'Amanora Park Town, Amanora Gold Tower, Tower 42, Flat 1012, Hadapsar, Pune 411028',
+  grievanceOfficerName: 'Bhagyashree Patil',
+  grievanceOfficerEmail: 'privacy@consultwithlawyer.in',
+};
+const counselFields: { key: keyof CounselForm; label: string; type?: string; wide?: boolean }[] = [
+  { key: 'counselName', label: 'Qualified counsel name' },
+  { key: 'barCouncil', label: 'Bar Council' },
+  { key: 'enrollmentNumber', label: 'Enrolment number' },
+  { key: 'counselEmail', label: 'Counsel email', type: 'email' },
+  { key: 'supportContactEmail', label: 'Public support email', type: 'email' },
+  { key: 'privacyContactEmail', label: 'Privacy contact email', type: 'email' },
+  { key: 'grievanceOfficerName', label: 'Grievance officer name' },
+  { key: 'grievanceOfficerEmail', label: 'Grievance officer email', type: 'email' },
+  { key: 'privacyContactAddress', label: 'Business contact address', wide: true },
+];
+
+function LegalReviewTab() {
+  const q = useGetAdminLegalReview();
+  const save = useRecordAdminLegalReview();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [form, setForm] = useState<CounselForm>(initialCounselForm);
+  const [confirmed, setConfirmed] = useState(false);
+  useEffect(() => {
+    if (!q.data?.approval) return;
+    const { approvedAt: _approvedAt, ...saved } = q.data.approval;
+    setForm(saved);
+  }, [q.data?.approval]);
+  if (q.isLoading) return <ListSkeleton />;
+  if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
+  const current = q.data.approval;
+  const complete = Object.values(form).every((value) => value.trim().length > 0);
+  return (
+    <div className="max-w-4xl space-y-5">
+      <Notice icon={<ShieldCheck />}>
+        Paid consultations open only after both Razorpay verification and a recorded qualified-counsel approval. This does not change client-content rights or refund rules.
+        <div className="mt-2 font-medium">
+          Razorpay: {q.data.paymentVerificationComplete ? 'verified' : 'not verified'} · Counsel: {current ? 'approval recorded' : 'not approved'} · Paid consultations: {q.data.paidConsultationsEnabled ? 'enabled' : 'closed'}
+        </div>
+        {current && <p className="mt-2 text-sm">Current approval recorded {fmtDate(current.approvedAt)} for {current.counselName} ({current.barCouncil}, {current.enrollmentNumber}).</p>}
+      </Notice>
+      {!q.data.canRecord ? (
+        <Notice icon={<Info />}>Only the owner-designated administrator can record or update this approval.</Notice>
+      ) : (
+        <form className="space-y-5 rounded-3xl border bg-card p-5 md:p-7" onSubmit={(event) => {
+          event.preventDefault();
+          save.mutate({ data: { ...form, confirmApproval: true } }, {
+            onSuccess: (result) => {
+              qc.setQueryData(getGetAdminLegalReviewQueryKey(), result);
+              qc.invalidateQueries({ queryKey: getGetPlatformQueryKey() });
+              setConfirmed(false);
+              toast({ title: 'Counsel approval recorded', description: result.paidConsultationsEnabled ? 'Paid consultation checkout is now open.' : 'The payment-verification gate is still closed.' });
+            },
+            onError: (error) => toast({ title: 'Approval was not recorded', description: errMsg(error), variant: 'destructive' }),
+          });
+        }}>
+          <div>
+            <h2 className="font-display text-2xl font-semibold">Counsel approval and policy contacts</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Enter the qualified counsel who reviewed the current public policies. The approved contacts below are shown in those policies.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {counselFields.map(({ key, label, type = 'text', wide }) => (
+              <div key={key} className={wide ? 'sm:col-span-2' : ''}>
+                <Label htmlFor={`legal-${key}`}>{label}</Label>
+                <Input id={`legal-${key}`} className="mt-1.5" type={type} required maxLength={key === 'privacyContactAddress' ? 500 : 254} value={form[key]} onChange={(event) => setForm((old) => ({ ...old, [key]: event.target.value }))} />
+              </div>
+            ))}
+          </div>
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm">
+            <Checkbox checked={confirmed} onCheckedChange={(checked) => setConfirmed(checked === true)} className="mt-0.5" />
+            <span>I confirm qualified counsel has reviewed and approved the current Terms, Privacy Policy, Disclaimer, Refund Policy, and all policy contact details entered above.</span>
+          </label>
+          <Button type="submit" disabled={!q.data.canRecord || !complete || !confirmed || save.isPending} className="rounded-full">
+            {save.isPending && <Loader2 className="animate-spin" />}
+            {current ? 'Update counsel approval' : 'Record counsel approval'}
+          </Button>
+        </form>
+      )}
+    </div>
   );
 }
 

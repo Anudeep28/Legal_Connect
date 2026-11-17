@@ -557,6 +557,30 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminOverview" }
+  /admin/legal-review:
+    get:
+      operationId: getAdminLegalReview
+      responses:
+        "200":
+          description: Current counsel approval and consultation checkout gate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminLegalReview" }
+    put:
+      operationId: recordAdminLegalReview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LegalCounselApprovalInput" }
+      responses:
+        "200":
+          description: Counsel approval and policy contacts recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminLegalReview" }
+        "403":
+          description: Only the owner-designated administrator may record approval
   /admin/users:
     get:
       operationId: listAdminUsers
@@ -791,11 +815,17 @@ components:
         features: { type: array, items: { type: string } }
     Platform:
       type: object
-      required: [name, demo, paymentsEnabled, callsEnabled, emailEnabled, pushEnabled, phoneVerificationEnabled, recordingEnabled, remindersEnabled, aiEnabled, draftingEnabled, dictationEnabled, categories, templates, languages, plans, lawyerCount, onlineCount]
+      required: [name, demo, paymentsEnabled, legalReviewComplete, paidConsultationsEnabled, policyContacts, callsEnabled, emailEnabled, pushEnabled, phoneVerificationEnabled, recordingEnabled, remindersEnabled, aiEnabled, draftingEnabled, dictationEnabled, categories, templates, languages, plans, lawyerCount, onlineCount]
       properties:
         name: { type: string }
         demo: { type: boolean }
         paymentsEnabled: { type: boolean }
+        legalReviewComplete: { type: boolean }
+        paidConsultationsEnabled: { type: boolean }
+        policyContacts:
+          oneOf:
+            - { $ref: "#/components/schemas/ApprovedPolicyContacts" }
+            - { type: "null" }
         callsEnabled: { type: boolean }
         emailEnabled: { type: boolean }
         pushEnabled: { type: boolean }
@@ -812,6 +842,54 @@ components:
         plans: { type: array, items: { $ref: "#/components/schemas/Plan" } }
         lawyerCount: { type: integer }
         onlineCount: { type: integer }
+    ApprovedPolicyContacts:
+      type: object
+      required: [supportContactEmail, privacyContactEmail, privacyContactAddress, grievanceOfficerName, grievanceOfficerEmail]
+      properties:
+        supportContactEmail: { type: string, format: email }
+        privacyContactEmail: { type: string, format: email }
+        privacyContactAddress: { type: string }
+        grievanceOfficerName: { type: string }
+        grievanceOfficerEmail: { type: string, format: email }
+    LegalCounselApproval:
+      type: object
+      required: [counselName, barCouncil, enrollmentNumber, counselEmail, supportContactEmail, privacyContactEmail, privacyContactAddress, grievanceOfficerName, grievanceOfficerEmail, approvedAt]
+      properties:
+        counselName: { type: string }
+        barCouncil: { type: string }
+        enrollmentNumber: { type: string }
+        counselEmail: { type: string, format: email }
+        supportContactEmail: { type: string, format: email }
+        privacyContactEmail: { type: string, format: email }
+        privacyContactAddress: { type: string }
+        grievanceOfficerName: { type: string }
+        grievanceOfficerEmail: { type: string, format: email }
+        approvedAt: { type: string }
+    LegalCounselApprovalInput:
+      type: object
+      required: [counselName, barCouncil, enrollmentNumber, counselEmail, supportContactEmail, privacyContactEmail, privacyContactAddress, grievanceOfficerName, grievanceOfficerEmail, confirmApproval]
+      properties:
+        counselName: { type: string, minLength: 2, maxLength: 160 }
+        barCouncil: { type: string, minLength: 2, maxLength: 160 }
+        enrollmentNumber: { type: string, minLength: 2, maxLength: 80 }
+        counselEmail: { type: string, format: email, maxLength: 254 }
+        supportContactEmail: { type: string, format: email, maxLength: 254 }
+        privacyContactEmail: { type: string, format: email, maxLength: 254 }
+        privacyContactAddress: { type: string, minLength: 8, maxLength: 500 }
+        grievanceOfficerName: { type: string, minLength: 2, maxLength: 160 }
+        grievanceOfficerEmail: { type: string, format: email, maxLength: 254 }
+        confirmApproval: { type: boolean, const: true }
+    AdminLegalReview:
+      type: object
+      required: [canRecord, paymentVerificationComplete, paidConsultationsEnabled, approval]
+      properties:
+        canRecord: { type: boolean }
+        paymentVerificationComplete: { type: boolean }
+        paidConsultationsEnabled: { type: boolean }
+        approval:
+          oneOf:
+            - { $ref: "#/components/schemas/LegalCounselApproval" }
+            - { type: "null" }
     Account:
       type: object
       required: [id, name, email, role, status, emailNotifications, pushNotifications, phone, phoneVerifiedAt, subscriptionPlan, documentCredits, createdAt]

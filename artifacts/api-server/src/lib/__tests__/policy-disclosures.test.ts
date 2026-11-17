@@ -28,7 +28,7 @@ const viteConfigSource = readFileSync(
   "utf8",
 );
 
-function readPolicy(name: "terms" | "privacy" | "disclaimer", nextField?: string): string {
+function readPolicy(name: "terms" | "privacy" | "disclaimer" | "refunds", nextField?: string): string {
   const boundary = nextField
     ? `,\\n\\n  ${nextField}:`
     : `,\\n};`;
@@ -40,6 +40,7 @@ function readPolicy(name: "terms" | "privacy" | "disclaimer", nextField?: string
 
 const privacy = readPolicy("privacy", "refunds");
 const terms = readPolicy("terms", "privacy");
+const refunds = readPolicy("refunds", "disclaimer");
 const disclaimer = readPolicy("disclaimer");
 
 test("public privacy and disclaimer disclosures match configured providers", () => {
@@ -81,6 +82,14 @@ test("call recording is disclosed as disabled and requires both participants' co
     `${terms}\n${privacy}\n${disclaimer}`,
     /Calls are not recorded by this Platform|this Platform does not record calls/i,
   );
+});
+
+test("consultation checkout waits for counsel without changing client rights or refunds", () => {
+  assert.match(terms, /Paid consultation checkout opens only after both Razorpay verification and qualified-counsel approval/i);
+  assert.match(terms, /Clients retain rights to their legal content/i);
+  assert.match(refunds, /Client-initiated cancellations do not qualify for a consultation refund/i);
+  assert.match(refunds, /Unused document credits: Refundable within 7 days/i);
+  assert.match(simplePagesSource, /Paid consultation checkout remains closed until counsel approval and Razorpay verification are both complete/i);
 });
 
 test("signed-out visitors can open every policy from the footer or directly", () => {
@@ -148,7 +157,7 @@ test("signed-out visitors can open every policy from the footer or directly", ()
     );
   }
 
-  assert.match(simplePagesSource, /const text = policies\[p\.key\]/);
+  assert.match(simplePagesSource, /let content = policies\[p\.key\]/);
   assert.match(simplePagesSource, /<PageHeader eyebrow="Policies" title={p\.title}/);
 });
 

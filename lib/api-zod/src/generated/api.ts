@@ -253,6 +253,15 @@ export const GetPlatformResponse = zod.object({
   "name": zod.string(),
   "demo": zod.boolean(),
   "paymentsEnabled": zod.boolean(),
+  "legalReviewComplete": zod.boolean(),
+  "paidConsultationsEnabled": zod.boolean(),
+  "policyContacts": zod.union([zod.object({
+  "supportContactEmail": zod.string().email(),
+  "privacyContactEmail": zod.string().email(),
+  "privacyContactAddress": zod.string(),
+  "grievanceOfficerName": zod.string(),
+  "grievanceOfficerEmail": zod.string().email()
+}),zod.null()]),
   "callsEnabled": zod.boolean(),
   "emailEnabled": zod.boolean(),
   "pushEnabled": zod.boolean(),
@@ -1054,6 +1063,82 @@ export const GetAdminOverviewResponse = zod.object({
   "consultations": zod.number().int(),
   "completedConsultations": zod.number().int(),
   "documents": zod.number().int()
+})
+
+
+export const GetAdminLegalReviewResponse = zod.object({
+  "canRecord": zod.boolean(),
+  "paymentVerificationComplete": zod.boolean(),
+  "paidConsultationsEnabled": zod.boolean(),
+  "approval": zod.union([zod.object({
+  "counselName": zod.string(),
+  "barCouncil": zod.string(),
+  "enrollmentNumber": zod.string(),
+  "counselEmail": zod.string().email(),
+  "supportContactEmail": zod.string().email(),
+  "privacyContactEmail": zod.string().email(),
+  "privacyContactAddress": zod.string(),
+  "grievanceOfficerName": zod.string(),
+  "grievanceOfficerEmail": zod.string().email(),
+  "approvedAt": zod.string()
+}),zod.null()])
+})
+
+
+export const recordAdminLegalReviewBodyCounselNameMin = 2;
+export const recordAdminLegalReviewBodyCounselNameMax = 160;
+
+export const recordAdminLegalReviewBodyBarCouncilMin = 2;
+export const recordAdminLegalReviewBodyBarCouncilMax = 160;
+
+export const recordAdminLegalReviewBodyEnrollmentNumberMin = 2;
+export const recordAdminLegalReviewBodyEnrollmentNumberMax = 80;
+
+export const recordAdminLegalReviewBodyCounselEmailMax = 254;
+
+export const recordAdminLegalReviewBodySupportContactEmailMax = 254;
+
+export const recordAdminLegalReviewBodyPrivacyContactEmailMax = 254;
+
+export const recordAdminLegalReviewBodyPrivacyContactAddressMin = 8;
+export const recordAdminLegalReviewBodyPrivacyContactAddressMax = 500;
+
+export const recordAdminLegalReviewBodyGrievanceOfficerNameMin = 2;
+export const recordAdminLegalReviewBodyGrievanceOfficerNameMax = 160;
+
+export const recordAdminLegalReviewBodyGrievanceOfficerEmailMax = 254;
+
+
+
+export const RecordAdminLegalReviewBody = zod.object({
+  "counselName": zod.string().min(recordAdminLegalReviewBodyCounselNameMin).max(recordAdminLegalReviewBodyCounselNameMax),
+  "barCouncil": zod.string().min(recordAdminLegalReviewBodyBarCouncilMin).max(recordAdminLegalReviewBodyBarCouncilMax),
+  "enrollmentNumber": zod.string().min(recordAdminLegalReviewBodyEnrollmentNumberMin).max(recordAdminLegalReviewBodyEnrollmentNumberMax),
+  "counselEmail": zod.string().email().max(recordAdminLegalReviewBodyCounselEmailMax),
+  "supportContactEmail": zod.string().email().max(recordAdminLegalReviewBodySupportContactEmailMax),
+  "privacyContactEmail": zod.string().email().max(recordAdminLegalReviewBodyPrivacyContactEmailMax),
+  "privacyContactAddress": zod.string().min(recordAdminLegalReviewBodyPrivacyContactAddressMin).max(recordAdminLegalReviewBodyPrivacyContactAddressMax),
+  "grievanceOfficerName": zod.string().min(recordAdminLegalReviewBodyGrievanceOfficerNameMin).max(recordAdminLegalReviewBodyGrievanceOfficerNameMax),
+  "grievanceOfficerEmail": zod.string().email().max(recordAdminLegalReviewBodyGrievanceOfficerEmailMax),
+  "confirmApproval": zod.literal(true)
+})
+
+export const RecordAdminLegalReviewResponse = zod.object({
+  "canRecord": zod.boolean(),
+  "paymentVerificationComplete": zod.boolean(),
+  "paidConsultationsEnabled": zod.boolean(),
+  "approval": zod.union([zod.object({
+  "counselName": zod.string(),
+  "barCouncil": zod.string(),
+  "enrollmentNumber": zod.string(),
+  "counselEmail": zod.string().email(),
+  "supportContactEmail": zod.string().email(),
+  "privacyContactEmail": zod.string().email(),
+  "privacyContactAddress": zod.string(),
+  "grievanceOfficerName": zod.string(),
+  "grievanceOfficerEmail": zod.string().email(),
+  "approvedAt": zod.string()
+}),zod.null()])
 })
 
 

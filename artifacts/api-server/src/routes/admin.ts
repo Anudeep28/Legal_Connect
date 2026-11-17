@@ -1,10 +1,12 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { db, accounts, lawyers, consultations, documents, reviews, auditLogs, notifications } from "@workspace/db";
+import { db, accounts, lawyers, consultations, documents, reviews, auditLogs, notifications, platformCompliance } from "@workspace/db";
 import * as api from "@workspace/api-zod";
-import { requireAccount, requireAdmin, HttpError } from "../middlewares/access";
+import { requireAccount, requireAdmin, requireOwnerAdmin, isOwnerDesignatedAdmin, HttpError } from "../middlewares/access";
 import { lawyerViews } from "../lib/legal";
+import { paymentsEnabled } from "../lib/razorpay";
+import { getLegalReviewApproval } from "../lib/legal-review";
 
 const router: IRouter = Router();
 router.use("/admin", requireAccount, requireAdmin);
@@ -18,6 +20,82 @@ router.get("/admin/overview", async (_req, res): Promise<void> => {
   res.json(api.GetAdminOverviewResponse.parse({
     users: u[0]!.count, lawyers: l[0]!.count, pendingLawyers: l[0]!.pending,
     consultations: c[0]!.count, completedConsultations: c[0]!.completed, documents: d[0]!.count,
+  }));
+});
+router.get("/admin/legal-review", async (req, res): Promise<void> => {
+  const [approval, canRecord] = await Promise.all([
+    getLegalReviewApproval(),
+    isOwnerDesignatedAdmin(req.account.id),
+  ]);
+  res.json(api.GetAdminLegalReviewResponse.parse({
+    canRecord,
+    paymentVerificationComplete: paymentsEnabled(),
+    paidConsultationsEnabled: paymentsEnabled() && Boolean(approval),
+    approval: approval ? {
+      counselName: approval.counselName,
+      barCouncil: approval.barCouncil,
+      enrollmentNumber: approval.enrollmentNumber,
+      counselEmail: approval.counselEmail,
+      supportContactEmail: approval.supportContactEmail,
+      privacyContactEmail: approval.privacyContactEmail,
+      privacyContactAddress: approval.privacyContactAddress,
+      grievanceOfficerName: approval.grievanceOfficerName,
+      grievanceOfficerEmail: approval.grievanceOfficerEmail,
+      approvedAt: approval.approvedAt,
+    } : null,
+  }));
+});
+router.put("/admin/legal-review", requireOwnerAdmin, async (req, res): Promise<void> => {
+  const input = api.RecordAdminLegalReviewBody.parse(req.body);
+  if (!input.confirmApproval) throw new HttpError(400, "Confirm qualified counsel approval before recording it.");
+  const clean = {
+    counselName: input.counselName.trim(),
+    barCouncil: input.barCouncil.trim(),
+    enrollmentNumber: input.enrollmentNumber.trim(),
+    counselEmail: input.counselEmail.trim().toLowerCase(),
+    supportContactEmail: input.supportContactEmail.trim().toLowerCase(),
+    privacyContactEmail: input.privacyContactEmail.trim().toLowerCase(),
+    privacyContactAddress: input.privacyContactAddress.trim(),
+    grievanceOfficerName: input.grievanceOfficerName.trim(),
+    grievanceOfficerEmail: input.grievanceOfficerEmail.trim().toLowerCase(),
+    approvedBy: req.account.id,
+    approvedAt: new Date().toISOString(),
+  };
+  if ([clean.counselName, clean.barCouncil, clean.enrollmentNumber, clean.privacyContactAddress, clean.grievanceOfficerName].some((value) => !value))
+    throw new HttpError(400, "Complete every counsel and policy contact field.");
+  const approval = await db.transaction(async (tx) => {
+    const [record] = await tx.insert(platformCompliance).values({
+      id: "platform",
+      ...clean,
+    }).onConflictDoUpdate({
+      target: platformCompliance.id,
+      set: clean,
+    }).returning();
+    await tx.insert(auditLogs).values({
+      id: randomUUID(),
+      actorId: req.account.id,
+      targetId: "platform",
+      action: "legal:counsel-approval-recorded",
+      reason: `Qualified counsel approval recorded for ${clean.counselName}; policy contacts and address updated.`,
+    });
+    return record!;
+  });
+  res.json(api.RecordAdminLegalReviewResponse.parse({
+    canRecord: true,
+    paymentVerificationComplete: paymentsEnabled(),
+    paidConsultationsEnabled: paymentsEnabled(),
+    approval: {
+      counselName: approval.counselName,
+      barCouncil: approval.barCouncil,
+      enrollmentNumber: approval.enrollmentNumber,
+      counselEmail: approval.counselEmail,
+      supportContactEmail: approval.supportContactEmail,
+      privacyContactEmail: approval.privacyContactEmail,
+      privacyContactAddress: approval.privacyContactAddress,
+      grievanceOfficerName: approval.grievanceOfficerName,
+      grievanceOfficerEmail: approval.grievanceOfficerEmail,
+      approvedAt: approval.approvedAt,
+    },
   }));
 });
 router.get("/admin/users", async (_req, res): Promise<void> => {

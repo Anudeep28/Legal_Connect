@@ -90,13 +90,15 @@ function ConsultationPayment({ c }: { c: Consultation }) {
   const platform = useGetPlatform();
   const checkout = usePaymentCheckout();
   const payable = !c.demo && c.status === 'requested' && ['unpaid', 'pending'].includes(c.paymentStatus) && new Date(c.startsAt).getTime() > Date.now();
+  const checkoutReady = !!platform.data?.paidConsultationsEnabled;
   return <div className="mt-4">
     <Notice icon={<Info />}>
       Payment: <strong>{c.paymentStatus.replace('_', ' ')}</strong>. {c.paymentStatus === 'paid' ? 'Captured payment does not itself confirm the appointment; the lawyer must accept.'
         : c.demo ? 'Illustrative profiles never accept payments.' : 'Only a server-verified captured payment marks this request paid.'}
-      {payable && <Button className="mt-3 block" disabled={!platform.data?.paymentsEnabled || checkout.pending} onClick={() => checkout.start({ plan: 'consultation', consultationId: c.id })} data-testid="button-pay-consultation">
-        {platform.data?.paymentsEnabled ? `Pay ${inr(c.fee)} with Razorpay` : 'Checkout disabled pending verification'}
+      {payable && <Button className="mt-3 block" disabled={!checkoutReady || checkout.pending} onClick={() => checkout.start({ plan: 'consultation', consultationId: c.id })} data-testid="button-pay-consultation">
+        {checkoutReady ? `Pay ${inr(c.fee)} with Razorpay` : 'Paid consultation checkout is closed'}
       </Button>}
+      {payable && !checkoutReady && <p className="mt-2 text-sm">Paid consultations open only after Razorpay verification and qualified-counsel approval of the current policies and contact details.</p>}
       <p className="mt-2 text-sm">Consultation refunds require lawyer cancellation. Client cancellation is not refundable, subject to applicable law.</p>
     </Notice>
     <PaymentHistory consultationId={c.id} />

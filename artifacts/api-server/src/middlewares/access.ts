@@ -1,7 +1,7 @@
 import type { RequestHandler, ErrorRequestHandler } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
-import { db, accounts } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, accounts, auditLogs } from "@workspace/db";
+import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { notifications } from "@workspace/db";
 import { getClerkProxyHost } from "./clerkProxyMiddleware";
@@ -71,6 +71,21 @@ export const requireLawyer: RequestHandler = (req, res, next) => {
 };
 export const requireAdmin: RequestHandler = (req, res, next) => {
   if (req.account.role !== "admin") { res.status(403).json({ error: "Administrator access is required." }); return; }
+  next();
+};
+export async function isOwnerDesignatedAdmin(accountId: string): Promise<boolean> {
+  const [grant] = await db.select({ id: auditLogs.id }).from(auditLogs).where(and(
+    eq(auditLogs.actorId, accountId),
+    eq(auditLogs.targetId, accountId),
+    eq(auditLogs.action, "admin:owner-designated"),
+  )).limit(1);
+  return Boolean(grant);
+}
+export const requireOwnerAdmin: RequestHandler = async (req, res, next) => {
+  if (req.account.role !== "admin" || !(await isOwnerDesignatedAdmin(req.account.id))) {
+    res.status(403).json({ error: "Only the owner-designated administrator can record counsel approval." });
+    return;
+  }
   next();
 };
 

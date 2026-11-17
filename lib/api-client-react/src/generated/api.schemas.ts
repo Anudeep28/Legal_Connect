@@ -45,10 +45,21 @@ export interface Plan {
   features: string[];
 }
 
+export interface ApprovedPolicyContacts {
+  supportContactEmail: string;
+  privacyContactEmail: string;
+  privacyContactAddress: string;
+  grievanceOfficerName: string;
+  grievanceOfficerEmail: string;
+}
+
 export interface Platform {
   name: string;
   demo: boolean;
   paymentsEnabled: boolean;
+  legalReviewComplete: boolean;
+  paidConsultationsEnabled: boolean;
+  policyContacts: ApprovedPolicyContacts | null;
   callsEnabled: boolean;
   emailEnabled: boolean;
   pushEnabled: boolean;
@@ -66,6 +77,63 @@ export interface Platform {
   plans: Plan[];
   lawyerCount: number;
   onlineCount: number;
+}
+
+export interface LegalCounselApproval {
+  counselName: string;
+  barCouncil: string;
+  enrollmentNumber: string;
+  counselEmail: string;
+  supportContactEmail: string;
+  privacyContactEmail: string;
+  privacyContactAddress: string;
+  grievanceOfficerName: string;
+  grievanceOfficerEmail: string;
+  approvedAt: string;
+}
+
+export interface LegalCounselApprovalInput {
+  /**
+     * @minLength 2
+     * @maxLength 160
+     */
+  counselName: string;
+  /**
+     * @minLength 2
+     * @maxLength 160
+     */
+  barCouncil: string;
+  /**
+     * @minLength 2
+     * @maxLength 80
+     */
+  enrollmentNumber: string;
+  /** @maxLength 254 */
+  counselEmail: string;
+  /** @maxLength 254 */
+  supportContactEmail: string;
+  /** @maxLength 254 */
+  privacyContactEmail: string;
+  /**
+     * @minLength 8
+     * @maxLength 500
+     */
+  privacyContactAddress: string;
+  /**
+     * @minLength 2
+     * @maxLength 160
+     */
+  grievanceOfficerName: string;
+  /** @maxLength 254 */
+  grievanceOfficerEmail: string;
+  confirmApproval: true;
+}
+
+export interface AdminLegalReview {
+  canRecord: boolean;
+  paymentVerificationComplete: boolean;
+  paidConsultationsEnabled: boolean;
+  approval: LegalCounselApproval | null;
 }
 
 export type AccountRole = typeof AccountRole[keyof typeof AccountRole];

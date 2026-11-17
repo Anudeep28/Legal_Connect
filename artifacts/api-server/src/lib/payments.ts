@@ -4,6 +4,7 @@ import { db, accounts, consultations, lawyers, paymentOrders, paymentEvents, not
 import { HttpError, type Account } from "../middlewares/access";
 import { credentials, razorpay, requireCheckout, providerPayment, type ProviderPayment, type ProviderRefund } from "./razorpay";
 import { DAY, DOCUMENT_PRICES, hasMonthlyAccess, unusedDocumentRefund } from "./payment-rules";
+import { hasLegalReviewApproval } from "./legal-review";
 
 type Order = typeof paymentOrders.$inferSelect;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -37,6 +38,8 @@ export async function createOrder(account: Account, input: Checkout, adminValida
   if (adminValidation && (account.role !== "admin" || input.plan !== "single"))
     throw new HttpError(403, "Only an administrator can create a verification purchase.");
   const config = adminValidation ? credentials() : requireCheckout();
+  if (input.plan === "consultation" && !(await hasLegalReviewApproval()))
+    throw new HttpError(503, "Paid consultation checkout is disabled until qualified counsel approves the current policies and contact details. No payment was taken.");
   if (adminValidation && !process.env.RAZORPAY_WEBHOOK_SECRET)
     throw new HttpError(503, "Configure the webhook signing secret before running payment verification.");
   // A lost callback/webhook must not send a client back to a captured order.

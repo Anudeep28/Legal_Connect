@@ -184,7 +184,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-6 py-5 font-mono text-[11px] uppercase tracking-widest text-white/45 md:flex-row md:justify-between">
-          <span>Pilot service · checkout requires verification · calls not connected</span>
+          <span>Pilot service · paid consultations require counsel and payment verification · calls not connected</span>
           <span>Times shown in IST</span>
         </div>
       </div>

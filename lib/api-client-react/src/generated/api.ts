@@ -28,6 +28,7 @@ import type {
   Account,
   AccountInput,
   ActionResult,
+  AdminLegalReview,
   AdminOverview,
   AudioInput,
   CallAccess,
@@ -56,6 +57,7 @@ import type {
   Lawyer,
   LawyerInput,
   LawyerModeration,
+  LegalCounselApprovalInput,
   ListLawyersParams,
   Message,
   MessageInput,
@@ -4037,6 +4039,183 @@ export function useGetAdminOverview<TData = Awaited<ReturnType<typeof getAdminOv
 
 
 
+
+export const getGetAdminLegalReviewUrl = () => {
+
+
+
+
+  return `/api/admin/legal-review`
+}
+
+export const getAdminLegalReview = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminLegalReview> => {
+
+  return customFetch<AdminLegalReview>(getGetAdminLegalReviewUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminLegalReviewQueryKey = () => {
+    return [
+    `/api/admin/legal-review`
+    ] as const;
+    }
+
+
+export const getGetAdminLegalReviewQueryOptions = <TData = Awaited<ReturnType<typeof getAdminLegalReview>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminLegalReview>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminLegalReviewQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminLegalReview>>> = ({ signal }) => getAdminLegalReview({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminLegalReview>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAdminLegalReviewQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminLegalReview>>>
+export type GetAdminLegalReviewQueryError = ErrorType<unknown>
+
+
+export function useGetAdminLegalReview<TData = Awaited<ReturnType<typeof getAdminLegalReview>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminLegalReview>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminLegalReview>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminLegalReview>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminLegalReview<TData = Awaited<ReturnType<typeof getAdminLegalReview>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminLegalReview>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminLegalReview>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminLegalReview>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminLegalReview<TData = Awaited<ReturnType<typeof getAdminLegalReview>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminLegalReview>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetAdminLegalReview<TData = Awaited<ReturnType<typeof getAdminLegalReview>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminLegalReview>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAdminLegalReviewQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRecordAdminLegalReviewUrl = () => {
+
+
+
+
+  return `/api/admin/legal-review`
+}
+
+export const recordAdminLegalReview = async (legalCounselApprovalInput: LegalCounselApprovalInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminLegalReview> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminLegalReview>(getRecordAdminLegalReviewUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(legalCounselApprovalInput)
+  }
+);}
+
+
+
+
+
+export const getRecordAdminLegalReviewMutationKey = () => ['recordAdminLegalReview'] as const;
+
+export const getRecordAdminLegalReviewMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordAdminLegalReview>>, TError,RecordAdminLegalReviewMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordAdminLegalReview>>, TError,RecordAdminLegalReviewMutationVariables, TContext> => {
+
+const mutationKey = getRecordAdminLegalReviewMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordAdminLegalReview>>, RecordAdminLegalReviewMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  recordAdminLegalReview(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordAdminLegalReviewMutationResult = NonNullable<Awaited<ReturnType<typeof recordAdminLegalReview>>>
+    export type RecordAdminLegalReviewMutationBody = BodyType<LegalCounselApprovalInput>
+    export type RecordAdminLegalReviewMutationError = ErrorType<void>
+    export type RecordAdminLegalReviewMutationVariables = {data: BodyType<LegalCounselApprovalInput>}
+
+    export const useRecordAdminLegalReview = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordAdminLegalReview>>, TError,RecordAdminLegalReviewMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof recordAdminLegalReview>>,
+        TError,
+        RecordAdminLegalReviewMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRecordAdminLegalReviewMutationOptions(options), queryClient);
+    }
 
 export const getListAdminUsersUrl = () => {
 
