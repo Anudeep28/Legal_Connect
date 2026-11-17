@@ -27,6 +27,7 @@ import { AppPage } from '@/components/shell';
 import { ErrorState, Notice } from '@/components/kit';
 import { AiUsageNotice } from '@/components/ai-usage';
 import { useToast } from '@/hooks/use-toast';
+import { AiRequestConsentDialog } from '@/components/ai-request-consent-dialog';
 import { cn } from '@/lib/utils';
 import { errMsg, fillTemplate, relTime } from '@/lib/format';
 import { exportDocx, exportMarkdown, exportPdf } from '@/lib/export';
@@ -67,6 +68,17 @@ function Editor({ doc }: { doc: Document }) {
   const [saved, setSaved] = useState({ title: doc.title, content: doc.content, language: doc.language || 'English', at: doc.updatedAt });
   const [view, setView] = useState<'edit' | 'split' | 'preview'>('split');
   const [aiResult, setAiResult] = useState<{ action: WritingInputAction; text: string } | null>(null);
+  const [pendingAiRequest, setPendingAiRequest] = useState<{
+    action: WritingInputAction;
+    text: string;
+    language: string;
+  } | null>(null);
+  const [pendingDictation, setPendingDictation] = useState<{
+    blob: Blob;
+    mime: AudioInputMimeType;
+    language: string;
+  } | null>(null);
+  const [preparingAudio, setPreparingAudio] = useState(false);
   const [targetLang, setTargetLang] = useState('Hindi');
   const [leaveTo, setLeaveTo] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -75,6 +87,7 @@ function Editor({ doc }: { doc: Document }) {
 
   const [recording, setRecording] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [finalizingRecording, setFinalizingRecording] = useState(false);
   const [lastDictation, setLastDictation] = useState<{ before: string; after: string } | null>(null);
   const discardRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
@@ -163,13 +176,25 @@ function Editor({ doc }: { doc: Document }) {
       toast({ title: 'Nothing to work with', description: 'Write or dictate a few lines first.' });
       return;
     }
+    setPendingAiRequest({
+      action,
+      text: text.slice(0, 30000),
+      language: action === 'translate' ? targetLang : language,
+    });
+  };
+
+  const confirmAiRequest = () => {
+    const request = pendingAiRequest;
+    if (!request) return;
+    setPendingAiRequest(null);
     ai.mutate(
-      { data: { action, text: text.slice(0, 30000), language: action === 'translate' ? targetLang : language } },
-      { onSuccess: (r) => setAiResult({ action, text: r.text }), onError: (e) => toast({ title: 'AI request failed', description: errMsg(e), variant: 'destructive' }) },
+      { data: request },
+      { onSuccess: (r) => setAiResult({ action: request.action, text: r.text }), onError: (e) => toast({ title: 'AI request failed', description: errMsg(e), variant: 'destructive' }) },
     );
   };
 
   const startRec = async () => {
+    if (recRef.current || pendingDictation || preparingAudio || finalizingRecording) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (discardRef.current) { stream.getTracks().forEach((t) => t.stop()); return; }
@@ -179,31 +204,17 @@ function Editor({ doc }: { doc: Document }) {
       chunksRef.current = [];
       rec.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
       rec.onstop = () => {
+        if (recRef.current === rec) recRef.current = null;
+        setFinalizingRecording(false);
         stream.getTracks().forEach((t) => t.stop());
         if (streamRef.current === stream) streamRef.current = null;
         if (discardRef.current) return;
         const blob = new Blob(chunksRef.current, { type: mime });
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (discardRef.current) return;
-          const b64 = String(reader.result).split(',')[1] ?? '';
-          transcribe.mutate(
-            { data: { audio: b64, mimeType: mime, language } },
-            {
-              onSuccess: (r) => {
-                if (discardRef.current) return;
-                setContent((c) => {
-                  const next = c ? `${c.trimEnd()}\n\n${r.text}` : r.text;
-                  setLastDictation({ before: c, after: next });
-                  return next;
-                });
-                toast({ title: 'Dictation added', description: 'Review the transcribed text for accuracy.' });
-              },
-              onError: (e) => toast({ title: 'Transcription failed', description: errMsg(e), variant: 'destructive' }),
-            },
-          );
-        };
-        reader.readAsDataURL(blob);
+        if (blob.size < 32) {
+          toast({ title: 'No audio captured', description: 'Record a short segment and try again.' });
+          return;
+        }
+        setPendingDictation({ blob, mime, language });
       };
       rec.start();
       recRef.current = rec;
@@ -215,10 +226,60 @@ function Editor({ doc }: { doc: Document }) {
       toast({ title: 'Microphone unavailable', description: 'Allow microphone access in your browser to dictate.', variant: 'destructive' });
     }
   };
+
+  const confirmDictation = () => {
+    const request = pendingDictation;
+    if (!request || preparingAudio || transcribe.isPending) return;
+    setPendingDictation(null);
+    setPreparingAudio(true);
+    const reader = new FileReader();
+    reader.onerror = () => {
+      setPreparingAudio(false);
+      toast({ title: 'Dictation could not be prepared', description: 'No audio was sent. Please record again.', variant: 'destructive' });
+    };
+    reader.onload = () => {
+      if (discardRef.current) {
+        setPreparingAudio(false);
+        return;
+      }
+      const result = String(reader.result ?? '');
+      const b64 = result.includes(',') ? result.split(',')[1] ?? '' : '';
+      if (!b64) {
+        setPreparingAudio(false);
+        toast({ title: 'Dictation could not be prepared', description: 'No audio was sent. Please record again.', variant: 'destructive' });
+        return;
+      }
+      setPreparingAudio(false);
+      transcribe.mutate(
+        { data: { audio: b64, mimeType: request.mime, language: request.language } },
+        {
+          onSuccess: (r) => {
+            if (discardRef.current) return;
+            setContent((c) => {
+              const next = c ? `${c.trimEnd()}\n\n${r.text}` : r.text;
+              setLastDictation({ before: c, after: next });
+              return next;
+            });
+            toast({ title: 'Dictation added', description: 'Review the transcribed text for accuracy.' });
+          },
+          onError: (e) => toast({ title: 'Transcription failed', description: errMsg(e), variant: 'destructive' }),
+        },
+      );
+    };
+    reader.readAsDataURL(request.blob);
+  };
+
+  const cancelDictation = () => {
+    setPendingDictation(null);
+    chunksRef.current = [];
+    toast({ title: 'Dictation discarded', description: 'No audio was sent to ElevenLabs.' });
+  };
   const stopRec = () => {
     const rec = recRef.current;
-    if (rec && rec.state !== 'inactive') rec.stop();
-    recRef.current = null;
+    if (rec && rec.state !== 'inactive') {
+      setFinalizingRecording(true);
+      rec.stop();
+    }
     setRecording(false);
     setPaused(false);
     stopTimer();
@@ -271,13 +332,13 @@ function Editor({ doc }: { doc: Document }) {
               <Button variant="outline" size="sm" className="rounded-full" onClick={togglePause} title={paused ? 'Resume dictation' : 'Pause dictation'} data-testid="button-pause-recording">
                 {paused ? <Play /> : <Pause />} {paused ? 'Resume' : 'Pause'}
               </Button>
-              <Button variant="destructive" size="sm" className="rounded-full" onClick={stopRec} title="Stop and transcribe" data-testid="button-stop-recording">
+              <Button variant="destructive" size="sm" className="rounded-full" onClick={stopRec} title="Stop recording and review upload" data-testid="button-stop-recording">
                 <span className={cn('h-2 w-2 rounded-full bg-white', !paused && 'rec-blink')} /> {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')} <Square />
               </Button>
             </div>
           ) : (
-              <Button variant="outline" size="sm" className="rounded-full" onClick={startRec} disabled={transcribe.isPending || !dictationEnabled} title={dictationEnabled ? 'Dictate' : 'ElevenLabs dictation is not configured'} data-testid="button-record">
-              {transcribe.isPending ? <Loader2 className="animate-spin" /> : <Mic />} {transcribe.isPending ? 'Transcribing' : 'Dictate'}
+              <Button variant="outline" size="sm" className="rounded-full" onClick={startRec} disabled={transcribe.isPending || preparingAudio || finalizingRecording || !!pendingDictation || !!recRef.current || !dictationEnabled} title={dictationEnabled ? 'Dictate' : 'ElevenLabs dictation is not configured'} data-testid="button-record">
+              {transcribe.isPending || preparingAudio || finalizingRecording ? <Loader2 className="animate-spin" /> : <Mic />} {finalizingRecording ? 'Finishing' : transcribe.isPending || preparingAudio ? 'Transcribing' : 'Dictate'}
             </Button>
           )}
           {lastDictation && !recording && (
@@ -353,6 +414,30 @@ function Editor({ doc }: { doc: Document }) {
         )}
       </div>
       <p className="mt-3 text-[12px] text-muted-foreground">Keyboard: Ctrl/Cmd + S to save. AI output and transcriptions are assistive and must be reviewed by a qualified advocate.</p>
+
+      <AiRequestConsentDialog
+        open={!!pendingAiRequest}
+        provider="DeepSeek"
+        description={
+          pendingAiRequest?.action === 'translate'
+            ? `The current document text will be sent to DeepSeek for translation into ${pendingAiRequest.language}.`
+            : pendingAiRequest?.action === 'improve'
+              ? 'The current document text will be sent to DeepSeek for wording and structure suggestions.'
+              : 'The selected document text will be sent to DeepSeek to create a formal draft.'
+        }
+        testIdPrefix="document-writing"
+        onCancel={() => setPendingAiRequest(null)}
+        onContinue={confirmAiRequest}
+      />
+      <AiRequestConsentDialog
+        open={!!pendingDictation}
+        provider="ElevenLabs via Replit"
+        description="The recorded audio will be sent to ElevenLabs through Replit’s managed connector and transcribed into this document."
+        testIdPrefix="document-dictation"
+        continueLabel="Continue and send audio"
+        onCancel={cancelDictation}
+        onContinue={confirmDictation}
+      />
 
       <Dialog open={!!aiResult} onOpenChange={(o) => !o && setAiResult(null)}>
         <DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto">

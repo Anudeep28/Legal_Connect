@@ -5,6 +5,7 @@ import {
   getGetConsultationCallQueryKey, type Consultation,
 } from '@workspace/api-client-react';
 import type { Room, RemoteTrack, RemoteParticipant } from 'twilio-video';
+import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { errMsg, fmtDateTime } from '@/lib/format';
 
@@ -187,7 +188,7 @@ export function ConsultationCall({ consultation, asLawyer }: { consultation: Con
     {availability.isError && <p role="alert" className="text-sm text-destructive">{errMsg(availability.error)}</p>}
     {availability.data && !availability.data.canJoin && <p className="text-sm" data-testid="call-unavailable">{availability.data.reason}</p>}
     {availability.data?.recordingConsentEnabled && <>
-      <p className="text-sm" data-testid="recording-consent-disclosure">If both participants opt in, Twilio records separate audio tracks for transcription by ElevenLabs after the room ends. The assigned lawyer can correct the private transcript before choosing a template for an AI draft. Twilio audio is deleted after transcription succeeds or after three failed attempts. Nothing is sent to the client until the lawyer reviews and publishes it. If either participant declines or withdraws, the call remains unrecorded from that point.</p>
+       <p className="text-sm" data-testid="recording-consent-disclosure">If both participants opt in, Twilio records separate audio tracks and sends them to ElevenLabs for transcription after the room ends. The assigned lawyer can correct the private transcript before choosing a template for a DeepSeek draft. Twilio audio is deleted after transcription succeeds or after three failed attempts. Nothing is sent to the client until the lawyer reviews and publishes it. If either participant declines or withdraws, the call remains unrecorded from that point. <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-medium text-primary underline underline-offset-4" data-testid={`link-recording-privacy-${c.id}`}>Read the Privacy Policy</Link>.</p>
       {availability.data.recordingMode === 'unrecorded' && <p role="status" className="text-sm" data-testid="recording-locked-off">This consultation is locked to an unrecorded call because a participant declined or withdrew consent.</p>}
       {asLawyer && availability.data.recordingLanguageEditable && (
         <label className="block max-w-sm space-y-1 text-sm">

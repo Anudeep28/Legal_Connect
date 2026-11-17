@@ -18,6 +18,7 @@ import {
   type CallTranscriptSession, type CallTranscriptDraftResponse, type Platform,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
+import { AiRequestConsentDialog } from '@/components/ai-request-consent-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -163,7 +164,7 @@ function CallTranscriptCard({
   const [text, setText] = useState(session.editedTranscript);
   const [templateId, setTemplateId] = useState('');
   const [language, setLanguage] = useState('English');
-  const [dataUseAcknowledged, setDataUseAcknowledged] = useState(false);
+  const [draftConsentOpen, setDraftConsentOpen] = useState(false);
   const dirty = text !== session.editedTranscript;
 
   useEffect(() => {
@@ -184,8 +185,14 @@ function CallTranscriptCard({
     },
   );
 
+  const openDraftConsent = () => {
+    if (!templateId || dirty || session.status !== 'ready' || generate.isPending) return;
+    setDraftConsentOpen(true);
+  };
+
   const draftFromTranscript = () => {
-    if (!dataUseAcknowledged || !templateId || dirty || session.status !== 'ready') return;
+    if (!templateId || dirty || session.status !== 'ready' || generate.isPending) return;
+    setDraftConsentOpen(false);
     generate.mutate(
       {
         id: c.id,
@@ -195,7 +202,6 @@ function CallTranscriptCard({
       {
         onSuccess: (draft) => {
           onDraftReady({ ...draft, sessionId: session.id });
-          setDataUseAcknowledged(false);
           toast({ title: 'Draft preview is ready for your review' });
         },
         onError: (error) => toast({ title: 'AI draft could not be created', description: errMsg(error), variant: 'destructive' }),
@@ -251,14 +257,18 @@ function CallTranscriptCard({
           <Notice icon={<Info />} className="mt-3">
             Generating a draft sends this lawyer-edited transcript and the selected template to DeepSeek. The result is only a preview; it is not saved or sent to the client automatically.
           </Notice>
-          <label className="mt-3 flex items-start gap-3 text-sm">
-            <input type="checkbox" checked={dataUseAcknowledged} onChange={(event) => setDataUseAcknowledged(event.target.checked)} data-testid={`checkbox-ai-data-use-${session.id}`} />
-            I understand this transcript and template will be sent to DeepSeek for this draft request.
-          </label>
-          <Button className="mt-3" onClick={draftFromTranscript} disabled={!dataUseAcknowledged || !templateId || dirty || generate.isPending} data-testid={`button-generate-call-draft-${session.id}`}>
+          <Button className="mt-3" onClick={openDraftConsent} disabled={!templateId || dirty || generate.isPending} data-testid={`button-generate-call-draft-${session.id}`}>
             {generate.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Generate document draft
           </Button>
-          {dirty && <p className="mt-2 text-xs text-muted-foreground">Save your transcript corrections before generating a draft.</p>}
+          {dirty && <p className="mt-2 text-xs text-muted-foreground">Save your transcript corrections before generating this draft.</p>}
+          <AiRequestConsentDialog
+            open={draftConsentOpen}
+            provider="DeepSeek"
+            description="Your reviewed transcript and selected legal template will be sent to DeepSeek for a draft preview. The draft is not saved or delivered automatically."
+            testIdPrefix={`call-draft-${session.id}`}
+            onCancel={() => setDraftConsentOpen(false)}
+            onContinue={draftFromTranscript}
+          />
         </>
       ) : session.status === 'failed' ? (
         <p className="mt-2 text-sm text-muted-foreground">No AI draft can be generated from an incomplete transcript. The call recording is deleted after transcription retries are exhausted.</p>
@@ -584,7 +594,7 @@ function DeliverableEditor({
   const [title, setTitle] = useState(item?.title ?? initialDraft?.title ?? `${c.topic} - advice note`);
   const [content, setContent] = useState(item?.content ?? initialDraft?.content ?? '');
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
-  const [aiDataAcknowledged, setAiDataAcknowledged] = useState(false);
+  const [aiConsentOpen, setAiConsentOpen] = useState(false);
   const pending = create.isPending || update.isPending;
 
   const save = (status: DeliverableInputStatus) => {
@@ -602,12 +612,22 @@ function DeliverableEditor({
     else create.mutate({ id: c.id, data }, opts);
   };
 
-  const draftFromTranscript = () => {
-    if (!aiDataAcknowledged) return;
+  const openDraftConsent = () => {
     const source = [c.topic, c.notes, c.transcript].filter(Boolean).join('\n\n');
+    if (!source.trim()) {
+      toast({ title: 'Nothing to draft', description: 'Add consultation notes or transcript text first.' });
+      return;
+    }
+    setAiConsentOpen(true);
+  };
+
+  const draftFromTranscript = () => {
+    const source = [c.topic, c.notes, c.transcript].filter(Boolean).join('\n\n');
+    if (!source.trim() || ai.isPending) return;
+    setAiConsentOpen(false);
     ai.mutate(
       { data: { action: 'draft', text: source, language: 'English' } },
-      { onSuccess: (r) => { setContent(r.text); setReviewConfirmed(false); setAiDataAcknowledged(false); }, onError: (e) => toast({ title: 'AI draft failed', description: errMsg(e), variant: 'destructive' }) },
+      { onSuccess: (r) => { setContent(r.text); setReviewConfirmed(false); }, onError: (e) => toast({ title: 'AI draft failed', description: errMsg(e), variant: 'destructive' }) },
     );
   };
 
@@ -617,17 +637,21 @@ function DeliverableEditor({
         <DialogHeader><DialogTitle className="font-display text-2xl">{item ? 'Edit document' : 'New document draft'}</DialogTitle></DialogHeader>
         <Input value={title} onChange={(e) => { setTitle(e.target.value); setReviewConfirmed(false); }} maxLength={200} data-testid="input-deliverable-title" />
         <Textarea value={content} onChange={(e) => { setContent(e.target.value); setReviewConfirmed(false); }} rows={14} className="font-mono text-[13px]" placeholder="Markdown supported" data-testid="input-deliverable-content" />
-        {platform.data?.aiEnabled && (
+        {platform.data?.draftingEnabled && (
           <>
-          <label className="flex items-start gap-3 text-sm">
-            <input type="checkbox" checked={aiDataAcknowledged} onChange={(e) => setAiDataAcknowledged(e.target.checked)} data-testid="checkbox-deliverable-ai-data-use" />
-            I understand the consultation topic, notes, and transcript will be sent to DeepSeek for this draft request.
-          </label>
-          <Button variant="outline" size="sm" onClick={draftFromTranscript} disabled={ai.isPending || !aiDataAcknowledged} className="self-start" data-testid="button-ai-draft">
+          <Button variant="outline" size="sm" onClick={openDraftConsent} disabled={ai.isPending} className="self-start" data-testid="button-ai-draft">
             {ai.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Draft from topic, notes and transcript
           </Button>
           </>
         )}
+        <AiRequestConsentDialog
+          open={aiConsentOpen}
+          provider="DeepSeek"
+          description="The consultation topic, notes, and transcript will be sent to DeepSeek to create a draft preview."
+          testIdPrefix="consultation-deliverable-draft"
+          onCancel={() => setAiConsentOpen(false)}
+          onContinue={draftFromTranscript}
+        />
         <Notice icon={<Info />}>Review every line before publishing. AI output can be wrong and is not legal advice on its own.</Notice>
         <label className="flex items-start gap-3 text-sm">
           <input type="checkbox" checked={reviewConfirmed} onChange={(e) => setReviewConfirmed(e.target.checked)} data-testid="checkbox-review-deliverable" />
