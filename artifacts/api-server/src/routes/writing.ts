@@ -9,6 +9,7 @@ import { legalTemplates } from "../data/templates";
 import { accessibleConsultation } from "../lib/legal";
 import { ensureCompatibleAudio } from "../lib/audio";
 import { buildWritingMessages } from "../lib/writing-prompts";
+import { getAiUsage, reserveAiAttempt } from "../lib/ai-usage";
 import {
   hasDeepSeekKey,
   ProviderConfigurationError,
@@ -23,10 +24,14 @@ const aiLimit = rateLimit({
   keyGenerator: (req) => req.account.id,
   standardHeaders: "draft-8",
   legacyHeaders: false,
-  message: { error: "AI usage limit reached. Please try again in an hour." },
+  message: { error: "Too many AI requests in a short time. Please retry after the time in the Retry-After response header. Your daily allowance resets separately at midnight UTC." },
 });
 const active = new Set<string>();
-router.use("/writing", requireAccount, requireLawyer, aiLimit);
+router.use("/writing", requireAccount, requireLawyer);
+router.get("/writing/usage", async (req, res) => {
+  res.json(api.GetWritingUsageResponse.parse(await getAiUsage(req.account.id)));
+});
+router.use("/writing", aiLimit);
 
 function providerError(err: unknown): never {
   if (err instanceof ProviderConfigurationError) {
@@ -43,6 +48,7 @@ router.post("/writing/assist", async (req, res): Promise<void> => {
   if (active.has(req.account.id)) throw new HttpError(429, "An AI request is already running. Please wait for it to finish.");
   active.add(req.account.id);
   try {
+    await reserveAiAttempt(req.account.id, "drafting");
     const text = await requestDeepSeek(buildWritingMessages(input.action, input.language, input.text));
     res.json(api.AssistWritingResponse.parse({ text }));
   } catch (err) {
@@ -84,6 +90,7 @@ router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", asyn
       `LAWYER-EDITED CALL TRANSCRIPT (unverified source material):\n${session.editedTranscript}`,
     ].join("\n\n");
     if (source.length > 100_000) throw new HttpError(413, "Shorten the edited transcript before generating this draft; no text was sent.");
+    await reserveAiAttempt(req.account.id, "drafting");
     const text = await requestDeepSeek(buildWritingMessages("draft", input.language, source));
     res.json(api.DraftFromCallTranscriptResponse.parse({
       title: `${record.topic} - ${template.name}`.slice(0, 200),
@@ -110,6 +117,7 @@ router.post("/writing/transcribe", async (req, res): Promise<void> => {
     const { buffer, format } = await ensureCompatibleAudio(bytes);
     if (buffer.length > 24 * 1024 * 1024) throw new HttpError(400, "The recording is too long. Please record a shorter segment.");
     const language = supportedLanguages.find((l) => l.name === input.language || l.code === input.language)?.code;
+    await reserveAiAttempt(req.account.id, "transcription");
     const text = await transcribeWithElevenLabs(buffer, format, language);
     if (!text.trim()) throw new HttpError(422, "No speech could be recognized. Please try again.");
     res.json(api.TranscribeAudioResponse.parse({ text }));

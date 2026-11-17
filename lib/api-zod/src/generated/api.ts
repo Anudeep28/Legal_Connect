@@ -943,6 +943,21 @@ export const DuplicateDocumentResponse = zod.object({
 })
 
 
+export const GetWritingUsageResponse = zod.object({
+  "drafting": zod.object({
+  "limit": zod.number().int(),
+  "used": zod.number().int(),
+  "remaining": zod.number().int()
+}),
+  "transcription": zod.object({
+  "limit": zod.number().int(),
+  "used": zod.number().int(),
+  "remaining": zod.number().int()
+}),
+  "resetsAt": zod.coerce.date()
+})
+
+
 export const assistWritingBodyTextMax = 30000;
 
 export const assistWritingBodyLanguageMin = 2;

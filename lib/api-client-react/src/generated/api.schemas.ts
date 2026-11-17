@@ -637,6 +637,18 @@ export interface DocumentInput {
   language: string;
 }
 
+export interface AiAllowance {
+  limit: number;
+  used: number;
+  remaining: number;
+}
+
+export interface WritingAllowance {
+  drafting: AiAllowance;
+  transcription: AiAllowance;
+  resetsAt: string;
+}
+
 export type WritingInputAction = typeof WritingInputAction[keyof typeof WritingInputAction];
 
 

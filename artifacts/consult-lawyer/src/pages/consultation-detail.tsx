@@ -35,6 +35,7 @@ import { exportDocx, exportMarkdown, exportPdf } from '@/lib/export';
 import { usePaymentCheckout } from '@/hooks/use-payment-checkout';
 import { PaymentHistory } from '@/components/payment-history';
 import { ConsultationCall } from '@/components/consultation-call';
+import { AiUsageNotice } from '@/components/ai-usage';
 
 export default function ConsultationDetail() {
   const { id = '' } = useParams<{ id: string }>();
@@ -117,6 +118,7 @@ function CallTranscriptWorkspace({
     <section className="rounded-3xl border bg-card p-5" data-testid="call-transcript-workspace">
       <h3 className="font-display text-lg font-semibold">Private call transcript</h3>
       <p className="mt-1 text-sm text-muted-foreground">Only the assigned lawyer can view or edit these transcripts. Correct the text before using it to prepare a document.</p>
+      <div className="mt-3"><AiUsageNotice /></div>
       {q.isLoading ? <Skeleton className="mt-3 h-20" /> : q.isError ? (
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : q.data?.length ? (

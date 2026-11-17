@@ -473,6 +473,15 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Document" }
+  /writing/usage:
+    get:
+      operationId: getWritingUsage
+      responses:
+        "200":
+          description: Daily allowances for the authenticated lawyer. Provider attempts including failures count; resets at midnight UTC.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WritingAllowance" }
   /writing/assist:
     post:
       operationId: assistWriting
@@ -1130,6 +1139,20 @@ components:
         templateId: { type: string }
         category: { type: string }
         language: { type: string }
+    WritingAllowance:
+      type: object
+      required: [drafting, transcription, resetsAt]
+      properties:
+        drafting: { $ref: "#/components/schemas/AiAllowance" }
+        transcription: { $ref: "#/components/schemas/AiAllowance" }
+        resetsAt: { type: string, format: date-time }
+    AiAllowance:
+      type: object
+      required: [limit, used, remaining]
+      properties:
+        limit: { type: integer }
+        used: { type: integer }
+        remaining: { type: integer }
     WritingInput:
       type: object
       required: [action, text, language]

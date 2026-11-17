@@ -13,6 +13,7 @@ import { publicAppUrl } from "./communication-config";
 import { twilioClient } from "./consultation-calls";
 import { getLanguageByCode } from "../data/languages";
 import { logger } from "./logger";
+import { reserveAiAttempt } from "./ai-usage";
 
 const MAX_RECORDING_BYTES = 100 * 1024 * 1024;
 const MAX_TRANSCRIPT_CHARS = 100_000;
@@ -377,6 +378,9 @@ export async function processCallRecordingQueue(
       }
       const processed = await transcribePersistThenDelete(
         async () => {
+          const lawyerOwnerId = lawyer?.ownerId;
+          if (!lawyerOwnerId) throw new Error("lawyer_owner_missing");
+          await reserveAiAttempt(lawyerOwnerId, "transcription");
           const raw = await downloadTwilioRecording(track.recordingSid);
           const compatible = await ensureCompatibleAudio(raw);
           if (compatible.buffer.length > MAX_RECORDING_BYTES) throw new Error("recording_too_large");
@@ -428,17 +432,18 @@ export async function processCallRecordingQueue(
       }
     } catch (error) {
       const attempts = track.attempts + 1;
-      const terminal = attempts >= MAX_TRANSCRIPTION_ATTEMPTS || (error as Error).message === "consent_withdrawn";
+      const quotaExceeded = (error as { status?: number }).status === 429;
+      const terminal = attempts >= MAX_TRANSCRIPTION_ATTEMPTS || (error as Error).message === "consent_withdrawn" || quotaExceeded;
       await db.update(callRecordingTracks).set({
         status: terminal ? "failed_delete_pending" : "queued",
         attempts,
-        lastError: terminal ? "transcription_failed" : "provider_retry",
+        lastError: quotaExceeded ? "daily_usage_limit" : terminal ? "transcription_failed" : "provider_retry",
         updatedAt: new Date().toISOString(),
       }).where(eq(callRecordingTracks.id, track.id));
       if (terminal) {
         await db.update(callRecordingSessions).set({
           status: "failed",
-          processingError: "transcription_failed",
+          processingError: quotaExceeded ? "daily_usage_limit" : "transcription_failed",
           updatedAt: new Date().toISOString(),
         }).where(eq(callRecordingSessions.id, session.id));
       }

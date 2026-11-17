@@ -4,3 +4,4 @@ export * from "./consultations";
 export * from "./documents";
 export * from "./notifications";
 export * from "./payments";
+export * from "./ai-usage";

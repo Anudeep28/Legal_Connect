@@ -74,6 +74,7 @@ import type {
   TextResult,
   UserModeration,
   VerificationChallenge,
+  WritingAllowance,
   WritingInput
 } from './api.schemas';
 
@@ -3431,6 +3432,101 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getDuplicateDocumentMutationOptions(options), queryClient);
     }
+
+export const getGetWritingUsageUrl = () => {
+
+
+
+
+  return `/api/writing/usage`
+}
+
+export const getWritingUsage = async ( options?: Parameters<typeof customFetch>[1]): Promise<WritingAllowance> => {
+
+  return customFetch<WritingAllowance>(getGetWritingUsageUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWritingUsageQueryKey = () => {
+    return [
+    `/api/writing/usage`
+    ] as const;
+    }
+
+
+export const getGetWritingUsageQueryOptions = <TData = Awaited<ReturnType<typeof getWritingUsage>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWritingUsage>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWritingUsageQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWritingUsage>>> = ({ signal }) => getWritingUsage({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWritingUsage>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetWritingUsageQueryResult = NonNullable<Awaited<ReturnType<typeof getWritingUsage>>>
+export type GetWritingUsageQueryError = ErrorType<unknown>
+
+
+export function useGetWritingUsage<TData = Awaited<ReturnType<typeof getWritingUsage>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWritingUsage>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWritingUsage>>,
+          TError,
+          Awaited<ReturnType<typeof getWritingUsage>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWritingUsage<TData = Awaited<ReturnType<typeof getWritingUsage>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWritingUsage>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWritingUsage>>,
+          TError,
+          Awaited<ReturnType<typeof getWritingUsage>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWritingUsage<TData = Awaited<ReturnType<typeof getWritingUsage>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWritingUsage>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetWritingUsage<TData = Awaited<ReturnType<typeof getWritingUsage>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWritingUsage>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetWritingUsageQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getAssistWritingUrl = () => {
 

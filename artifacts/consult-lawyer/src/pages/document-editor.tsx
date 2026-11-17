@@ -25,6 +25,7 @@ import {
 import { Guard } from '@/components/guard';
 import { AppPage } from '@/components/shell';
 import { ErrorState, Notice } from '@/components/kit';
+import { AiUsageNotice } from '@/components/ai-usage';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { errMsg, fillTemplate, relTime } from '@/lib/format';
@@ -319,6 +320,7 @@ function Editor({ doc }: { doc: Document }) {
         </div>
       </div>
 
+      <AiUsageNotice />
       {platform.data && (!draftingEnabled || !dictationEnabled) && (
         <Notice icon={<Info />} tone="ink" className="mb-4">
           {!draftingEnabled && !dictationEnabled
