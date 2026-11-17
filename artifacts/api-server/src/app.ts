@@ -10,6 +10,7 @@ import { apiErrorHandler, csrfProtection } from "./middlewares/access";
 import { razorpayWebhook } from "./routes/billing";
 import { dispatchCommunications } from "./routes/communication-dispatch";
 import { twilioVideoRecordingWebhook } from "./lib/call-recordings";
+import healthRouter from "./routes/health";
 
 const app: Express = express();
 
@@ -40,6 +41,8 @@ app.post("/api/communications/dispatch", dispatchCommunications);
 app.post("/api/communications/twilio-video-recordings", express.urlencoded({ extended: false, limit: "256kb" }), twilioVideoRecordingWebhook);
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
+// Public liveness endpoint: platform probes must not require Clerk or database access.
+app.use("/api", healthRouter);
 app.use(clerkMiddleware((req) => ({
   publishableKey: publishableKeyFromHost(getClerkProxyHost(req) ?? "", process.env.CLERK_PUBLISHABLE_KEY),
 })));
