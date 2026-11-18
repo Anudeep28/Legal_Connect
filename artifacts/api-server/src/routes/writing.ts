@@ -45,6 +45,7 @@ export function createWritingRouter(dependencies: {
   authMiddlewares?: RequestHandler[];
   hasDeepSeekKey?: typeof hasDeepSeekKey;
   requestDeepSeek?: typeof requestDeepSeek;
+  transcribeAudio?: typeof transcribeWithElevenLabs;
   getAiUsage?: typeof getAiUsage;
   reserveAiAttempt?: typeof reserveAiAttempt;
   recordAiProviderSuccess?: typeof recordAiProviderSuccessSafely;
@@ -53,6 +54,7 @@ const router: IRouter = Router();
 const active = new Set<string>();
 const aiKeyReady = dependencies.hasDeepSeekKey ?? hasDeepSeekKey;
 const completeWithAi = dependencies.requestDeepSeek ?? requestDeepSeek;
+const transcribeAudio = dependencies.transcribeAudio ?? transcribeWithElevenLabs;
 const readUsage = dependencies.getAiUsage ?? getAiUsage;
 const reserveUsage = dependencies.reserveAiAttempt ?? reserveAiAttempt;
 const recordProviderSuccess = dependencies.recordAiProviderSuccess ?? recordAiProviderSuccessSafely;
@@ -143,7 +145,7 @@ router.post("/writing/transcribe", async (req, res): Promise<void> => {
     if (buffer.length > 24 * 1024 * 1024) throw new HttpError(400, "The recording is too long. Please record a shorter segment.");
     const language = supportedLanguages.find((l) => l.name === input.language || l.code === input.language)?.code;
     await reserveUsage(req.account.id, "transcription");
-    const text = await transcribeWithElevenLabs(buffer, format, language);
+    const text = await transcribeAudio(buffer, format, language);
     await recordProviderSuccess(req.account.id, "transcription");
     if (!text.trim()) throw new HttpError(422, "No speech could be recognized. Please try again.");
     res.json(api.TranscribeAudioResponse.parse({ text }));

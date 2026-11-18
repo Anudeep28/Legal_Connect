@@ -169,3 +169,92 @@ test("a truly simultaneous drafting request for the same lawyer is rejected", as
     await new Promise<void>((resolve) => server.once("close", resolve));
   }
 });
+
+test("a failed dictation request releases the lawyer lock for a later request", async () => {
+  process.env.DATABASE_URL = "postgres://smoke:smoke@127.0.0.1:1/writing_route_test";
+  const [{ createWritingRouter }, { apiErrorHandler }] = await Promise.all([
+    import("./writing"),
+    import("../middlewares/access"),
+  ]);
+  let providerCalls = 0;
+  let reservationCalls = 0;
+  const app = express();
+  app.use(express.json());
+  app.use(pinoHttp({ quietReqLogger: true, logger: pino({ level: "silent" }) }));
+  app.use((req, _res, next) => {
+    req.account = { id: "synthetic-dictation-lawyer", role: "lawyer" } as never;
+    next();
+  });
+  app.use(createWritingRouter({
+    authMiddlewares: [(_req, _res, next) => next()],
+    getAiUsage: async () => ({
+      plan: "single",
+      drafting: { limit: 15, used: 2, remaining: 13 },
+      transcription: { limit: 15, used: reservationCalls, remaining: 15 - reservationCalls },
+      resetsAt: "2026-11-19T00:00:00.000Z",
+    }),
+    reserveAiAttempt: async () => {
+      reservationCalls += 1;
+      return { used: reservationCalls, limit: 30, resetsAt: new Date().toISOString() };
+    },
+    transcribeAudio: async (audio, format, language) => {
+      providerCalls += 1;
+      assert.equal(audio.length, 44);
+      assert.equal(format, "wav");
+      assert.equal(language, "en");
+      if (providerCalls === 1) throw new ProviderRequestError();
+      return "Synthetic dictation transcript.";
+    },
+    recordAiProviderSuccess: async () => {},
+  }));
+  app.use(apiErrorHandler);
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  try {
+    const wav = Buffer.alloc(44);
+    wav.write("RIFF", 0, "ascii");
+    wav.writeUInt32LE(36, 4);
+    wav.write("WAVE", 8, "ascii");
+    wav.write("fmt ", 12, "ascii");
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(16_000, 24);
+    wav.writeUInt32LE(32_000, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write("data", 36, "ascii");
+    wav.writeUInt32LE(0, 40);
+    const body = JSON.stringify({
+      audio: wav.toString("base64"),
+      mimeType: "audio/wav",
+      language: "English",
+    });
+    const url = `http://127.0.0.1:${address.port}/writing/transcribe`;
+    const request = () => fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+
+    const failedResponse = await request();
+    assert.equal(failedResponse.status, 502);
+    assert.match(String((await failedResponse.json() as { error?: unknown }).error), /temporarily unavailable/i);
+    assert.equal(providerCalls, 1);
+    assert.equal(reservationCalls, 1);
+
+    const retryResponse = await request();
+    assert.equal(retryResponse.status, 200);
+    assert.deepEqual(await retryResponse.json(), { text: "Synthetic dictation transcript." });
+    assert.equal(providerCalls, 2, "the retry must reach the mocked transcription provider");
+    assert.equal(reservationCalls, 2);
+  } finally {
+    server.close();
+    await new Promise<void>((resolve) => server.once("close", resolve));
+  }
+});
