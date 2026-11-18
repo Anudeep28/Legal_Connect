@@ -6,8 +6,10 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AiAllowance } from './aiAllowance';
+import type { WritingAllowancePlan } from './writingAllowancePlan';
 
 export interface WritingAllowance {
+  plan: WritingAllowancePlan;
   drafting: AiAllowance;
   transcription: AiAllowance;
   resetsAt: Date;

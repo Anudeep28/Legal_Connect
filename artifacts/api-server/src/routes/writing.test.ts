@@ -23,6 +23,12 @@ test("a failed drafting request releases the lawyer lock for a later request", a
   app.use(createWritingRouter({
     authMiddlewares: [(_req, _res, next) => next()],
     hasDeepSeekKey: () => true,
+    getAiUsage: async () => ({
+      plan: "single",
+      drafting: { limit: 15, used: 2, remaining: 13 },
+      transcription: { limit: 15, used: 1, remaining: 14 },
+      resetsAt: "2026-11-19T00:00:00.000Z",
+    }),
     reserveAiAttempt: async () => ({ used: 1, limit: 30, resetsAt: new Date().toISOString() }),
     requestDeepSeek: async (messages) => {
       providerCalls += 1;
@@ -41,6 +47,15 @@ test("a failed drafting request releases the lawyer lock for a later request", a
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   try {
+    const usageResponse = await fetch(`http://127.0.0.1:${address.port}/writing/usage`);
+    assert.equal(usageResponse.status, 200);
+    assert.deepEqual(await usageResponse.json(), {
+      plan: "single",
+      drafting: { limit: 15, used: 2, remaining: 13 },
+      transcription: { limit: 15, used: 1, remaining: 14 },
+      resetsAt: "2026-11-19T00:00:00.000Z",
+    });
+
     const url = `http://127.0.0.1:${address.port}/writing/assist`;
     const body = JSON.stringify({
       action: "draft",

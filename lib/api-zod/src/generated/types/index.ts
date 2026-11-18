@@ -105,5 +105,6 @@ export * from './userModeration';
 export * from './userModerationStatus';
 export * from './verificationChallenge';
 export * from './writingAllowance';
+export * from './writingAllowancePlan';
 export * from './writingInput';
 export * from './writingInputAction';

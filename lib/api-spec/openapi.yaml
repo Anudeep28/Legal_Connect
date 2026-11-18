@@ -1306,8 +1306,9 @@ components:
         language: { type: string }
     WritingAllowance:
       type: object
-      required: [drafting, transcription, resetsAt]
+      required: [plan, drafting, transcription, resetsAt]
       properties:
+        plan: { type: string, enum: [trial, single, monthly] }
         drafting: { $ref: "#/components/schemas/AiAllowance" }
         transcription: { $ref: "#/components/schemas/AiAllowance" }
         resetsAt: { type: string, format: date-time }

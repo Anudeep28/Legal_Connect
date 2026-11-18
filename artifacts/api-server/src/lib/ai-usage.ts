@@ -4,8 +4,13 @@ import { HttpError } from "../middlewares/access";
 import { logger } from "./logger";
 
 type Kind = "drafting" | "transcription";
+export type AiPlan = "trial" | "single" | "monthly";
 type Env = Record<string, string | undefined>;
 export const AI_USAGE_RETENTION_DAYS = 90;
+const DEFAULT_DAILY_LIMITS: Record<Kind, Record<AiPlan, number>> = {
+  drafting: { trial: 5, single: 15, monthly: 30 },
+  transcription: { trial: 5, single: 15, monthly: 30 },
+};
 
 function providerForKind(kind: Kind): "deepseek" | "elevenlabs" {
   return kind === "drafting" ? "deepseek" : "elevenlabs";
@@ -30,10 +35,26 @@ export function estimateDeepSeekCostUsd(
   return Number.isFinite(cost) ? cost : null;
 }
 
-export function aiDailyLimit(kind: Kind, env: Env = process.env): number {
-  const key = kind === "drafting" ? "AI_DRAFTING_DAILY_LIMIT" : "AI_TRANSCRIPTION_DAILY_LIMIT";
-  const raw = env[key];
-  if (raw === undefined) return 30;
+export function resolveAiPlan(
+  account: Pick<typeof accounts.$inferSelect, "subscriptionPlan" | "subscriptionExpiresAt" | "documentCredits">,
+  now = new Date(),
+): AiPlan {
+  const nowMs = now.getTime();
+  if (account.subscriptionPlan === "monthly" && account.subscriptionExpiresAt &&
+      Number.isFinite(Date.parse(account.subscriptionExpiresAt)) && Date.parse(account.subscriptionExpiresAt) > nowMs)
+    return "monthly";
+  if (account.documentCredits > 0) return "single";
+  return "trial";
+}
+
+export function aiDailyLimit(kind: Kind, plan: AiPlan, env: Env = process.env): number {
+  const prefix = kind === "drafting" ? "AI_DRAFTING" : "AI_TRANSCRIPTION";
+  const planKey = `${prefix}_DAILY_LIMIT_${plan.toUpperCase()}`;
+  const legacyKey = `${prefix}_DAILY_LIMIT`;
+  // The former one-size cap is retained as the monthly-tier fallback. Lower
+  // tiers keep their distinct defaults unless the owner sets their own caps.
+  const raw = env[planKey] ?? (plan === "monthly" ? env[legacyKey] : undefined);
+  if (raw === undefined) return DEFAULT_DAILY_LIMITS[kind][plan];
   if (!/^\d+$/.test(raw) || Number(raw) > 10000) {
     throw new HttpError(503, "AI usage limits are misconfigured. Please contact the administrator.");
   }
@@ -49,13 +70,16 @@ export function aiUsageWindow(now = new Date()) {
 
 export async function getAiUsage(accountId: string, now = new Date()) {
   const { day, resetsAt } = aiUsageWindow(now);
+  const [account] = await db.select().from(accounts).where(eq(accounts.id, accountId));
+  if (!account) throw new HttpError(404, "Account not found.");
+  const plan = resolveAiPlan(account, now);
   const rows = await db.select().from(aiUsage).where(and(eq(aiUsage.accountId, accountId), eq(aiUsage.day, day)));
   const allowance = (kind: Kind) => {
-    const limit = aiDailyLimit(kind);
+    const limit = aiDailyLimit(kind, plan);
     const used = rows.find(row => row.kind === kind)?.used ?? 0;
     return { limit, used, remaining: Math.max(0, limit - used) };
   };
-  return { drafting: allowance("drafting"), transcription: allowance("transcription"), resetsAt };
+  return { plan, drafting: allowance("drafting"), transcription: allowance("transcription"), resetsAt };
 }
 
 // Atomic insert-or-increment: multiple processes share the same strict allowance.
@@ -63,11 +87,14 @@ export async function getAiUsage(accountId: string, now = new Date()) {
 // a timeout can still have incurred provider charges.
 export async function reserveAiAttempt(accountId: string, kind: Kind, now = new Date()) {
   const { day, resetsAt } = aiUsageWindow(now);
-  const limit = aiDailyLimit(kind);
-  const exhausted = () => new HttpError(429,
-    `Your daily ${kind} limit (${limit} requests) has been reached. It resets at ${resetsAt} (midnight UTC). Your document has not been changed.`);
-  if (!limit) throw exhausted();
   return db.transaction(async (tx) => {
+    const [account] = await tx.select().from(accounts).where(eq(accounts.id, accountId)).for("update");
+    if (!account) throw new HttpError(404, "Account not found.");
+    const plan = resolveAiPlan(account, now);
+    const limit = aiDailyLimit(kind, plan);
+    const exhausted = () => new HttpError(429,
+      `Your daily ${kind} limit (${limit} requests for the ${plan} plan) has been reached. It resets at ${resetsAt} (midnight UTC). Your document has not been changed.`);
+    if (!limit) throw exhausted();
     const [reserved] = await tx.insert(aiUsage).values({ accountId, kind, day, used: 1 })
       .onConflictDoUpdate({
         target: [aiUsage.accountId, aiUsage.kind, aiUsage.day],

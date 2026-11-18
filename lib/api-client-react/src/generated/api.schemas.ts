@@ -774,6 +774,15 @@ export interface DocumentInput {
   language: string;
 }
 
+export type WritingAllowancePlan = typeof WritingAllowancePlan[keyof typeof WritingAllowancePlan];
+
+
+export const WritingAllowancePlan = {
+  trial: 'trial',
+  single: 'single',
+  monthly: 'monthly',
+} as const;
+
 export interface AiAllowance {
   limit: number;
   used: number;
@@ -781,6 +790,7 @@ export interface AiAllowance {
 }
 
 export interface WritingAllowance {
+  plan: WritingAllowancePlan;
   drafting: AiAllowance;
   transcription: AiAllowance;
   resetsAt: string;

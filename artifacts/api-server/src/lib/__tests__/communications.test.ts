@@ -4,7 +4,7 @@ import { randomUUID, randomBytes } from "node:crypto";
 import nock from "nock";
 import webPush from "web-push";
 import { eq, inArray } from "drizzle-orm";
-import { db, pool, accounts, lawyers, consultations, notifications, communicationDeliveries, callConsents, callRecordingConsents, pushSubscriptions, aiUsage } from "@workspace/db";
+import { db, pool, accounts, lawyers, consultations, notifications, communicationDeliveries, callConsents, callRecordingConsents, pushSubscriptions, aiUsage, aiUsageDaily } from "@workspace/db";
 import { callEligibility, isParticipant, reminderDue, retryAllowed, retryDelay, validPushEndpoint, phoneApproved, HOUR, MINUTE } from "../communication-policy";
 import { callsEnabled, callRecordingEnabled, emailEnabled, phoneVerificationEnabled, pushEnabled } from "../communication-config";
 import { scheduleReminders, queueOutbound, claimDelivery, deliver } from "../communication-worker";
@@ -384,19 +384,58 @@ test("competing workers claim distinct jobs and reclaim expired leases", async (
 
 test("AI request allowances reserve atomically per lawyer and reset at UTC midnight", async () => {
   const lawyer = await account(lawyerOwnerId);
-  process.env.AI_DRAFTING_DAILY_LIMIT = "4";
+  const previousLimits = {
+    legacy: process.env.AI_DRAFTING_DAILY_LIMIT,
+    trial: process.env.AI_DRAFTING_DAILY_LIMIT_TRIAL,
+    single: process.env.AI_DRAFTING_DAILY_LIMIT_SINGLE,
+    monthly: process.env.AI_DRAFTING_DAILY_LIMIT_MONTHLY,
+  };
+  delete process.env.AI_DRAFTING_DAILY_LIMIT;
+  process.env.AI_DRAFTING_DAILY_LIMIT_TRIAL = "4";
+  process.env.AI_DRAFTING_DAILY_LIMIT_SINGLE = "7";
+  process.env.AI_DRAFTING_DAILY_LIMIT_MONTHLY = "12";
   const transcriptionBefore = (await getAiUsage(lawyer.id)).transcription.used;
   const attempts = await Promise.all(Array.from({ length: 4 }, () =>
     reserveAiAttempt(lawyer.id, "drafting")));
   assert.deepEqual(attempts.map(x => x.used).sort(), [1, 2, 3, 4]);
   await assert.rejects(reserveAiAttempt(lawyer.id, "drafting"), { status: 429 });
   const usage = await getAiUsage(lawyer.id);
+  assert.equal(usage.plan, "trial");
   assert.equal(usage.drafting.used, 4);
+  assert.equal(usage.drafting.limit, 4);
   assert.equal(usage.drafting.remaining, 0);
   assert.equal(usage.transcription.used, transcriptionBefore);
   assert.equal(new Date(usage.resetsAt).getUTCHours(), 0);
   await db.delete(aiUsage).where(eq(aiUsage.accountId, lawyer.id));
-  delete process.env.AI_DRAFTING_DAILY_LIMIT;
+  await db.delete(aiUsageDaily).where(eq(aiUsageDaily.accountId, lawyer.id));
+
+  await db.update(accounts).set({ documentCredits: 1 }).where(eq(accounts.id, lawyer.id));
+  const singlePlan = await getAiUsage(lawyer.id);
+  assert.equal(singlePlan.plan, "single");
+  assert.equal(singlePlan.drafting.limit, 7);
+  await db.update(accounts).set({
+    documentCredits: 0,
+    subscriptionPlan: "monthly",
+    subscriptionExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  }).where(eq(accounts.id, lawyer.id));
+  const monthlyPlan = await getAiUsage(lawyer.id);
+  assert.equal(monthlyPlan.plan, "monthly");
+  assert.equal(monthlyPlan.drafting.limit, 12);
+
+  await db.update(accounts).set({
+    subscriptionPlan: "monthly",
+    subscriptionExpiresAt: new Date(Date.now() - 1).toISOString(),
+  }).where(eq(accounts.id, lawyer.id));
+  assert.equal((await getAiUsage(lawyer.id)).plan, "trial");
+  for (const [key, value] of Object.entries({
+    AI_DRAFTING_DAILY_LIMIT: previousLimits.legacy,
+    AI_DRAFTING_DAILY_LIMIT_TRIAL: previousLimits.trial,
+    AI_DRAFTING_DAILY_LIMIT_SINGLE: previousLimits.single,
+    AI_DRAFTING_DAILY_LIMIT_MONTHLY: previousLimits.monthly,
+  })) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 });
 
 test("push delivery tracks each browser separately and removes expired subscriptions", async () => {

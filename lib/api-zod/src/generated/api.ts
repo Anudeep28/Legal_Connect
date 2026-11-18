@@ -953,6 +953,7 @@ export const DuplicateDocumentResponse = zod.object({
 
 
 export const GetWritingUsageResponse = zod.object({
+  "plan": zod.enum(['trial', 'single', 'monthly']),
   "drafting": zod.object({
   "limit": zod.number().int(),
   "used": zod.number().int(),

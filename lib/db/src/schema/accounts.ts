@@ -10,7 +10,7 @@ export const accounts = pgTable("accounts", {
   pushNotifications: boolean("push_notifications").notNull().default(false),
   phone: text("phone"),
   phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true, mode: "string" }),
-  subscriptionPlan: text("subscription_plan").notNull().default("trial"),
+  subscriptionPlan: text("subscription_plan").$type<"trial" | "monthly">().notNull().default("trial"),
   subscriptionExpiresAt: timestamp("subscription_expires_at", { withTimezone: true, mode: "string" }),
   documentCredits: integer("document_credits").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
