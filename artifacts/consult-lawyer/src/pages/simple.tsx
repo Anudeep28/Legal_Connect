@@ -6,11 +6,14 @@ import { Check, Loader2, Bell, CheckCheck, Info, Scale, FileText, MessagesSquare
 import {
   useGetPlatform, useUpdateMe, getGetMeQueryKey,
   useListNotifications, getListNotificationsQueryKey, useReadNotification,
+  useListMyGrievances, getListMyGrievancesQueryKey, useSubmitGrievance,
+  type GrievanceInputCategory,
   type Account, type CheckoutInputPlan,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Guard } from '@/components/guard';
@@ -221,6 +224,130 @@ function NotificationsInner() {
           ))}
         </ul>
       )}
+    </>
+  );
+}
+
+const grievanceCategories: { value: GrievanceInputCategory; label: string }[] = [
+  { value: 'account', label: 'Account or access' },
+  { value: 'consultation', label: 'Consultation service' },
+  { value: 'payment', label: 'Payment' },
+  { value: 'privacy', label: 'Privacy or data' },
+  { value: 'other', label: 'Other' },
+];
+const grievanceStatusLabel = {
+  submitted: 'Submitted',
+  under_review: 'Under review',
+  resolved: 'Resolved',
+} as const;
+
+export function Grievances() {
+  return (
+    <AppPage>
+      <Guard roles={['client']}>{() => <GrievancesInner />}</Guard>
+    </AppPage>
+  );
+}
+
+function GrievancesInner() {
+  const q = useListMyGrievances({ query: { queryKey: getListMyGrievancesQueryKey(), refetchInterval: 30_000 } });
+  const platform = useGetPlatform();
+  const submit = useSubmitGrievance();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [category, setCategory] = useState<GrievanceInputCategory>('other');
+  const [description, setDescription] = useState('');
+  const contacts = platform.data?.policyContacts;
+  return (
+    <>
+      <PageHeader eyebrow="Help and accountability" title="Grievances" sub="Submit a service concern and follow its status here." />
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
+        <form className="space-y-4 rounded-3xl border bg-card p-5 md:p-7" onSubmit={(event) => {
+          event.preventDefault();
+          submit.mutate({ data: { category, description: description.trim() } }, {
+            onSuccess: () => {
+              setDescription('');
+              setCategory('other');
+              qc.invalidateQueries({ queryKey: getListMyGrievancesQueryKey() });
+              toast({ title: 'Grievance submitted', description: 'Your reference and status are now available below.' });
+            },
+            onError: (error) => toast({ title: 'Could not submit grievance', description: errMsg(error), variant: 'destructive' }),
+          });
+        }}>
+          <div>
+            <h2 className="font-display text-2xl font-semibold">Submit a grievance</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Your account is linked automatically. Share only the service issue needed to understand your concern.</p>
+          </div>
+          <div>
+            <Label htmlFor="grievance-category">Issue type</Label>
+            <select
+              id="grievance-category"
+              className="mt-1.5 h-11 w-full rounded-xl border bg-background px-3 text-sm"
+              value={category}
+              onChange={(event) => setCategory(event.target.value as GrievanceInputCategory)}
+              data-testid="select-grievance-category"
+            >
+              {grievanceCategories.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="grievance-description">What happened?</Label>
+            <Textarea
+              id="grievance-description"
+              className="mt-1.5 min-h-32"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              minLength={10}
+              maxLength={1200}
+              required
+              placeholder="Describe the platform or service issue, not the details of your legal matter."
+              data-testid="input-grievance-description"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">Do not include case facts, identity documents, passwords, card details, or other sensitive matter information.</p>
+          </div>
+          <Button type="submit" disabled={description.trim().length < 10 || submit.isPending} className="rounded-full" data-testid="button-submit-grievance">
+            {submit.isPending && <Loader2 className="animate-spin" />} Submit grievance
+          </Button>
+        </form>
+        <aside className="space-y-4">
+          <Notice icon={<Info />}>
+            The Privacy Policy states that grievances will be acknowledged within 48 hours and resolved within 30 days. <Link href="/privacy" className="underline">Read the Privacy Policy</Link>.
+          </Notice>
+          <div className="rounded-3xl border bg-secondary/50 p-5">
+            <h2 className="font-display text-xl font-semibold">Grievance contact</h2>
+            {contacts ? (
+              <div className="mt-3 space-y-1 text-sm">
+                <p>{contacts.grievanceOfficerName}</p>
+                <a className="text-primary underline" href={`mailto:${contacts.grievanceOfficerEmail}`}>{contacts.grievanceOfficerEmail}</a>
+                <p className="pt-2 text-muted-foreground">Support: <a className="underline" href={`mailto:${contacts.supportContactEmail}`}>{contacts.supportContactEmail}</a></p>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">Counsel-approved contact details are not yet on file. You can still submit and track a grievance here.</p>
+            )}
+          </div>
+        </aside>
+      </div>
+      <section className="mt-10">
+        <PageHeader eyebrow="Private to your account" title="Your submissions" sub="Only you and the authorized grievance reviewer can see these records." />
+        {q.isLoading ? <ListSkeleton /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data?.length ? (
+          <EmptyState icon={<Info />} title="No grievances submitted" body="If you need help with a platform or service issue, use the form above." />
+        ) : (
+          <div className="space-y-3">
+            {q.data.map((item) => (
+              <article key={item.id} className="rounded-2xl border bg-card p-5" data-testid={`row-grievance-${item.id}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold">{grievanceCategories.find((option) => option.value === item.category)?.label ?? 'Other'}</h3>
+                  <span className="rounded-full bg-secondary px-2.5 py-1 text-xs">{grievanceStatusLabel[item.status]}</span>
+                  <span className="ml-auto font-mono text-[10px] text-muted-foreground">Ref {item.id.slice(0, 8).toUpperCase()}</span>
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-sm">{item.description}</p>
+                <p className="mt-2 text-xs text-muted-foreground">Submitted {fmtDate(item.submittedAt)} · Updated {fmtDate(item.updatedAt)}</p>
+                {item.officerResponse && <div className="mt-4 rounded-xl bg-secondary/60 p-4"><h4 className="text-sm font-semibold">Officer response</h4><p className="mt-1 whitespace-pre-wrap text-sm">{item.officerResponse}</p>{item.respondedAt && <p className="mt-2 text-xs text-muted-foreground">Response recorded {fmtDate(item.respondedAt)}</p>}</div>}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </>
   );
 }

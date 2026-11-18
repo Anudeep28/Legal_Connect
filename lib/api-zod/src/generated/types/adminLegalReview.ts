@@ -10,6 +10,7 @@ import type { LegalCounselApproval } from './legalCounselApproval';
 
 export interface AdminLegalReview {
   canRecord: boolean;
+  canManageGrievances: boolean;
   paymentVerificationComplete: boolean;
   paidConsultationsEnabled: boolean;
   consultationCheckout: ConsultationCheckoutState;

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useClerk } from '@clerk/react';
-import { Bell, Menu, LogOut, Settings, Scale, ShieldCheck, LayoutDashboard, FileText, MessagesSquare, UserRound } from 'lucide-react';
+import { Bell, Menu, LogOut, Settings, Scale, ShieldCheck, LayoutDashboard, FileText, MessagesSquare, UserRound, FileWarning } from 'lucide-react';
 import { useListNotifications, getListNotificationsQueryKey } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -57,6 +57,7 @@ export function SiteHeader() {
     ? [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { href: '/consultations', label: 'Consultations', icon: MessagesSquare },
+        ...(me?.role === 'client' ? [{ href: '/grievances', label: 'Grievances', icon: FileWarning }] : []),
         ...(me && me.role !== 'client' ? [{ href: '/documents', label: 'Documents', icon: FileText }] : []),
       ]
     : [];
@@ -106,6 +107,7 @@ export function SiteHeader() {
                   <DropdownMenuSeparator />
                   <MenuLink href="/dashboard" icon={<LayoutDashboard />} label="Dashboard" />
                   <MenuLink href="/consultations" icon={<MessagesSquare />} label="Consultations" />
+                  {me?.role === 'client' && <MenuLink href="/grievances" icon={<FileWarning />} label="Grievances" />}
                   {me?.role !== 'client' && <MenuLink href="/documents" icon={<FileText />} label="Documents" />}
                   <MenuLink href="/lawyer/profile" icon={me?.role === 'client' ? <Scale /> : <UserRound />} label={me?.role === 'client' ? 'Apply as a lawyer' : 'Professional profile'} />
                   {me?.role === 'admin' && <MenuLink href="/admin" icon={<ShieldCheck />} label="Admin" />}
@@ -144,6 +146,7 @@ export function SiteHeader() {
             {signedIn && (
               <>
                 <NavLink href="/notifications" onClick={() => setOpen(false)}>Notifications</NavLink>
+                {me?.role === 'client' && <NavLink href="/grievances" onClick={() => setOpen(false)}>Grievances</NavLink>}
                 <NavLink href="/lawyer/profile" onClick={() => setOpen(false)}>{me?.role === 'client' ? 'Apply as a lawyer' : 'Professional profile'}</NavLink>
                 {me?.role === 'admin' && <NavLink href="/admin" onClick={() => setOpen(false)}>Admin</NavLink>}
                 <NavLink href="/settings" onClick={() => setOpen(false)}>Settings</NavLink>

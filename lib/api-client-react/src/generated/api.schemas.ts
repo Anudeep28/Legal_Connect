@@ -161,6 +161,7 @@ export interface ConsultationCheckoutState {
 
 export interface AdminLegalReview {
   canRecord: boolean;
+  canManageGrievances: boolean;
   paymentVerificationComplete: boolean;
   paidConsultationsEnabled: boolean;
   consultationCheckout: ConsultationCheckoutState;
@@ -174,6 +175,72 @@ export interface ConsultationCheckoutPauseInput {
      * @maxLength 500
      */
   reason: string;
+}
+
+export type GrievanceInputCategory = typeof GrievanceInputCategory[keyof typeof GrievanceInputCategory];
+
+
+export const GrievanceInputCategory = {
+  account: 'account',
+  consultation: 'consultation',
+  payment: 'payment',
+  privacy: 'privacy',
+  other: 'other',
+} as const;
+
+export interface GrievanceInput {
+  category: GrievanceInputCategory;
+  /**
+     * @minLength 10
+     * @maxLength 1200
+     */
+  description: string;
+}
+
+export type GrievanceStatus = typeof GrievanceStatus[keyof typeof GrievanceStatus];
+
+
+export const GrievanceStatus = {
+  submitted: 'submitted',
+  under_review: 'under_review',
+  resolved: 'resolved',
+} as const;
+
+export type MyGrievanceCategory = typeof MyGrievanceCategory[keyof typeof MyGrievanceCategory];
+
+
+export const MyGrievanceCategory = {
+  account: 'account',
+  consultation: 'consultation',
+  payment: 'payment',
+  privacy: 'privacy',
+  other: 'other',
+} as const;
+
+export interface MyGrievance {
+  id: string;
+  category: MyGrievanceCategory;
+  description: string;
+  status: GrievanceStatus;
+  officerResponse: string;
+  submittedAt: string;
+  updatedAt: string;
+  /** @nullable */
+  respondedAt: string | null;
+}
+
+export type AdminGrievance = MyGrievance & {
+  clientName: string;
+  clientEmail: string;
+};
+
+export interface AdminGrievanceUpdate {
+  status?: GrievanceStatus;
+  /**
+     * @minLength 3
+     * @maxLength 3000
+     */
+  response?: string;
 }
 
 export interface TwilioUsageBudgetInput {

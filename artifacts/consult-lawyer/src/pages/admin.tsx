@@ -10,9 +10,11 @@ import {
   useListAdminReviews, getListAdminReviewsQueryKey, useModerateReview,
   getGetAdminLegalReviewQueryKey, useRecordAdminLegalReview,
   useUpdateAdminConsultationCheckout,
+  useListAdminGrievances, getListAdminGrievancesQueryKey, useUpdateAdminGrievance,
   getGetPlatformQueryKey,
   getListLawyersQueryKey, getListLawyerReviewsQueryKey,
   type UserModerationStatus, type LawyerModerationApprovalStatus, type LegalCounselApprovalInput,
+  type AdminGrievance, type GrievanceStatus,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,7 +45,7 @@ export default function Admin() {
 
 function AdminWorkspace() {
   const legalReviewAccess = useGetAdminLegalReview();
-  const tabs = ['overview', 'lawyers', 'users', 'reviews', 'legal-review', 'call-usage', ...(legalReviewAccess.data?.canRecord ? ['ai-usage'] : [])];
+  const tabs = ['overview', 'lawyers', 'users', 'reviews', 'legal-review', ...(legalReviewAccess.data?.canManageGrievances ? ['grievances'] : []), 'call-usage', ...(legalReviewAccess.data?.canRecord ? ['ai-usage'] : [])];
   return (
     <>
       <PageHeader eyebrow="Administration" title="Platform oversight" sub="Owner-controlled changes are recorded and enforced on the server." />
@@ -58,6 +60,7 @@ function AdminWorkspace() {
         <TabsContent value="users"><UsersTab /></TabsContent>
         <TabsContent value="reviews"><ReviewsTab /></TabsContent>
         <TabsContent value="legal-review"><LegalReviewTab /></TabsContent>
+        {legalReviewAccess.data?.canManageGrievances && <TabsContent value="grievances"><GrievancesTab /></TabsContent>}
         <TabsContent value="call-usage"><AdminTwilioUsage /></TabsContent>
         {legalReviewAccess.data?.canRecord && <TabsContent value="ai-usage"><AdminAiUsage /></TabsContent>}
       </Tabs>
@@ -403,5 +406,96 @@ function ReviewsTab() {
         })}
       />
     </div>
+  );
+}
+
+function GrievancesTab() {
+  const q = useListAdminGrievances({ query: { queryKey: getListAdminGrievancesQueryKey(), refetchInterval: 30_000 } });
+  if (q.isLoading) return <ListSkeleton />;
+  if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
+  if (!q.data?.length) return <EmptyState icon={<Info />} title="No grievances submitted" body="Client submissions will appear here for authorized review." />;
+  return (
+    <div className="space-y-4">
+      <Notice icon={<Info />}>Grievance descriptions are private. Review only the service concern and avoid adding unnecessary legal-matter details to your response.</Notice>
+      {q.data.map((item) => <GrievanceReviewCard key={item.id} item={item} />)}
+    </div>
+  );
+}
+
+function GrievanceReviewCard({ item }: { item: AdminGrievance }) {
+  const [status, setStatus] = useState<GrievanceStatus>(item.status);
+  const [response, setResponse] = useState(item.officerResponse);
+  const mutation = useUpdateAdminGrievance();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  useEffect(() => {
+    setStatus(item.status);
+    setResponse(item.officerResponse);
+  }, [item.status, item.officerResponse]);
+  const responseChanged = response.trim() !== item.officerResponse;
+  const canSave = (status !== item.status || responseChanged) &&
+    (!responseChanged || response.trim().length >= 3) &&
+    (status !== 'resolved' || response.trim().length >= 3);
+  const options: GrievanceStatus[] = item.status === 'submitted'
+    ? ['submitted', 'under_review', 'resolved']
+    : item.status === 'under_review' ? ['under_review', 'resolved'] : ['resolved'];
+  return (
+    <article className="rounded-2xl border bg-card p-5" data-testid={`row-admin-grievance-${item.id}`}>
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+        <div className="flex-1">
+          <h3 className="font-semibold">{item.clientName} <span className="font-normal text-muted-foreground">· {item.clientEmail}</span></h3>
+          <p className="mt-1 text-xs text-muted-foreground">Reference {item.id.slice(0, 8).toUpperCase()} · Submitted {fmtDate(item.submittedAt)}</p>
+        </div>
+        <span className="rounded-full bg-secondary px-2.5 py-1 text-xs capitalize">{item.status.replace('_', ' ')}</span>
+      </div>
+      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.category}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm">{item.description}</p>
+      <div className="mt-5 grid gap-4 md:grid-cols-[190px_1fr]">
+        <div>
+          <Label htmlFor={`grievance-status-${item.id}`}>Status</Label>
+          <select
+            id={`grievance-status-${item.id}`}
+            className="mt-1.5 h-11 w-full rounded-xl border bg-background px-3 text-sm"
+            value={status}
+            onChange={(event) => setStatus(event.target.value as GrievanceStatus)}
+          >
+            {options.map((option) => <option key={option} value={option}>{option.replace('_', ' ')}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label htmlFor={`grievance-response-${item.id}`}>Officer response</Label>
+          <Textarea
+            id={`grievance-response-${item.id}`}
+            className="mt-1.5 min-h-24"
+            value={response}
+            onChange={(event) => setResponse(event.target.value)}
+            maxLength={3000}
+            placeholder="Write a response the client can see."
+          />
+        </div>
+      </div>
+      <div className="mt-4 flex justify-end">
+        <Button
+          size="sm"
+          disabled={!canSave || mutation.isPending}
+          onClick={() => mutation.mutate({
+            id: item.id,
+            data: {
+              ...(status !== item.status ? { status } : {}),
+              ...(responseChanged ? { response: response.trim() } : {}),
+            },
+          }, {
+            onSuccess: () => {
+              qc.invalidateQueries({ queryKey: getListAdminGrievancesQueryKey() });
+              toast({ title: 'Grievance updated', description: 'The client can see the current status and response.' });
+            },
+            onError: (error) => toast({ title: 'Could not update grievance', description: errMsg(error), variant: 'destructive' }),
+          })}
+          data-testid={`button-save-grievance-${item.id}`}
+        >
+          {mutation.isPending && <Loader2 className="animate-spin" />} Save update
+        </Button>
+      </div>
+    </article>
   );
 }

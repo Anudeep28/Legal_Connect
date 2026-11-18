@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { notifications } from "@workspace/db";
 import { getClerkProxyHost } from "./clerkProxyMiddleware";
+import { getLegalReviewApproval } from "../lib/legal-review";
 
 export type Account = typeof accounts.$inferSelect;
 declare global {
@@ -81,6 +82,22 @@ export async function isOwnerDesignatedAdmin(accountId: string): Promise<boolean
   )).limit(1);
   return Boolean(grant);
 }
+export async function canManageGrievances(accountId: string): Promise<boolean> {
+  const [account] = await db.select({ role: accounts.role, email: accounts.email })
+    .from(accounts).where(eq(accounts.id, accountId)).limit(1);
+  if (!account || account.role !== "admin") return false;
+  if (await isOwnerDesignatedAdmin(accountId)) return true;
+  const approval = await getLegalReviewApproval();
+  return Boolean(approval?.grievanceOfficerEmail &&
+    approval.grievanceOfficerEmail.trim().toLowerCase() === account.email.trim().toLowerCase());
+}
+export const requireGrievanceOfficer: RequestHandler = async (req, res, next) => {
+  if (!(await canManageGrievances(req.account.id))) {
+    res.status(403).json({ error: "Only the approved Grievance Officer or owner-designated administrator may review grievances." });
+    return;
+  }
+  next();
+};
 export const requireOwnerAdmin: RequestHandler = async (req, res, next) => {
   if (req.account.role !== "admin" || !(await isOwnerDesignatedAdmin(req.account.id))) {
     res.status(403).json({ error: "Only the owner-designated administrator has access to this setting." });

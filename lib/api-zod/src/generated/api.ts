@@ -1064,6 +1064,101 @@ export const ReadNotificationResponse = zod.object({
 })
 
 
+/**
+ * Lists only the signed-in client's grievance records.
+ */
+export const ListMyGrievancesResponseItem = zod.object({
+  "id": zod.string(),
+  "category": zod.enum(['account', 'consultation', 'payment', 'privacy', 'other']),
+  "description": zod.string(),
+  "status": zod.enum(['submitted', 'under_review', 'resolved']),
+  "officerResponse": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "respondedAt": zod.coerce.date().nullable()
+})
+export const ListMyGrievancesResponse = zod.array(ListMyGrievancesResponseItem)
+
+
+/**
+ * Creates a minimal grievance record. Do not include case facts or unnecessary matter details.
+ */
+export const submitGrievanceBodyDescriptionMin = 10;
+export const submitGrievanceBodyDescriptionMax = 1200;
+
+
+
+export const SubmitGrievanceBody = zod.object({
+  "category": zod.enum(['account', 'consultation', 'payment', 'privacy', 'other']),
+  "description": zod.string().min(submitGrievanceBodyDescriptionMin).max(submitGrievanceBodyDescriptionMax)
+})
+
+export const SubmitGrievanceResponse = zod.object({
+  "id": zod.string(),
+  "category": zod.enum(['account', 'consultation', 'payment', 'privacy', 'other']),
+  "description": zod.string(),
+  "status": zod.enum(['submitted', 'under_review', 'resolved']),
+  "officerResponse": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "respondedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * Lists grievances for the grievance officer or owner-designated administrator only.
+ */
+export const ListAdminGrievancesResponseItem = zod.object({
+  "id": zod.string(),
+  "category": zod.enum(['account', 'consultation', 'payment', 'privacy', 'other']),
+  "description": zod.string(),
+  "status": zod.enum(['submitted', 'under_review', 'resolved']),
+  "officerResponse": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "respondedAt": zod.coerce.date().nullable()
+}).and(zod.object({
+  "clientName": zod.string(),
+  "clientEmail": zod.string().email()
+}))
+export const ListAdminGrievancesResponse = zod.array(ListAdminGrievancesResponseItem)
+
+
+/**
+ * Updates a grievance status and/or records the officer's response.
+ */
+
+
+
+export const UpdateAdminGrievanceParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const updateAdminGrievanceBodyResponseMin = 3;
+export const updateAdminGrievanceBodyResponseMax = 3000;
+
+
+
+export const UpdateAdminGrievanceBody = zod.object({
+  "status": zod.enum(['submitted', 'under_review', 'resolved']).optional(),
+  "response": zod.string().min(updateAdminGrievanceBodyResponseMin).max(updateAdminGrievanceBodyResponseMax).optional()
+})
+
+export const UpdateAdminGrievanceResponse = zod.object({
+  "id": zod.string(),
+  "category": zod.enum(['account', 'consultation', 'payment', 'privacy', 'other']),
+  "description": zod.string(),
+  "status": zod.enum(['submitted', 'under_review', 'resolved']),
+  "officerResponse": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "respondedAt": zod.coerce.date().nullable()
+}).and(zod.object({
+  "clientName": zod.string(),
+  "clientEmail": zod.string().email()
+}))
+
+
 export const GetAdminOverviewResponse = zod.object({
   "users": zod.number().int(),
   "lawyers": zod.number().int(),
@@ -1109,6 +1204,7 @@ export const GetAdminAiUsageResponse = zod.object({
 
 export const GetAdminLegalReviewResponse = zod.object({
   "canRecord": zod.boolean(),
+  "canManageGrievances": zod.boolean(),
   "paymentVerificationComplete": zod.boolean(),
   "paidConsultationsEnabled": zod.boolean(),
   "consultationCheckout": zod.object({
@@ -1171,6 +1267,7 @@ export const RecordAdminLegalReviewBody = zod.object({
 
 export const RecordAdminLegalReviewResponse = zod.object({
   "canRecord": zod.boolean(),
+  "canManageGrievances": zod.boolean(),
   "paymentVerificationComplete": zod.boolean(),
   "paidConsultationsEnabled": zod.boolean(),
   "consultationCheckout": zod.object({

@@ -29,6 +29,8 @@ import type {
   AccountInput,
   ActionResult,
   AdminAiUsage,
+  AdminGrievance,
+  AdminGrievanceUpdate,
   AdminLegalReview,
   AdminOverview,
   AdminTwilioUsageBudget,
@@ -58,6 +60,7 @@ import type {
   Document,
   DocumentInput,
   GetAdminAiUsageParams,
+  GrievanceInput,
   HealthStatus,
   Lawyer,
   LawyerInput,
@@ -66,6 +69,7 @@ import type {
   ListLawyersParams,
   Message,
   MessageInput,
+  MyGrievance,
   Notification,
   PaymentRecord,
   PaymentVerification,
@@ -4045,6 +4049,373 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getReadNotificationMutationOptions(options), queryClient);
+    }
+
+export const getListMyGrievancesUrl = () => {
+
+
+
+
+  return `/api/grievances`
+}
+
+/**
+ * Lists only the signed-in client's grievance records.
+ */
+export const listMyGrievances = async ( options?: Parameters<typeof customFetch>[1]): Promise<MyGrievance[]> => {
+
+  return customFetch<MyGrievance[]>(getListMyGrievancesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMyGrievancesQueryKey = () => {
+    return [
+    `/api/grievances`
+    ] as const;
+    }
+
+
+export const getListMyGrievancesQueryOptions = <TData = Awaited<ReturnType<typeof listMyGrievances>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyGrievances>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMyGrievancesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyGrievances>>> = ({ signal }) => listMyGrievances({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMyGrievances>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListMyGrievancesQueryResult = NonNullable<Awaited<ReturnType<typeof listMyGrievances>>>
+export type ListMyGrievancesQueryError = ErrorType<unknown>
+
+
+export function useListMyGrievances<TData = Awaited<ReturnType<typeof listMyGrievances>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyGrievances>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMyGrievances>>,
+          TError,
+          Awaited<ReturnType<typeof listMyGrievances>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMyGrievances<TData = Awaited<ReturnType<typeof listMyGrievances>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyGrievances>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMyGrievances>>,
+          TError,
+          Awaited<ReturnType<typeof listMyGrievances>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMyGrievances<TData = Awaited<ReturnType<typeof listMyGrievances>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyGrievances>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListMyGrievances<TData = Awaited<ReturnType<typeof listMyGrievances>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMyGrievances>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListMyGrievancesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitGrievanceUrl = () => {
+
+
+
+
+  return `/api/grievances`
+}
+
+/**
+ * Creates a minimal grievance record. Do not include case facts or unnecessary matter details.
+ */
+export const submitGrievance = async (grievanceInput: GrievanceInput, options?: Parameters<typeof customFetch>[1]): Promise<MyGrievance> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<MyGrievance>(getSubmitGrievanceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(grievanceInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitGrievanceMutationKey = () => ['submitGrievance'] as const;
+
+export const getSubmitGrievanceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGrievance>>, TError,SubmitGrievanceMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitGrievance>>, TError,SubmitGrievanceMutationVariables, TContext> => {
+
+const mutationKey = getSubmitGrievanceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitGrievance>>, SubmitGrievanceMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitGrievance(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitGrievanceMutationResult = NonNullable<Awaited<ReturnType<typeof submitGrievance>>>
+    export type SubmitGrievanceMutationBody = BodyType<GrievanceInput>
+    export type SubmitGrievanceMutationError = ErrorType<unknown>
+    export type SubmitGrievanceMutationVariables = {data: BodyType<GrievanceInput>}
+
+    export const useSubmitGrievance = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGrievance>>, TError,SubmitGrievanceMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof submitGrievance>>,
+        TError,
+        SubmitGrievanceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitGrievanceMutationOptions(options), queryClient);
+    }
+
+export const getListAdminGrievancesUrl = () => {
+
+
+
+
+  return `/api/admin/grievances`
+}
+
+/**
+ * Lists grievances for the grievance officer or owner-designated administrator only.
+ */
+export const listAdminGrievances = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminGrievance[]> => {
+
+  return customFetch<AdminGrievance[]>(getListAdminGrievancesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminGrievancesQueryKey = () => {
+    return [
+    `/api/admin/grievances`
+    ] as const;
+    }
+
+
+export const getListAdminGrievancesQueryOptions = <TData = Awaited<ReturnType<typeof listAdminGrievances>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminGrievances>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminGrievancesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminGrievances>>> = ({ signal }) => listAdminGrievances({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminGrievances>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAdminGrievancesQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminGrievances>>>
+export type ListAdminGrievancesQueryError = ErrorType<void>
+
+
+export function useListAdminGrievances<TData = Awaited<ReturnType<typeof listAdminGrievances>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminGrievances>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAdminGrievances>>,
+          TError,
+          Awaited<ReturnType<typeof listAdminGrievances>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAdminGrievances<TData = Awaited<ReturnType<typeof listAdminGrievances>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminGrievances>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAdminGrievances>>,
+          TError,
+          Awaited<ReturnType<typeof listAdminGrievances>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAdminGrievances<TData = Awaited<ReturnType<typeof listAdminGrievances>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminGrievances>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListAdminGrievances<TData = Awaited<ReturnType<typeof listAdminGrievances>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminGrievances>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAdminGrievancesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAdminGrievanceUrl = (id: string,) => {
+
+
+
+
+  return `/api/admin/grievances/${id}`
+}
+
+/**
+ * Updates a grievance status and/or records the officer's response.
+ */
+export const updateAdminGrievance = async (id: string,
+    adminGrievanceUpdate: AdminGrievanceUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AdminGrievance> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminGrievance>(getUpdateAdminGrievanceUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminGrievanceUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminGrievanceMutationKey = () => ['updateAdminGrievance'] as const;
+
+export const getUpdateAdminGrievanceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminGrievance>>, TError,UpdateAdminGrievanceMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminGrievance>>, TError,UpdateAdminGrievanceMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAdminGrievanceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminGrievance>>, UpdateAdminGrievanceMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAdminGrievance(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminGrievanceMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminGrievance>>>
+    export type UpdateAdminGrievanceMutationBody = BodyType<AdminGrievanceUpdate>
+    export type UpdateAdminGrievanceMutationError = ErrorType<void>
+    export type UpdateAdminGrievanceMutationVariables = {id: string;data: BodyType<AdminGrievanceUpdate>}
+
+    export const useUpdateAdminGrievance = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminGrievance>>, TError,UpdateAdminGrievanceMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminGrievance>>,
+        TError,
+        UpdateAdminGrievanceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAdminGrievanceMutationOptions(options), queryClient);
     }
 
 export const getGetAdminOverviewUrl = () => {

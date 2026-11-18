@@ -3,7 +3,7 @@ import { eq, desc, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, accounts, lawyers, consultations, documents, reviews, auditLogs, notifications, platformCompliance } from "@workspace/db";
 import * as api from "@workspace/api-zod";
-import { requireAccount, requireAdmin, requireOwnerAdmin, isOwnerDesignatedAdmin, HttpError } from "../middlewares/access";
+import { requireAccount, requireAdmin, requireOwnerAdmin, canManageGrievances, isOwnerDesignatedAdmin, HttpError } from "../middlewares/access";
 import { lawyerViews } from "../lib/legal";
 import { paymentsEnabled } from "../lib/razorpay";
 import { getLegalReviewApproval } from "../lib/legal-review";
@@ -31,13 +31,15 @@ router.get("/admin/ai-usage", requireOwnerAdmin, async (req, res): Promise<void>
   res.set("Cache-Control", "no-store").json(api.GetAdminAiUsageResponse.parse(report));
 });
 router.get("/admin/legal-review", async (req, res): Promise<void> => {
-  const [approval, canRecord, consultationCheckout] = await Promise.all([
+  const [approval, canRecord, canReviewGrievances, consultationCheckout] = await Promise.all([
     getLegalReviewApproval(),
     isOwnerDesignatedAdmin(req.account.id),
+    canManageGrievances(req.account.id),
     getConsultationCheckoutState(),
   ]);
   res.json(api.GetAdminLegalReviewResponse.parse({
     canRecord,
+    canManageGrievances: canReviewGrievances,
     paymentVerificationComplete: paymentsEnabled(),
     paidConsultationsEnabled: paymentsEnabled() && Boolean(approval) && !consultationCheckout.paused,
     consultationCheckout,
@@ -93,6 +95,7 @@ router.put("/admin/legal-review", requireOwnerAdmin, async (req, res): Promise<v
   const consultationCheckout = await getConsultationCheckoutState();
   res.json(api.RecordAdminLegalReviewResponse.parse({
     canRecord: true,
+    canManageGrievances: await canManageGrievances(req.account.id),
     paymentVerificationComplete: paymentsEnabled(),
     paidConsultationsEnabled: paymentsEnabled() && !consultationCheckout.paused,
     consultationCheckout,

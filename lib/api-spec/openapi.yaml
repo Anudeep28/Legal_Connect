@@ -562,6 +562,61 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Notification" }
+  /grievances:
+    get:
+      operationId: listMyGrievances
+      description: Lists only the signed-in client's grievance records.
+      responses:
+        "200":
+          description: This client's grievance submissions and current responses
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/MyGrievance" } }
+    post:
+      operationId: submitGrievance
+      description: Creates a minimal grievance record. Do not include case facts or unnecessary matter details.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GrievanceInput" }
+      responses:
+        "201":
+          description: Grievance submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyGrievance" }
+  /admin/grievances:
+    get:
+      operationId: listAdminGrievances
+      description: Lists grievances for the grievance officer or owner-designated administrator only.
+      responses:
+        "200":
+          description: Grievances awaiting or receiving officer review
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/AdminGrievance" } }
+        "403":
+          description: Grievance-officer access required
+  /admin/grievances/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    patch:
+      operationId: updateAdminGrievance
+      description: Updates a grievance status and/or records the officer's response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminGrievanceUpdate" }
+      responses:
+        "200":
+          description: Updated grievance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminGrievance" }
+        "403":
+          description: Grievance-officer access required
   /admin/overview:
     get:
       operationId: getAdminOverview
@@ -973,9 +1028,10 @@ components:
         confirmApproval: { type: boolean, const: true }
     AdminLegalReview:
       type: object
-      required: [canRecord, paymentVerificationComplete, paidConsultationsEnabled, consultationCheckout]
+      required: [canRecord, canManageGrievances, paymentVerificationComplete, paidConsultationsEnabled, consultationCheckout]
       properties:
         canRecord: { type: boolean }
+        canManageGrievances: { type: boolean }
         paymentVerificationComplete: { type: boolean }
         paidConsultationsEnabled: { type: boolean }
         consultationCheckout: { $ref: "#/components/schemas/ConsultationCheckoutState" }
@@ -996,6 +1052,41 @@ components:
         paused: { type: boolean }
         reason: { type: ["string", "null"] }
         changedAt: { type: ["string", "null"], format: date-time }
+    GrievanceInput:
+      type: object
+      required: [category, description]
+      properties:
+        category: { type: string, enum: [account, consultation, payment, privacy, other] }
+        description: { type: string, minLength: 10, maxLength: 1200 }
+    GrievanceStatus:
+      type: string
+      enum: [submitted, under_review, resolved]
+    MyGrievance:
+      type: object
+      required: [id, category, description, status, officerResponse, submittedAt, updatedAt, respondedAt]
+      properties:
+        id: { type: string }
+        category: { type: string, enum: [account, consultation, payment, privacy, other] }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/GrievanceStatus" }
+        officerResponse: { type: string }
+        submittedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        respondedAt: { type: ["string", "null"], format: date-time }
+    AdminGrievance:
+      allOf:
+        - { $ref: "#/components/schemas/MyGrievance" }
+        - type: object
+          required: [clientName, clientEmail]
+          properties:
+            clientName: { type: string }
+            clientEmail: { type: string, format: email }
+    AdminGrievanceUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        status: { $ref: "#/components/schemas/GrievanceStatus" }
+        response: { type: string, minLength: 3, maxLength: 3000 }
     TwilioUsageBudgetInput:
       type: object
       required: [enabled, budgetAmount, budgetCurrency, warningPercent]
