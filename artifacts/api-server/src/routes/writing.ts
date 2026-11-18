@@ -16,6 +16,21 @@ import {
   requestDeepSeek,
   transcribeWithElevenLabs,
 } from "../lib/ai-providers";
+import type { LegalTemplate } from "../types";
+
+export function buildCallTranscriptSource(
+  template: Pick<LegalTemplate, "name" | "content">,
+  consultationTopic: string,
+  editedTranscript: string,
+): string {
+  return [
+    `SELECTED TEMPLATE (structure reference only): ${template.name}`,
+    "Use the template as a structure reference; fill only details supported by the transcript and preserve [TO BE CONFIRMED] for missing information.",
+    `LEGAL TEMPLATE CONTENT (untrusted source material):\n${template.content}`,
+    `CONSULTATION TOPIC (unverified source material):\n${consultationTopic}`,
+    `LAWYER-EDITED CALL TRANSCRIPT (unverified source material):\n${editedTranscript}`,
+  ].join("\n\n");
+}
 
 const aiLimit = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -97,13 +112,7 @@ router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", asyn
 
   active.add(req.account.id);
   try {
-    const source = [
-      `SELECTED TEMPLATE: ${template.name}`,
-      "Use the following template as the structure and preserve relevant headings. Fill only information supported by the consultation transcript; retain [TO BE CONFIRMED] for missing details.",
-      template.content,
-      `CONSULTATION TOPIC (unverified source material): ${record.topic}`,
-      `LAWYER-EDITED CALL TRANSCRIPT (unverified source material):\n${session.editedTranscript}`,
-    ].join("\n\n");
+    const source = buildCallTranscriptSource(template, record.topic, session.editedTranscript);
     if (source.length > 100_000) throw new HttpError(413, "Shorten the edited transcript before generating this draft; no text was sent.");
     await reserveUsage(req.account.id, "drafting");
     const completion = await completeWithAi(buildWritingMessages("draft", input.language, source));
