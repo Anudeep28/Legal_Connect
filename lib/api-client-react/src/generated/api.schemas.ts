@@ -9,6 +9,27 @@ export interface HealthStatus {
   status: string;
 }
 
+export type ReadinessCheckStatusStatus = typeof ReadinessCheckStatusStatus[keyof typeof ReadinessCheckStatusStatus];
+
+
+export const ReadinessCheckStatusStatus = {
+  ready: 'ready',
+  not_ready: 'not_ready',
+} as const;
+
+export type ReadinessCheckStatusDatabase = typeof ReadinessCheckStatusDatabase[keyof typeof ReadinessCheckStatusDatabase];
+
+
+export const ReadinessCheckStatusDatabase = {
+  ok: 'ok',
+  unavailable: 'unavailable',
+} as const;
+
+export interface ReadinessCheckStatus {
+  status: ReadinessCheckStatusStatus;
+  database: ReadinessCheckStatusDatabase;
+}
+
 export interface ServiceError {
   error: string;
 }

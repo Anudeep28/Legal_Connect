@@ -180,6 +180,20 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/HealthStatus" }
+  /readyz:
+    get:
+      operationId: readinessCheck
+      responses:
+        "200":
+          description: API is ready for database-backed requests
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadinessCheckStatus" }
+        "503":
+          description: Database-backed requests are unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadinessCheckStatus" }
   /platform:
     get:
       operationId: getPlatform
@@ -825,6 +839,12 @@ components:
       required: [status]
       properties:
         status: { type: string }
+    ReadinessCheckStatus:
+      type: object
+      required: [status, database]
+      properties:
+        status: { type: string, enum: [ready, not_ready] }
+        database: { type: string, enum: [ok, unavailable] }
     ServiceError:
       type: object
       required: [error]

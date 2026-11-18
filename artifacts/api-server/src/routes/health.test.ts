@@ -9,6 +9,7 @@ test("full API serves health without production credentials or database access",
   process.env.CLERK_SECRET_KEY = "sk_test_smoke";
   delete process.env.OWNER_ADMIN_BOOTSTRAP_EMAIL;
   const { default: app } = await import("../app");
+  const { pool } = await import("@workspace/db");
   const server = app.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();
@@ -17,8 +18,13 @@ test("full API serves health without production credentials or database access",
     const response = await fetch(`http://127.0.0.1:${address.port}/api/healthz`);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { status: "ok" });
+
+    const readiness = await fetch(`http://127.0.0.1:${address.port}/api/readyz`);
+    assert.equal(readiness.status, 503);
+    assert.deepEqual(await readiness.json(), { status: "not_ready", database: "unavailable" });
   } finally {
     server.close();
     await once(server, "close");
+    await pool.end();
   }
 });

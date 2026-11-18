@@ -249,6 +249,12 @@ export const HealthCheckResponse = zod.object({
 })
 
 
+export const ReadinessCheckResponse = zod.object({
+  "status": zod.enum(['ready', 'not_ready']),
+  "database": zod.enum(['ok', 'unavailable'])
+})
+
+
 export const GetPlatformResponse = zod.object({
   "name": zod.string(),
   "demo": zod.boolean(),
