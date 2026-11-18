@@ -5,11 +5,13 @@
  * Consult with Lawyer — independent legal consultation platform.
  * OpenAPI spec version: 1.0.0
  */
+import type { ConsultationCheckoutState } from './consultationCheckoutState';
 import type { LegalCounselApproval } from './legalCounselApproval';
 
 export interface AdminLegalReview {
   canRecord: boolean;
   paymentVerificationComplete: boolean;
   paidConsultationsEnabled: boolean;
-  approval: LegalCounselApproval | null;
+  consultationCheckout: ConsultationCheckoutState;
+  approval?: LegalCounselApproval | null;
 }

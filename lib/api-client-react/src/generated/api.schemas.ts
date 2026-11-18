@@ -80,6 +80,7 @@ export interface Platform {
   paymentsEnabled: boolean;
   legalReviewComplete: boolean;
   paidConsultationsEnabled: boolean;
+  consultationCheckoutPaused: boolean;
   policyContacts: ApprovedPolicyContacts | null;
   callsEnabled: boolean;
   emailEnabled: boolean;
@@ -150,11 +151,29 @@ export interface LegalCounselApprovalInput {
   confirmApproval: true;
 }
 
+export interface ConsultationCheckoutState {
+  paused: boolean;
+  /** @nullable */
+  reason: string | null;
+  /** @nullable */
+  changedAt: string | null;
+}
+
 export interface AdminLegalReview {
   canRecord: boolean;
   paymentVerificationComplete: boolean;
   paidConsultationsEnabled: boolean;
-  approval: LegalCounselApproval | null;
+  consultationCheckout: ConsultationCheckoutState;
+  approval?: LegalCounselApproval | null;
+}
+
+export interface ConsultationCheckoutPauseInput {
+  paused: boolean;
+  /**
+     * @minLength 3
+     * @maxLength 500
+     */
+  reason: string;
 }
 
 export interface TwilioUsageBudgetInput {

@@ -6,4 +6,5 @@ export * from "./notifications";
 export * from "./payments";
 export * from "./ai-usage";
 export * from "./platform-compliance";
+export * from "./consultation-checkout-control";
 export * from "./twilio-usage-budget";

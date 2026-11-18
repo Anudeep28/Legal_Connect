@@ -16,21 +16,24 @@ import { paymentsEnabled } from "../lib/razorpay";
 import { communicationServices } from "../lib/communication-config";
 import { isAiAvailable } from "../lib/ai-providers";
 import { getLegalReviewApproval } from "../lib/legal-review";
+import { getConsultationCheckoutState } from "../lib/consultation-checkout";
 
 const router: IRouter = Router();
 
 router.get("/platform", async (_req, res): Promise<void> => {
-  const [rows, ai, legalApproval] = await Promise.all([
+  const [rows, ai, legalApproval, checkoutState] = await Promise.all([
     db.select().from(lawyers).where(eq(lawyers.approvalStatus, "approved")),
     isAiAvailable(),
     getLegalReviewApproval(),
+    getConsultationCheckoutState(),
   ]);
   res.json(GetPlatformResponse.parse({
     name: "Consult with Lawyer",
     demo: rows.some((l) => l.demo),
     paymentsEnabled: paymentsEnabled(),
     legalReviewComplete: Boolean(legalApproval),
-    paidConsultationsEnabled: paymentsEnabled() && Boolean(legalApproval),
+    paidConsultationsEnabled: paymentsEnabled() && Boolean(legalApproval) && !checkoutState.paused,
+    consultationCheckoutPaused: checkoutState.paused,
     policyContacts: legalApproval ? {
       supportContactEmail: legalApproval.supportContactEmail,
       privacyContactEmail: legalApproval.privacyContactEmail,

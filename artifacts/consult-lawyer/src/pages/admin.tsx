@@ -9,6 +9,7 @@ import {
   useListAdminLawyers, getListAdminLawyersQueryKey, useModerateLawyer,
   useListAdminReviews, getListAdminReviewsQueryKey, useModerateReview,
   getGetAdminLegalReviewQueryKey, useRecordAdminLegalReview,
+  useUpdateAdminConsultationCheckout,
   getGetPlatformQueryKey,
   getListLawyersQueryKey, getListLawyerReviewsQueryKey,
   type UserModerationStatus, type LawyerModerationApprovalStatus, type LegalCounselApprovalInput,
@@ -91,10 +92,12 @@ const counselFields: { key: keyof CounselForm; label: string; type?: string; wid
 function LegalReviewTab() {
   const q = useGetAdminLegalReview();
   const save = useRecordAdminLegalReview();
+  const checkoutChange = useUpdateAdminConsultationCheckout();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [form, setForm] = useState<CounselForm>(initialCounselForm);
   const [confirmed, setConfirmed] = useState(false);
+  const [checkoutReason, setCheckoutReason] = useState('');
   useEffect(() => {
     if (!q.data?.approval) return;
     const { approvedAt: _approvedAt, ...saved } = q.data.approval;
@@ -113,6 +116,60 @@ function LegalReviewTab() {
         </div>
         {current && <p className="mt-2 text-sm">Current approval recorded {fmtDate(current.approvedAt)} for {current.counselName} ({current.barCouncil}, {current.enrollmentNumber}).</p>}
       </Notice>
+      <section className="space-y-4 rounded-3xl border bg-card p-5 md:p-7">
+        <div>
+          <h2 className="font-display text-2xl font-semibold">Consultation checkout pause</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Pause new paid consultation orders during provider, staffing, or operational issues. This does not change Razorpay verification or counsel approval.</p>
+        </div>
+        <Notice icon={<Info />}>
+          New consultation checkout is {q.data.consultationCheckout.paused ? 'temporarily paused' : 'not paused'}.
+          {q.data.consultationCheckout.changedAt && <p className="mt-1 text-sm">Last change {fmtDate(q.data.consultationCheckout.changedAt)}: {q.data.consultationCheckout.reason}</p>}
+        </Notice>
+        {!q.data.canRecord ? (
+          <Notice icon={<Info />}>Only the owner-designated administrator can pause or resume paid consultation checkout.</Notice>
+        ) : (
+          <form className="space-y-3" onSubmit={(event) => {
+            event.preventDefault();
+            const paused = !q.data.consultationCheckout.paused;
+            checkoutChange.mutate({ data: { paused, reason: checkoutReason.trim() } }, {
+              onSuccess: (result) => {
+                qc.setQueryData(getGetAdminLegalReviewQueryKey(), (old: typeof q.data | undefined) => old ? {
+                  ...old,
+                  consultationCheckout: result,
+                  paidConsultationsEnabled: old.paymentVerificationComplete && Boolean(old.approval) && !result.paused,
+                } : old);
+                qc.invalidateQueries({ queryKey: getGetPlatformQueryKey() });
+                setCheckoutReason('');
+                toast({
+                  title: paused ? 'Consultation checkout paused' : 'Consultation checkout resumed',
+                  description: paused ? 'Clients cannot create new paid consultation orders.' : 'New orders still require Razorpay verification and counsel approval.',
+                });
+              },
+              onError: (error) => toast({ title: 'Checkout state was not changed', description: errMsg(error), variant: 'destructive' }),
+            });
+          }}>
+            <div>
+              <Label htmlFor="consultation-checkout-reason">Operational reason</Label>
+              <Textarea
+                id="consultation-checkout-reason"
+                className="mt-1.5"
+                value={checkoutReason}
+                onChange={(event) => setCheckoutReason(event.target.value)}
+                minLength={3}
+                maxLength={500}
+                rows={3}
+                required
+                placeholder="Brief reason; do not include client names or case details."
+                data-testid="input-consultation-checkout-reason"
+              />
+            </div>
+            <Button type="submit" disabled={checkoutReason.trim().length < 3 || checkoutChange.isPending} variant={q.data.consultationCheckout.paused ? 'default' : 'destructive'} className="rounded-full" data-testid="button-toggle-consultation-checkout">
+              {checkoutChange.isPending && <Loader2 className="animate-spin" />}
+              {q.data.consultationCheckout.paused ? 'Resume paid consultations' : 'Pause paid consultations'}
+            </Button>
+          </form>
+        )}
+      </section>
       {!q.data.canRecord ? (
         <Notice icon={<Info />}>Only the owner-designated administrator can record or update this approval.</Notice>
       ) : (

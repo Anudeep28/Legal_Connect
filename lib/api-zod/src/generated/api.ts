@@ -261,6 +261,7 @@ export const GetPlatformResponse = zod.object({
   "paymentsEnabled": zod.boolean(),
   "legalReviewComplete": zod.boolean(),
   "paidConsultationsEnabled": zod.boolean(),
+  "consultationCheckoutPaused": zod.boolean(),
   "policyContacts": zod.union([zod.object({
   "supportContactEmail": zod.string().email(),
   "privacyContactEmail": zod.string().email(),
@@ -1110,6 +1111,11 @@ export const GetAdminLegalReviewResponse = zod.object({
   "canRecord": zod.boolean(),
   "paymentVerificationComplete": zod.boolean(),
   "paidConsultationsEnabled": zod.boolean(),
+  "consultationCheckout": zod.object({
+  "paused": zod.boolean(),
+  "reason": zod.string().nullable(),
+  "changedAt": zod.coerce.date().nullable()
+}),
   "approval": zod.union([zod.object({
   "counselName": zod.string(),
   "barCouncil": zod.string(),
@@ -1121,7 +1127,7 @@ export const GetAdminLegalReviewResponse = zod.object({
   "grievanceOfficerName": zod.string(),
   "grievanceOfficerEmail": zod.string().email(),
   "approvedAt": zod.string()
-}),zod.null()])
+}),zod.null()]).optional()
 })
 
 
@@ -1167,6 +1173,11 @@ export const RecordAdminLegalReviewResponse = zod.object({
   "canRecord": zod.boolean(),
   "paymentVerificationComplete": zod.boolean(),
   "paidConsultationsEnabled": zod.boolean(),
+  "consultationCheckout": zod.object({
+  "paused": zod.boolean(),
+  "reason": zod.string().nullable(),
+  "changedAt": zod.coerce.date().nullable()
+}),
   "approval": zod.union([zod.object({
   "counselName": zod.string(),
   "barCouncil": zod.string(),
@@ -1178,7 +1189,24 @@ export const RecordAdminLegalReviewResponse = zod.object({
   "grievanceOfficerName": zod.string(),
   "grievanceOfficerEmail": zod.string().email(),
   "approvedAt": zod.string()
-}),zod.null()])
+}),zod.null()]).optional()
+})
+
+
+export const updateAdminConsultationCheckoutBodyReasonMin = 3;
+export const updateAdminConsultationCheckoutBodyReasonMax = 500;
+
+
+
+export const UpdateAdminConsultationCheckoutBody = zod.object({
+  "paused": zod.boolean(),
+  "reason": zod.string().min(updateAdminConsultationCheckoutBodyReasonMin).max(updateAdminConsultationCheckoutBodyReasonMax)
+})
+
+export const UpdateAdminConsultationCheckoutResponse = zod.object({
+  "paused": zod.boolean(),
+  "reason": zod.string().nullable(),
+  "changedAt": zod.coerce.date().nullable()
 })
 
 

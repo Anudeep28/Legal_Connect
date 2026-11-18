@@ -16,6 +16,7 @@ export interface Platform {
   paymentsEnabled: boolean;
   legalReviewComplete: boolean;
   paidConsultationsEnabled: boolean;
+  consultationCheckoutPaused: boolean;
   policyContacts: ApprovedPolicyContacts | null;
   callsEnabled: boolean;
   emailEnabled: boolean;

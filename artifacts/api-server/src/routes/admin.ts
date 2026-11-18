@@ -7,6 +7,7 @@ import { requireAccount, requireAdmin, requireOwnerAdmin, isOwnerDesignatedAdmin
 import { lawyerViews } from "../lib/legal";
 import { paymentsEnabled } from "../lib/razorpay";
 import { getLegalReviewApproval } from "../lib/legal-review";
+import { getConsultationCheckoutState, setConsultationCheckoutPaused } from "../lib/consultation-checkout";
 import { getTwilioUsageBudgetState, refreshTwilioUsageBudget, saveTwilioUsageBudgetConfig } from "../lib/twilio-usage-budget";
 import { getAdminAiUsage } from "../lib/ai-usage";
 
@@ -30,14 +31,16 @@ router.get("/admin/ai-usage", requireOwnerAdmin, async (req, res): Promise<void>
   res.set("Cache-Control", "no-store").json(api.GetAdminAiUsageResponse.parse(report));
 });
 router.get("/admin/legal-review", async (req, res): Promise<void> => {
-  const [approval, canRecord] = await Promise.all([
+  const [approval, canRecord, consultationCheckout] = await Promise.all([
     getLegalReviewApproval(),
     isOwnerDesignatedAdmin(req.account.id),
+    getConsultationCheckoutState(),
   ]);
   res.json(api.GetAdminLegalReviewResponse.parse({
     canRecord,
     paymentVerificationComplete: paymentsEnabled(),
-    paidConsultationsEnabled: paymentsEnabled() && Boolean(approval),
+    paidConsultationsEnabled: paymentsEnabled() && Boolean(approval) && !consultationCheckout.paused,
+    consultationCheckout,
     approval: approval ? {
       counselName: approval.counselName,
       barCouncil: approval.barCouncil,
@@ -87,10 +90,12 @@ router.put("/admin/legal-review", requireOwnerAdmin, async (req, res): Promise<v
     });
     return record!;
   });
+  const consultationCheckout = await getConsultationCheckoutState();
   res.json(api.RecordAdminLegalReviewResponse.parse({
     canRecord: true,
     paymentVerificationComplete: paymentsEnabled(),
-    paidConsultationsEnabled: paymentsEnabled(),
+    paidConsultationsEnabled: paymentsEnabled() && !consultationCheckout.paused,
+    consultationCheckout,
     approval: {
       counselName: approval.counselName,
       barCouncil: approval.barCouncil,
@@ -104,6 +109,13 @@ router.put("/admin/legal-review", requireOwnerAdmin, async (req, res): Promise<v
       approvedAt: approval.approvedAt,
     },
   }));
+});
+router.put("/admin/consultation-checkout", requireOwnerAdmin, async (req, res): Promise<void> => {
+  const input = api.UpdateAdminConsultationCheckoutBody.parse(req.body);
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw new HttpError(400, "Enter a brief operational reason for this checkout change.");
+  const state = await setConsultationCheckoutPaused(req.account.id, input.paused, reason);
+  res.json(api.UpdateAdminConsultationCheckoutResponse.parse(state));
 });
 router.get("/admin/twilio-usage-budget", requireOwnerAdmin, async (_req, res): Promise<void> => {
   const state = await getTwilioUsageBudgetState();

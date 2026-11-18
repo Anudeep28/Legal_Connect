@@ -50,6 +50,8 @@ export * from './communicationDelivery';
 export * from './communicationDeliveryChannel';
 export * from './communicationDeliveryStatus';
 export * from './consultation';
+export * from './consultationCheckoutPauseInput';
+export * from './consultationCheckoutState';
 export * from './consultationInput';
 export * from './consultationInputMode';
 export * from './consultationInputPackage';

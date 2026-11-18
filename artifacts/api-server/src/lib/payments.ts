@@ -5,6 +5,11 @@ import { HttpError, type Account } from "../middlewares/access";
 import { credentials, razorpay, requireCheckout, providerPayment, type ProviderPayment, type ProviderRefund } from "./razorpay";
 import { DAY, DOCUMENT_PRICES, hasMonthlyAccess, unusedDocumentRefund } from "./payment-rules";
 import { hasLegalReviewApproval } from "./legal-review";
+import {
+  getConsultationCheckoutState,
+  lockConsultationCheckoutControl,
+  consultationCheckoutPausedError,
+} from "./consultation-checkout";
 
 type Order = typeof paymentOrders.$inferSelect;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -37,6 +42,8 @@ export async function paymentView(order: Order) {
 export async function createOrder(account: Account, input: Checkout, adminValidation = false) {
   if (adminValidation && (account.role !== "admin" || input.plan !== "single"))
     throw new HttpError(403, "Only an administrator can create a verification purchase.");
+  if (input.plan === "consultation" && (await getConsultationCheckoutState()).paused)
+    throw new HttpError(503, consultationCheckoutPausedError());
   const config = adminValidation ? credentials() : requireCheckout();
   if (input.plan === "consultation" && !(await hasLegalReviewApproval()))
     throw new HttpError(503, "Paid consultation checkout is disabled until qualified counsel approves the current policies and contact details. No payment was taken.");
@@ -60,6 +67,8 @@ export async function createOrder(account: Account, input: Checkout, adminValida
     const locked = await lockAccount(tx, account.id);
     let amount: number;
     if (input.plan === "consultation") {
+      const checkoutControl = await lockConsultationCheckoutControl(tx);
+      if (checkoutControl.paused) throw new HttpError(503, consultationCheckoutPausedError());
       if (!input.consultationId) throw new HttpError(400, "Choose the consultation to pay for.");
       const [c] = await tx.select().from(consultations)
         .where(and(eq(consultations.id, input.consultationId), eq(consultations.userId, account.id))).for("update");

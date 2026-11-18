@@ -88,18 +88,21 @@ function Inner({ id, me }: { id: string; me: Account }) {
 }
 
 function ConsultationPayment({ c }: { c: Consultation }) {
-  const platform = useGetPlatform();
+  const platform = useGetPlatform({ query: { refetchInterval: 15_000 } });
   const checkout = usePaymentCheckout();
   const payable = !c.demo && c.status === 'requested' && ['unpaid', 'pending'].includes(c.paymentStatus) && new Date(c.startsAt).getTime() > Date.now();
   const checkoutReady = !!platform.data?.paidConsultationsEnabled;
+  const checkoutPaused = !!platform.data?.consultationCheckoutPaused;
   return <div className="mt-4">
     <Notice icon={<Info />}>
       Payment: <strong>{c.paymentStatus.replace('_', ' ')}</strong>. {c.paymentStatus === 'paid' ? 'Captured payment does not itself confirm the appointment; the lawyer must accept.'
         : c.demo ? 'Illustrative profiles never accept payments.' : 'Only a server-verified captured payment marks this request paid.'}
       {payable && <Button className="mt-3 block" disabled={!checkoutReady || checkout.pending} onClick={() => checkout.start({ plan: 'consultation', consultationId: c.id })} data-testid="button-pay-consultation">
-        {checkoutReady ? `Pay ${inr(c.fee)} with Razorpay` : 'Paid consultation checkout is closed'}
+        {checkoutReady ? `Pay ${inr(c.fee)} with Razorpay` : checkoutPaused ? 'Consultation checkout is temporarily paused' : 'Paid consultation checkout is closed'}
       </Button>}
-      {payable && !checkoutReady && <p className="mt-2 text-sm">Paid consultations open only after Razorpay verification and qualified-counsel approval of the current policies and contact details.</p>}
+      {payable && !checkoutReady && <p className="mt-2 text-sm">{checkoutPaused
+        ? 'Paid consultation checkout is temporarily paused by the platform. No payment will be taken. Please check back later.'
+        : 'Paid consultations open only after Razorpay verification and qualified-counsel approval of the current policies and contact details.'}</p>}
       <p className="mt-2 text-sm">Consultation refunds require lawyer cancellation. Client cancellation is not refundable, subject to applicable law.</p>
     </Notice>
     <PaymentHistory consultationId={c.id} />

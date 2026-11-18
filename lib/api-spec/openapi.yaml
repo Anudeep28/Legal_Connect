@@ -611,6 +611,22 @@ paths:
               schema: { $ref: "#/components/schemas/AdminLegalReview" }
         "403":
           description: Only the owner-designated administrator may record approval
+  /admin/consultation-checkout:
+    put:
+      operationId: updateAdminConsultationCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConsultationCheckoutPauseInput" }
+      responses:
+        "200":
+          description: Paid consultation checkout pause state updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConsultationCheckoutState" }
+        "403":
+          description: Only the owner-designated administrator may pause or resume checkout
   /admin/twilio-usage-budget:
     get:
       operationId: getAdminTwilioUsageBudget
@@ -890,13 +906,14 @@ components:
         features: { type: array, items: { type: string } }
     Platform:
       type: object
-      required: [name, demo, paymentsEnabled, legalReviewComplete, paidConsultationsEnabled, policyContacts, callsEnabled, emailEnabled, pushEnabled, phoneVerificationEnabled, recordingEnabled, remindersEnabled, aiEnabled, draftingEnabled, dictationEnabled, categories, templates, languages, plans, lawyerCount, onlineCount]
+      required: [name, demo, paymentsEnabled, legalReviewComplete, paidConsultationsEnabled, consultationCheckoutPaused, policyContacts, callsEnabled, emailEnabled, pushEnabled, phoneVerificationEnabled, recordingEnabled, remindersEnabled, aiEnabled, draftingEnabled, dictationEnabled, categories, templates, languages, plans, lawyerCount, onlineCount]
       properties:
         name: { type: string }
         demo: { type: boolean }
         paymentsEnabled: { type: boolean }
         legalReviewComplete: { type: boolean }
         paidConsultationsEnabled: { type: boolean }
+        consultationCheckoutPaused: { type: boolean }
         policyContacts:
           oneOf:
             - { $ref: "#/components/schemas/ApprovedPolicyContacts" }
@@ -956,15 +973,29 @@ components:
         confirmApproval: { type: boolean, const: true }
     AdminLegalReview:
       type: object
-      required: [canRecord, paymentVerificationComplete, paidConsultationsEnabled, approval]
+      required: [canRecord, paymentVerificationComplete, paidConsultationsEnabled, consultationCheckout]
       properties:
         canRecord: { type: boolean }
         paymentVerificationComplete: { type: boolean }
         paidConsultationsEnabled: { type: boolean }
+        consultationCheckout: { $ref: "#/components/schemas/ConsultationCheckoutState" }
         approval:
           oneOf:
             - { $ref: "#/components/schemas/LegalCounselApproval" }
             - { type: "null" }
+    ConsultationCheckoutPauseInput:
+      type: object
+      required: [paused, reason]
+      properties:
+        paused: { type: boolean }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    ConsultationCheckoutState:
+      type: object
+      required: [paused, reason, changedAt]
+      properties:
+        paused: { type: boolean }
+        reason: { type: ["string", "null"] }
+        changedAt: { type: ["string", "null"], format: date-time }
     TwilioUsageBudgetInput:
       type: object
       required: [enabled, budgetAmount, budgetCurrency, warningPercent]
