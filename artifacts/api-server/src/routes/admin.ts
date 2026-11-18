@@ -8,6 +8,7 @@ import { lawyerViews } from "../lib/legal";
 import { paymentsEnabled } from "../lib/razorpay";
 import { getLegalReviewApproval } from "../lib/legal-review";
 import { getTwilioUsageBudgetState, refreshTwilioUsageBudget, saveTwilioUsageBudgetConfig } from "../lib/twilio-usage-budget";
+import { getAdminAiUsage } from "../lib/ai-usage";
 
 const router: IRouter = Router();
 router.use("/admin", requireAccount, requireAdmin);
@@ -22,6 +23,11 @@ router.get("/admin/overview", async (_req, res): Promise<void> => {
     users: u[0]!.count, lawyers: l[0]!.count, pendingLawyers: l[0]!.pending,
     consultations: c[0]!.count, completedConsultations: c[0]!.completed, documents: d[0]!.count,
   }));
+});
+router.get("/admin/ai-usage", requireOwnerAdmin, async (req, res): Promise<void> => {
+  const { days } = api.GetAdminAiUsageQueryParams.parse(req.query);
+  const report = await getAdminAiUsage(days);
+  res.set("Cache-Control", "no-store").json(api.GetAdminAiUsageResponse.parse(report));
 });
 router.get("/admin/legal-review", async (req, res): Promise<void> => {
   const [approval, canRecord] = await Promise.all([

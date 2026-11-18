@@ -4,10 +4,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Users, Scale, Hourglass, MessagesSquare, CheckCheck, FileText, Eye, EyeOff, ShieldCheck, Info } from 'lucide-react';
 import {
   useGetAdminOverview, getGetAdminOverviewQueryKey,
+  useGetAdminLegalReview,
   useListAdminUsers, getListAdminUsersQueryKey, useModerateUser,
   useListAdminLawyers, getListAdminLawyersQueryKey, useModerateLawyer,
   useListAdminReviews, getListAdminReviewsQueryKey, useModerateReview,
-  useGetAdminLegalReview, getGetAdminLegalReviewQueryKey, useRecordAdminLegalReview,
+  getGetAdminLegalReviewQueryKey, useRecordAdminLegalReview,
   getGetPlatformQueryKey,
   getListLawyersQueryKey, getListLawyerReviewsQueryKey,
   type UserModerationStatus, type LawyerModerationApprovalStatus, type LegalCounselApprovalInput,
@@ -27,31 +28,39 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { errMsg, fmtDate, inr } from '@/lib/format';
 import { AdminTwilioUsage } from '@/components/admin-twilio-usage';
+import { AdminAiUsage } from '@/components/admin-ai-usage';
 
 export default function Admin() {
   return (
     <AppPage wide>
       <Guard roles={['admin']}>
-        {() => (
-          <>
-            <PageHeader eyebrow="Administration" title="Platform oversight" sub="Owner-controlled changes are recorded and enforced on the server." />
-            <Tabs defaultValue="overview">
-              <TabsList className="mb-6 h-auto flex-wrap rounded-full bg-secondary p-1">
-                {['overview', 'lawyers', 'users', 'reviews', 'legal-review', 'call-usage'].map((t) => (
-                  <TabsTrigger key={t} value={t} className="rounded-full px-4 capitalize data-[state=active]:bg-card" data-testid={`tab-admin-${t}`}>{t === 'lawyers' ? 'Lawyer approvals' : t === 'legal-review' ? 'Legal approval' : t === 'call-usage' ? 'Call usage' : t}</TabsTrigger>
-                ))}
-              </TabsList>
-              <TabsContent value="overview"><Overview /></TabsContent>
-              <TabsContent value="lawyers"><LawyersTab /></TabsContent>
-              <TabsContent value="users"><UsersTab /></TabsContent>
-              <TabsContent value="reviews"><ReviewsTab /></TabsContent>
-              <TabsContent value="legal-review"><LegalReviewTab /></TabsContent>
-              <TabsContent value="call-usage"><AdminTwilioUsage /></TabsContent>
-            </Tabs>
-          </>
-        )}
+        {() => <AdminWorkspace />}
       </Guard>
     </AppPage>
+  );
+}
+
+function AdminWorkspace() {
+  const legalReviewAccess = useGetAdminLegalReview();
+  const tabs = ['overview', 'lawyers', 'users', 'reviews', 'legal-review', 'call-usage', ...(legalReviewAccess.data?.canRecord ? ['ai-usage'] : [])];
+  return (
+    <>
+      <PageHeader eyebrow="Administration" title="Platform oversight" sub="Owner-controlled changes are recorded and enforced on the server." />
+      <Tabs defaultValue="overview">
+        <TabsList className="mb-6 h-auto flex-wrap rounded-full bg-secondary p-1">
+          {tabs.map((t) => (
+            <TabsTrigger key={t} value={t} className="rounded-full px-4 capitalize data-[state=active]:bg-card" data-testid={`tab-admin-${t}`}>{t === 'lawyers' ? 'Lawyer approvals' : t === 'legal-review' ? 'Legal approval' : t === 'call-usage' ? 'Call usage' : t === 'ai-usage' ? 'AI usage' : t}</TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value="overview"><Overview /></TabsContent>
+        <TabsContent value="lawyers"><LawyersTab /></TabsContent>
+        <TabsContent value="users"><UsersTab /></TabsContent>
+        <TabsContent value="reviews"><ReviewsTab /></TabsContent>
+        <TabsContent value="legal-review"><LegalReviewTab /></TabsContent>
+        <TabsContent value="call-usage"><AdminTwilioUsage /></TabsContent>
+        {legalReviewAccess.data?.canRecord && <TabsContent value="ai-usage"><AdminAiUsage /></TabsContent>}
+      </Tabs>
+    </>
   );
 }
 

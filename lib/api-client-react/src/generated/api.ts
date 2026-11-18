@@ -28,6 +28,7 @@ import type {
   Account,
   AccountInput,
   ActionResult,
+  AdminAiUsage,
   AdminLegalReview,
   AdminOverview,
   AdminTwilioUsageBudget,
@@ -54,6 +55,7 @@ import type {
   DeliverableInput,
   Document,
   DocumentInput,
+  GetAdminAiUsageParams,
   HealthStatus,
   Lawyer,
   LawyerInput,
@@ -4030,6 +4032,108 @@ export function useGetAdminOverview<TData = Awaited<ReturnType<typeof getAdminOv
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetAdminOverviewQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminAiUsageUrl = (params?: GetAdminAiUsageParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/ai-usage?${stringifiedParams}` : `/api/admin/ai-usage`
+}
+
+export const getAdminAiUsage = async (params?: GetAdminAiUsageParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminAiUsage> => {
+
+  return customFetch<AdminAiUsage>(getGetAdminAiUsageUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminAiUsageQueryKey = (params?: GetAdminAiUsageParams,) => {
+    return [
+    `/api/admin/ai-usage`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminAiUsageQueryOptions = <TData = Awaited<ReturnType<typeof getAdminAiUsage>>, TError = ErrorType<void>>(params?: GetAdminAiUsageParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAiUsage>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminAiUsageQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminAiUsage>>> = ({ signal }) => getAdminAiUsage(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminAiUsage>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAdminAiUsageQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminAiUsage>>>
+export type GetAdminAiUsageQueryError = ErrorType<void>
+
+
+export function useGetAdminAiUsage<TData = Awaited<ReturnType<typeof getAdminAiUsage>>, TError = ErrorType<void>>(
+ params: undefined |  GetAdminAiUsageParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAiUsage>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminAiUsage>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminAiUsage>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminAiUsage<TData = Awaited<ReturnType<typeof getAdminAiUsage>>, TError = ErrorType<void>>(
+ params?: GetAdminAiUsageParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAiUsage>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminAiUsage>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminAiUsage>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminAiUsage<TData = Awaited<ReturnType<typeof getAdminAiUsage>>, TError = ErrorType<void>>(
+ params?: GetAdminAiUsageParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAiUsage>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetAdminAiUsage<TData = Awaited<ReturnType<typeof getAdminAiUsage>>, TError = ErrorType<void>>(
+ params?: GetAdminAiUsageParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminAiUsage>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAdminAiUsageQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

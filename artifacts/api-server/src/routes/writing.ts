@@ -9,7 +9,7 @@ import { legalTemplates } from "../data/templates";
 import { accessibleConsultation } from "../lib/legal";
 import { ensureCompatibleAudio } from "../lib/audio";
 import { buildWritingMessages } from "../lib/writing-prompts";
-import { getAiUsage, reserveAiAttempt } from "../lib/ai-usage";
+import { getAiUsage, recordAiProviderSuccessSafely, reserveAiAttempt } from "../lib/ai-usage";
 import {
   hasDeepSeekKey,
   ProviderConfigurationError,
@@ -32,6 +32,7 @@ export function createWritingRouter(dependencies: {
   requestDeepSeek?: typeof requestDeepSeek;
   getAiUsage?: typeof getAiUsage;
   reserveAiAttempt?: typeof reserveAiAttempt;
+  recordAiProviderSuccess?: typeof recordAiProviderSuccessSafely;
 } = {}): IRouter {
 const router: IRouter = Router();
 const active = new Set<string>();
@@ -39,6 +40,7 @@ const aiKeyReady = dependencies.hasDeepSeekKey ?? hasDeepSeekKey;
 const completeWithAi = dependencies.requestDeepSeek ?? requestDeepSeek;
 const readUsage = dependencies.getAiUsage ?? getAiUsage;
 const reserveUsage = dependencies.reserveAiAttempt ?? reserveAiAttempt;
+const recordProviderSuccess = dependencies.recordAiProviderSuccess ?? recordAiProviderSuccessSafely;
 router.use("/writing", ...(dependencies.authMiddlewares ?? [requireAccount, requireLawyer]));
 router.get("/writing/usage", async (req, res) => {
   res.json(api.GetWritingUsageResponse.parse(await readUsage(req.account.id)));
@@ -61,8 +63,9 @@ router.post("/writing/assist", async (req, res): Promise<void> => {
   active.add(req.account.id);
   try {
     await reserveUsage(req.account.id, "drafting");
-    const text = await completeWithAi(buildWritingMessages(input.action, input.language, input.text));
-    res.json(api.AssistWritingResponse.parse({ text }));
+    const completion = await completeWithAi(buildWritingMessages(input.action, input.language, input.text));
+    await recordProviderSuccess(req.account.id, "drafting", completion.usage);
+    res.json(api.AssistWritingResponse.parse({ text: completion.text }));
   } catch (err) {
     if (err instanceof HttpError) throw err;
     req.log.warn({ name: (err as Error).name }, "DeepSeek writing request failed");
@@ -103,10 +106,11 @@ router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", asyn
     ].join("\n\n");
     if (source.length > 100_000) throw new HttpError(413, "Shorten the edited transcript before generating this draft; no text was sent.");
     await reserveUsage(req.account.id, "drafting");
-    const text = await completeWithAi(buildWritingMessages("draft", input.language, source));
+    const completion = await completeWithAi(buildWritingMessages("draft", input.language, source));
+    await recordProviderSuccess(req.account.id, "drafting", completion.usage);
     res.json(api.DraftFromCallTranscriptResponse.parse({
       title: `${record.topic} - ${template.name}`.slice(0, 200),
-      content: text,
+      content: completion.text,
     }));
   } catch (err) {
     if (err instanceof HttpError) throw err;
@@ -131,6 +135,7 @@ router.post("/writing/transcribe", async (req, res): Promise<void> => {
     const language = supportedLanguages.find((l) => l.name === input.language || l.code === input.language)?.code;
     await reserveUsage(req.account.id, "transcription");
     const text = await transcribeWithElevenLabs(buffer, format, language);
+    await recordProviderSuccess(req.account.id, "transcription");
     if (!text.trim()) throw new HttpError(422, "No speech could be recognized. Please try again.");
     res.json(api.TranscribeAudioResponse.parse({ text }));
   } catch (err) {

@@ -848,6 +848,39 @@ export interface AdminOverview {
   documents: number;
 }
 
+export type AdminAiUsageRowProvider = typeof AdminAiUsageRowProvider[keyof typeof AdminAiUsageRowProvider];
+
+
+export const AdminAiUsageRowProvider = {
+  deepseek: 'deepseek',
+  elevenlabs: 'elevenlabs',
+} as const;
+
+export interface AdminAiUsageRow {
+  day: string;
+  lawyerId: string;
+  lawyerName: string;
+  provider: AdminAiUsageRowProvider;
+  requests: number;
+  successfulRequests: number;
+  successfulRequestsKnown: boolean;
+  tokenUsageRequests: number;
+  inputTokens: number;
+  outputTokens: number;
+  pricedRequests: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  estimatedCostUsd: number | null;
+}
+
+export interface AdminAiUsage {
+  days: number;
+  retentionDays: number;
+  rows: AdminAiUsageRow[];
+}
+
 export type UserModerationStatus = typeof UserModerationStatus[keyof typeof UserModerationStatus];
 
 
@@ -1020,4 +1053,12 @@ export const ListLawyersSort = {
   experience: 'experience',
   rating: 'rating',
 } as const;
+
+export type GetAdminAiUsageParams = {
+/**
+ * @minimum 1
+ * @maximum 90
+ */
+days?: number;
+};
 

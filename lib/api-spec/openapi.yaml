@@ -557,6 +557,22 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminOverview" }
+  /admin/ai-usage:
+    get:
+      operationId: getAdminAiUsage
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 90, default: 30 }
+      responses:
+        "200":
+          description: Daily AI request aggregates and available usage-based estimates
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAiUsage" }
+        "403":
+          description: Only the owner-designated administrator may view AI usage
   /admin/legal-review:
     get:
       operationId: getAdminLegalReview
@@ -1341,6 +1357,31 @@ components:
         consultations: { type: integer }
         completedConsultations: { type: integer }
         documents: { type: integer }
+    AdminAiUsage:
+      type: object
+      required: [days, retentionDays, rows]
+      properties:
+        days: { type: integer }
+        retentionDays: { type: integer }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAiUsageRow" }
+    AdminAiUsageRow:
+      type: object
+      required: [day, lawyerId, lawyerName, provider, requests, successfulRequests, successfulRequestsKnown, tokenUsageRequests, inputTokens, outputTokens, pricedRequests, estimatedCostUsd]
+      properties:
+        day: { type: string, format: date }
+        lawyerId: { type: string }
+        lawyerName: { type: string }
+        provider: { type: string, enum: [deepseek, elevenlabs] }
+        requests: { type: integer }
+        successfulRequests: { type: integer }
+        successfulRequestsKnown: { type: boolean }
+        tokenUsageRequests: { type: integer }
+        inputTokens: { type: integer }
+        outputTokens: { type: integer }
+        pricedRequests: { type: integer }
+        estimatedCostUsd: { type: ["number", "null"], minimum: 0 }
     UserModeration:
       type: object
       required: [status, reason]

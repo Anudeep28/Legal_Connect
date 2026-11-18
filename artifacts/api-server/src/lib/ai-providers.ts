@@ -22,10 +22,24 @@ export function hasDeepSeekKey(key: string | undefined = process.env.DEEPSEEK_AP
 type ChatMessage = { role: "system" | "user"; content: string };
 type Fetcher = typeof fetch;
 
+export type DeepSeekUsage = {
+  inputTokens: number;
+  outputTokens: number;
+};
+
+export type DeepSeekCompletion = {
+  text: string;
+  usage: DeepSeekUsage | null;
+};
+
+function validTokenCount(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
 export async function requestDeepSeek(
   messages: ChatMessage[],
   options: { apiKey?: string; fetcher?: Fetcher } = {},
-): Promise<string> {
+): Promise<DeepSeekCompletion> {
   const apiKey = options.apiKey ?? process.env.DEEPSEEK_API_KEY;
   if (!hasDeepSeekKey(apiKey)) throw new ProviderConfigurationError("DeepSeek drafting is not configured.");
   const fetcher = options.fetcher ?? fetch;
@@ -57,10 +71,18 @@ export async function requestDeepSeek(
   } catch {
     throw new ProviderRequestError();
   }
-  const text = (payload as { choices?: Array<{ message?: { content?: unknown } }> } | null)
-    ?.choices?.[0]?.message?.content;
+  const responseData = payload as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
+  } | null;
+  const text = responseData?.choices?.[0]?.message?.content;
   if (typeof text !== "string" || !text.trim()) throw new ProviderRequestError();
-  return text.trim();
+  const inputTokens = validTokenCount(responseData?.usage?.prompt_tokens);
+  const outputTokens = validTokenCount(responseData?.usage?.completion_tokens);
+  return {
+    text: text.trim(),
+    usage: inputTokens !== null && outputTokens !== null ? { inputTokens, outputTokens } : null,
+  };
 }
 
 export type ConnectorClient = Pick<ReplitConnectors, "listConnections" | "proxy">;

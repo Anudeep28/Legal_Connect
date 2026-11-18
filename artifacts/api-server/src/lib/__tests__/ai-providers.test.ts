@@ -39,7 +39,7 @@ function fakeConnector(options: {
 test("DeepSeek drafting calls the configured server-side API and returns its completion", async () => {
   let authorization = "";
   let body: Record<string, unknown> | undefined;
-  const text = await requestDeepSeek([
+  const completion = await requestDeepSeek([
     { role: "system", content: "Only draft." },
     { role: "user", content: "provided case facts" },
   ], {
@@ -47,10 +47,13 @@ test("DeepSeek drafting calls the configured server-side API and returns its com
     fetcher: async (_url, init) => {
       authorization = new Headers(init?.headers).get("authorization") ?? "";
       body = JSON.parse(String(init?.body));
-      return Response.json({ choices: [{ message: { content: "  Draft for review  " } }] });
+      return Response.json({
+        choices: [{ message: { content: "  Draft for review  " } }],
+        usage: { prompt_tokens: 27, completion_tokens: 13 },
+      });
     },
   });
-  assert.equal(text, "Draft for review");
+  assert.deepEqual(completion, { text: "Draft for review", usage: { inputTokens: 27, outputTokens: 13 } });
   assert.equal(authorization, "Bearer test-only-secret");
   assert.equal(body?.model, "deepseek-flash");
   assert.equal(body?.stream, false);

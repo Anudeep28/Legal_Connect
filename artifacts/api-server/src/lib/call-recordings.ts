@@ -13,7 +13,7 @@ import { publicAppUrl } from "./communication-config";
 import { twilioClient } from "./consultation-calls";
 import { getLanguageByCode } from "../data/languages";
 import { logger } from "./logger";
-import { reserveAiAttempt } from "./ai-usage";
+import { recordAiProviderSuccessSafely, reserveAiAttempt } from "./ai-usage";
 
 const MAX_RECORDING_BYTES = 100 * 1024 * 1024;
 const MAX_TRANSCRIPT_CHARS = 100_000;
@@ -393,6 +393,7 @@ export async function processCallRecordingQueue(
             languageCode: session.languageCode,
             secondaryLanguageCodes,
           });
+          await recordAiProviderSuccessSafely(lawyerOwnerId, "transcription");
           if (result.text.length > MAX_TRANSCRIPT_CHARS) throw new Error("transcript_too_large");
           return {
             result,

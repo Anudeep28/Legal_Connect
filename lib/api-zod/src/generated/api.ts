@@ -1066,6 +1066,39 @@ export const GetAdminOverviewResponse = zod.object({
 })
 
 
+export const getAdminAiUsageQueryDaysDefault = 30;
+export const getAdminAiUsageQueryDaysMax = 90;
+
+
+
+export const GetAdminAiUsageQueryParams = zod.object({
+  "days": zod.coerce.number().int().min(1).max(getAdminAiUsageQueryDaysMax).default(getAdminAiUsageQueryDaysDefault)
+})
+
+export const getAdminAiUsageResponseRowsItemEstimatedCostUsdMin = 0;
+
+
+
+export const GetAdminAiUsageResponse = zod.object({
+  "days": zod.number().int(),
+  "retentionDays": zod.number().int(),
+  "rows": zod.array(zod.object({
+  "day": zod.coerce.date(),
+  "lawyerId": zod.string(),
+  "lawyerName": zod.string(),
+  "provider": zod.enum(['deepseek', 'elevenlabs']),
+  "requests": zod.number().int(),
+  "successfulRequests": zod.number().int(),
+  "successfulRequestsKnown": zod.boolean(),
+  "tokenUsageRequests": zod.number().int(),
+  "inputTokens": zod.number().int(),
+  "outputTokens": zod.number().int(),
+  "pricedRequests": zod.number().int(),
+  "estimatedCostUsd": zod.number().min(getAdminAiUsageResponseRowsItemEstimatedCostUsdMin).nullable()
+}))
+})
+
+
 export const GetAdminLegalReviewResponse = zod.object({
   "canRecord": zod.boolean(),
   "paymentVerificationComplete": zod.boolean(),

@@ -28,8 +28,9 @@ test("a failed drafting request releases the lawyer lock for a later request", a
       providerCalls += 1;
       assert.equal(messages[1]?.content, "Fictional facts for a route test.");
       if (providerCalls === 1) throw new ProviderRequestError();
-      return "Draft for advocate review.";
+      return { text: "Draft for advocate review.", usage: null };
     },
+    recordAiProviderSuccess: async () => {},
   }));
   app.use(apiErrorHandler);
   const server = app.listen(0, "127.0.0.1");

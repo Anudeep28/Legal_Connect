@@ -83,7 +83,7 @@ export async function isOwnerDesignatedAdmin(accountId: string): Promise<boolean
 }
 export const requireOwnerAdmin: RequestHandler = async (req, res, next) => {
   if (req.account.role !== "admin" || !(await isOwnerDesignatedAdmin(req.account.id))) {
-    res.status(403).json({ error: "Only the owner-designated administrator can record counsel approval." });
+    res.status(403).json({ error: "Only the owner-designated administrator has access to this setting." });
     return;
   }
   next();
