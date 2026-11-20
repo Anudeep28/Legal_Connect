@@ -5,6 +5,20 @@ import { ProviderRequestError } from "../lib/ai-providers";
 import pinoHttp from "pino-http";
 import pino from "pino";
 
+async function assertDisclosureRequired(url: string, acknowledgedBody: string, provider: string) {
+  const fields = JSON.parse(acknowledgedBody);
+  for (const value of [undefined, false, "true", 1, null]) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...fields, dataUseAcknowledged: value }),
+    });
+    assert.equal(response.status, 400);
+    const result = await response.json() as { error: string };
+    assert.match(result.error, new RegExp(`${provider} disclosure`));
+  }
+}
+
 test("a failed drafting request releases the lawyer lock for a later request", async () => {
   // The route's imports initialize a lazy DB pool, but this test never queries it.
   process.env.DATABASE_URL = "postgres://smoke:smoke@127.0.0.1:1/writing_route_test";
@@ -61,7 +75,10 @@ test("a failed drafting request releases the lawyer lock for a later request", a
       action: "draft",
       text: "Fictional facts for a route test.",
       language: "English",
+      dataUseAcknowledged: true,
     });
+    await assertDisclosureRequired(url, body, "DeepSeek");
+    assert.equal(providerCalls, 0, "unacknowledged writing must not reach DeepSeek");
     const first = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body });
     assert.equal(first.status, 502);
     const firstBody = await first.json() as { error?: unknown };
@@ -136,6 +153,7 @@ test("a truly simultaneous drafting request for the same lawyer is rejected", as
       action: "draft",
       text: "Fictional facts for a concurrency test.",
       language: "English",
+      dataUseAcknowledged: true,
     });
     const request = () => fetch(url, {
       method: "POST",
@@ -234,8 +252,12 @@ test("a failed dictation request releases the lawyer lock for a later request", 
       audio: wav.toString("base64"),
       mimeType: "audio/wav",
       language: "English",
+      dataUseAcknowledged: true,
     });
     const url = `http://127.0.0.1:${address.port}/writing/transcribe`;
+    await assertDisclosureRequired(url, body, "ElevenLabs");
+    assert.equal(providerCalls, 0, "unacknowledged audio must not reach ElevenLabs");
+    assert.equal(reservationCalls, 0);
     const request = () => fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },

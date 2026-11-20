@@ -1463,15 +1463,17 @@ components:
         remaining: { type: integer }
     WritingInput:
       type: object
-      required: [action, text, language]
+      required: [action, text, language, dataUseAcknowledged]
       properties:
+        dataUseAcknowledged: { type: boolean, const: true, description: "The lawyer continued after the DeepSeek disclosure for this request." }
         action: { type: string, enum: [draft, translate, improve] }
         text: { type: string, minLength: 1, maxLength: 30000 }
         language: { type: string, minLength: 2, maxLength: 50 }
     AudioInput:
       type: object
-      required: [audio, mimeType]
+      required: [audio, mimeType, dataUseAcknowledged]
       properties:
+        dataUseAcknowledged: { type: boolean, const: true, description: "The lawyer continued after the ElevenLabs disclosure for this recording." }
         audio: { type: string, maxLength: 15000000 }
         mimeType: { type: string, enum: [audio/webm, audio/mp4, audio/wav, audio/ogg] }
         language: { type: string }

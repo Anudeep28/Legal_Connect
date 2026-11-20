@@ -72,6 +72,8 @@ function providerError(err: unknown): never {
 }
 
 router.post("/writing/assist", async (req, res): Promise<void> => {
+  if (req.body?.dataUseAcknowledged !== true)
+    throw new HttpError(400, "Review the DeepSeek disclosure and continue before sending text.");
   const input = api.AssistWritingBody.parse(req.body);
   if (!input.text.trim()) throw new HttpError(400, "Enter text or case facts first.");
   if (!supportedLanguages.some((l) => l.name === input.language || l.code === input.language)) throw new HttpError(400, "Please select a supported language.");
@@ -133,6 +135,8 @@ router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", asyn
 });
 
 router.post("/writing/transcribe", async (req, res): Promise<void> => {
+  if (req.body?.dataUseAcknowledged !== true)
+    throw new HttpError(400, "Review the ElevenLabs disclosure and continue before sending audio.");
   const input = api.TranscribeAudioBody.parse(req.body);
   const audio = input.audio.replace(/^data:[^;]+;base64,/, "");
   if (!audio || !/^[A-Za-z0-9+/\r\n]*={0,2}$/.test(audio)) throw new HttpError(400, "Invalid audio recording.");

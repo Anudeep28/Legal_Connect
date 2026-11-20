@@ -629,7 +629,7 @@ function DeliverableEditor({
     if (!source.trim() || ai.isPending) return;
     setAiConsentOpen(false);
     ai.mutate(
-      { data: { action: 'draft', text: source, language: 'English' } },
+      { data: { action: 'draft', text: source, language: 'English', dataUseAcknowledged: true } },
       { onSuccess: (r) => { setContent(r.text); setReviewConfirmed(false); }, onError: (e) => toast({ title: 'AI draft failed', description: errMsg(e), variant: 'destructive' }) },
     );
   };

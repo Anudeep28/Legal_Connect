@@ -188,7 +188,7 @@ function Editor({ doc }: { doc: Document }) {
     if (!request) return;
     setPendingAiRequest(null);
     ai.mutate(
-      { data: request },
+      { data: { ...request, dataUseAcknowledged: true } },
       { onSuccess: (r) => setAiResult({ action: request.action, text: r.text }), onError: (e) => toast({ title: 'AI request failed', description: errMsg(e), variant: 'destructive' }) },
     );
   };
@@ -251,7 +251,7 @@ function Editor({ doc }: { doc: Document }) {
       }
       setPreparingAudio(false);
       transcribe.mutate(
-        { data: { audio: b64, mimeType: request.mime, language: request.language } },
+        { data: { audio: b64, mimeType: request.mime, language: request.language, dataUseAcknowledged: true } },
         {
           onSuccess: (r) => {
             if (discardRef.current) return;

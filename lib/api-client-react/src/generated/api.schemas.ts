@@ -913,6 +913,8 @@ export const WritingInputAction = {
 } as const;
 
 export interface WritingInput {
+  /** The lawyer continued after the DeepSeek disclosure for this request. */
+  dataUseAcknowledged: true;
   action: WritingInputAction;
   /**
      * @minLength 1
@@ -937,6 +939,8 @@ export const AudioInputMimeType = {
 } as const;
 
 export interface AudioInput {
+  /** The lawyer continued after the ElevenLabs disclosure for this recording. */
+  dataUseAcknowledged: true;
   /** @maxLength 15000000 */
   audio: string;
   mimeType: AudioInputMimeType;

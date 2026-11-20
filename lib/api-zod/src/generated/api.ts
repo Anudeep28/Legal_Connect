@@ -983,6 +983,7 @@ export const assistWritingBodyLanguageMax = 50;
 
 
 export const AssistWritingBody = zod.object({
+  "dataUseAcknowledged": zod.literal(true).describe('The lawyer continued after the DeepSeek disclosure for this request.'),
   "action": zod.enum(['draft', 'translate', 'improve']),
   "text": zod.string().min(1).max(assistWritingBodyTextMax),
   "language": zod.string().min(assistWritingBodyLanguageMin).max(assistWritingBodyLanguageMax)
@@ -998,6 +999,7 @@ export const transcribeAudioBodyAudioMax = 15000000;
 
 
 export const TranscribeAudioBody = zod.object({
+  "dataUseAcknowledged": zod.literal(true).describe('The lawyer continued after the ElevenLabs disclosure for this recording.'),
   "audio": zod.string().max(transcribeAudioBodyAudioMax),
   "mimeType": zod.enum(['audio/webm', 'audio/mp4', 'audio/wav', 'audio/ogg']),
   "language": zod.string().optional()
