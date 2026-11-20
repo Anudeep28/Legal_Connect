@@ -8,7 +8,8 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "preview:smoke": "vite preview --config vite.config.ts --host 127.0.0.1",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:ai-cancel": "vitest run --config vitest.config.mts tests/ai-cancel.test.tsx"
   },
   "devDependencies": {
     "@clerk/react": "^6.18.5",
@@ -47,6 +48,9 @@
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-query": "catalog:",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.13",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
@@ -61,6 +65,7 @@
     "framer-motion": "catalog:",
     "html2canvas": "^1.4.1",
     "input-otp": "^1.4.2",
+    "jsdom": "^31.0.1",
     "jspdf": "^4.2.1",
     "lucide-react": "catalog:",
     "next-themes": "^0.4.6",
@@ -79,6 +84,7 @@
     "tw-animate-css": "^1.4.0",
     "vaul": "^1.1.2",
     "vite": "catalog:",
+    "vitest": "^5.1.1",
     "wouter": "^3.3.5",
     "zod": "catalog:"
   },
