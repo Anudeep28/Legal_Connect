@@ -299,6 +299,70 @@ test("participant lookup failure returns a retryable error and the callback succ
   await db.update(callRecordingTracks).set({ status: "failed" }).where(eq(callRecordingTracks.id, tracks[0].id));
 });
 
+test("late recording callbacks after withdrawal create deletion-only work and stay deduplicated", async () => {
+  const consultation = await createConsultation();
+  await grantMutualConsent(consultation.id);
+  const roomSid = testSid("RM");
+  const recordingSid = testSid("RT");
+  const [session] = await insertSession(consultation.id, roomSid, {
+    roomEnded: true,
+    inventoryComplete: true,
+    status: "processing",
+  });
+  const withdrawal = await saveCallRecordingConsent(fixtureAccounts.get(clientId)!, consultation.id, false);
+  assert.equal(withdrawal.mode, "unrecorded");
+
+  const callback = {
+    AccountSid: twilioSid,
+    RoomSid: roomSid,
+    RecordingSid: recordingSid,
+    ParticipantIdentity: clientId,
+    SourceSid: testSid("MT"),
+    TrackKind: "audio",
+    Container: "mka",
+    StatusCallbackEvent: "recording-completed",
+  };
+  assert.equal(await sendTwilioCallback(callback), 204);
+  assert.equal(await sendTwilioCallback(callback), 204);
+  const beforeDeletion = await db.select().from(callRecordingTracks)
+    .where(eq(callRecordingTracks.recordingSid, recordingSid));
+  assert.equal(beforeDeletion.length, 1, "duplicate late callbacks must not create extra tracks");
+  assert.equal(beforeDeletion[0]?.status, "failed_delete_pending");
+  assert.equal(beforeDeletion[0]?.lastError, "consent_withdrawn");
+  assert.deepEqual(beforeDeletion[0]?.transcriptWords, []);
+  assert.equal(beforeDeletion[0]?.transcribedAt, null);
+
+  const removeAudio = nock("https://video.twilio.com").delete(`/v1/Recordings/${recordingSid}`).reply(204);
+  let transcriptionCalls = 0;
+  const options = {
+    transcribe: async () => {
+      transcriptionCalls++;
+      return { text: "This must never be transcribed.", languageCode: "en", words: [] };
+    },
+  };
+  await processCallRecordingQueue(1, options);
+  assert.ok(removeAudio.isDone());
+  assert.equal(transcriptionCalls, 0, "withdrawn audio is deleted without transcription");
+
+  assert.equal(await sendTwilioCallback(callback), 204);
+  await processCallRecordingQueue(1, options);
+  const afterDuplicate = await db.select().from(callRecordingTracks)
+    .where(eq(callRecordingTracks.recordingSid, recordingSid));
+  assert.equal(afterDuplicate.length, 1);
+  assert.equal(afterDuplicate[0]?.status, "failed");
+  assert.ok(afterDuplicate[0]?.deletedAt);
+  assert.deepEqual(afterDuplicate[0]?.transcriptWords, []);
+  assert.equal(afterDuplicate[0]?.transcribedAt, null);
+  assert.equal(transcriptionCalls, 0, "a callback after deletion cannot requeue transcription");
+  const [persistedSession] = await db.select().from(callRecordingSessions)
+    .where(eq(callRecordingSessions.id, session.id));
+  assert.equal(persistedSession?.status, "withdrawn");
+  assert.equal(persistedSession?.generatedTranscript, "");
+  const [persistedConsultation] = await db.select().from(consultations)
+    .where(eq(consultations.id, consultation.id));
+  assert.equal(persistedConsultation?.callRecordingMode, "unrecorded");
+});
+
 test("consent withdrawn during transcription prevents transcript save and retries raw-audio deletion", async () => {
   const consultation = await createConsultation();
   await grantMutualConsent(consultation.id);
