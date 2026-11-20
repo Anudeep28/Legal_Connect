@@ -26,6 +26,8 @@ import { errMsg, fmtDate, inr, relTime } from '@/lib/format';
 import { policies } from '@/data/policies';
 import { usePaymentCheckout } from '@/hooks/use-payment-checkout';
 import { PaymentHistory } from '@/components/payment-history';
+import { PolicySectionIndex } from '@/components/policy-section-index';
+import { getPolicySections } from '@/lib/policy-sections';
 
 const base = import.meta.env.BASE_URL;
 
@@ -435,6 +437,8 @@ export function Policy({ path }: { path: string }) {
     return content;
   }, [p.key, platform.data?.policyContacts]);
   const blocks = text.split(/\n\s*\n/);
+  const sections = getPolicySections(blocks.slice(1));
+  const sectionByBlock = new Map(sections.map((section) => [section.blockIndex, section]));
   return (
     <AppPage>
       <div className="mx-auto max-w-3xl">
@@ -445,10 +449,12 @@ export function Policy({ path }: { path: string }) {
             ? <>These policies and contact details have a recorded qualified-counsel approval. Paid consultation checkout also requires Razorpay verification.</>
             : <>These policies and contact details are drafts pending qualified-counsel approval. Paid consultation checkout remains closed until counsel approval and Razorpay verification are both complete.</>}
         </Notice>
+        <PolicySectionIndex sections={sections} />
         <article className="space-y-4 rounded-3xl border bg-card p-6 md:p-10">
           {blocks.slice(1).map((b, i) => {
             const t = b.trim();
-            if (/^\d+\.\s+[A-Z][A-Z\s&,'()-]+$/.test(t)) return <h2 key={i} className="break-words pt-4 text-xl font-semibold">{t}</h2>;
+            const section = sectionByBlock.get(i);
+            if (section) return <h2 key={i} id={section.id} tabIndex={-1} className="scroll-mt-24 break-words pt-4 text-xl font-semibold">{t}</h2>;
             return <p key={i} className="break-words whitespace-pre-line text-[14.5px] leading-relaxed text-foreground/85">{t}</p>;
           })}
         </article>
