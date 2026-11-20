@@ -34,7 +34,7 @@ function NavLink({ href, children, onClick }: { href: string; children: ReactNod
       href={href}
       onClick={onClick}
       className={cn(
-        'relative rounded-full px-3.5 py-2 text-[14px] font-medium transition-colors',
+        'relative rounded-full px-3.5 py-2 text-[14px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         active ? 'bg-primary/8 text-primary' : 'text-foreground/70 hover:text-foreground',
       )}
       data-testid={`link-nav-${href.replace(/\//g, '') || 'home'}`}
@@ -46,12 +46,14 @@ function NavLink({ href, children, onClick }: { href: string; children: ReactNod
 }
 
 export function SiteHeader() {
+  const [location] = useLocation();
   const { signedIn, me, user } = useAccount();
   const { signOut } = useClerk();
   const [open, setOpen] = useState(false);
   const notifs = useListNotifications({ query: { enabled: signedIn, queryKey: getListNotificationsQueryKey(), refetchInterval: 30000 } });
   const unread = (notifs.data ?? []).filter((n) => !n.read).length;
   const name = me?.name || user?.fullName || 'Account';
+  const isPolicyPage = ['/privacy', '/disclaimer', '/terms', '/refund-policy'].includes(location);
 
   const appLinks = signedIn
     ? [
@@ -63,16 +65,26 @@ export function SiteHeader() {
     : [];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 md:px-6">
-        <Link href={signedIn ? '/dashboard' : '/'} className="flex items-center gap-2.5" data-testid="link-logo">
+    <>
+      {isPolicyPage && (
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-foreground focus:shadow focus-visible:ring-2 focus-visible:ring-ring"
+          data-testid="link-skip-policy"
+        >
+          Skip to policy content
+        </a>
+      )}
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 md:px-6">
+          <Link href={signedIn ? '/dashboard' : '/'} className="flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" data-testid="link-logo">
           <LogoMark />
           <span className="leading-none">
             <span className="block font-display text-[17px] font-semibold">Consult with Lawyer</span>
             <span className="block font-mono text-[9.5px] uppercase tracking-[0.22em] text-muted-foreground">Advocates, on call</span>
           </span>
-        </Link>
-        <nav className="ml-6 hidden items-center gap-0.5 lg:flex">
+          </Link>
+        <nav aria-label="Primary navigation" className="ml-6 hidden items-center gap-0.5 lg:flex">
           {appLinks.map((l) => (
             <NavLink key={l.href} href={l.href}>
               {l.label}
@@ -129,15 +141,15 @@ export function SiteHeader() {
               </Button>
             </>
           )}
-          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setOpen(true)} data-testid="button-mobile-menu">
+          <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open navigation menu" onClick={() => setOpen(true)} data-testid="button-mobile-menu">
             <Menu />
           </Button>
         </div>
-      </div>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-[300px] bg-background">
-          <SheetTitle className="font-display">Menu</SheetTitle>
-          <div className="mt-6 flex flex-col gap-1">
+        </div>
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetContent side="right" className="w-[300px] bg-background">
+            <SheetTitle className="font-display">Menu</SheetTitle>
+            <nav aria-label="Mobile navigation" className="mt-6 flex flex-col gap-1">
             {[...appLinks, ...publicLinks].map((l) => (
               <NavLink key={l.href} href={l.href} onClick={() => setOpen(false)}>
                 {l.label}
@@ -152,10 +164,11 @@ export function SiteHeader() {
                 <NavLink href="/settings" onClick={() => setOpen(false)}>Settings</NavLink>
               </>
             )}
-          </div>
-        </SheetContent>
-      </Sheet>
-    </header>
+            </nav>
+          </SheetContent>
+        </Sheet>
+      </header>
+    </>
   );
 }
 
@@ -183,7 +196,7 @@ export function SiteFooter() {
         </div>
         <FooterCol title="Clients" links={[['/lawyers', 'Find a lawyer'], ['/templates', 'Legal templates'], ['/plans', 'Plans']]} />
         <FooterCol title="Advocates" links={[['/for-lawyers', 'Why join'], ['/lawyer/profile', 'Apply'], ['/documents', 'Document workspace']]} />
-        <FooterCol title="Policies" links={[['/terms', 'Terms of service'], ['/privacy', 'Privacy policy'], ['/disclaimer', 'Disclaimer'], ['/refund-policy', 'Refund policy']]} />
+        <FooterCol title="Policies" links={[['/terms', 'Terms of Service'], ['/privacy', 'Privacy Policy'], ['/disclaimer', 'Disclaimer'], ['/refund-policy', 'Refund and Cancellation Policy']]} />
       </div>
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-6 py-5 font-mono text-[11px] uppercase tracking-widest text-white/45 md:flex-row md:justify-between">
@@ -197,21 +210,21 @@ export function SiteFooter() {
 
 function FooterCol({ title, links }: { title: string; links: [string, string][] }) {
   return (
-    <div>
-      <h4 className="font-mono text-[11px] uppercase tracking-[0.2em] text-haldi">{title}</h4>
+    <nav aria-label={`${title} links`}>
+      <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-haldi">{title}</h2>
       <ul className="mt-4 space-y-2.5">
         {links.map(([href, label]) => (
           <li key={href}>
-            <Link href={href} className="flex min-h-11 w-full items-center text-sm text-white/75 transition-colors hover:text-white">
+            <Link href={href} className="flex min-h-11 w-full items-center rounded-sm text-sm text-white/75 outline-none transition-colors hover:text-white focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-primary">
               {label}
             </Link>
           </li>
         ))}
       </ul>
-    </div>
+    </nav>
   );
 }
 
 export function AppPage({ children, wide }: { children: ReactNode; wide?: boolean }) {
-  return <main className={cn('mx-auto w-full px-4 pb-10 pt-10 md:px-6', wide ? 'max-w-7xl' : 'max-w-6xl')}>{children}</main>;
+  return <main id="main-content" tabIndex={-1} className={cn('scroll-mt-20 mx-auto w-full px-4 pb-10 pt-10 md:px-6', wide ? 'max-w-7xl' : 'max-w-6xl')}>{children}</main>;
 }

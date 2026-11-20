@@ -450,7 +450,7 @@ export function Policy({ path }: { path: string }) {
             : <>These policies and contact details are drafts pending qualified-counsel approval. Paid consultation checkout remains closed until counsel approval and Razorpay verification are both complete.</>}
         </Notice>
         <PolicySectionIndex sections={sections} />
-        <article className="space-y-4 rounded-3xl border bg-card p-6 md:p-10">
+        <article aria-label={p.title} className="space-y-4 rounded-3xl border bg-card p-6 md:p-10">
           {blocks.slice(1).map((b, i) => {
             const t = b.trim();
             const section = sectionByBlock.get(i);
