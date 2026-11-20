@@ -34,6 +34,7 @@ import type {
   AdminLegalReview,
   AdminOverview,
   AdminTwilioUsageBudget,
+  AdminTwilioUsageHistory,
   AudioInput,
   CallAccess,
   CallAvailability,
@@ -5118,6 +5119,101 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getRefreshAdminTwilioUsageBudgetMutationOptions(options), queryClient);
     }
+
+export const getGetAdminTwilioUsageHistoryUrl = () => {
+
+
+
+
+  return `/api/admin/twilio-usage-history`
+}
+
+export const getAdminTwilioUsageHistory = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminTwilioUsageHistory> => {
+
+  return customFetch<AdminTwilioUsageHistory>(getGetAdminTwilioUsageHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminTwilioUsageHistoryQueryKey = () => {
+    return [
+    `/api/admin/twilio-usage-history`
+    ] as const;
+    }
+
+
+export const getGetAdminTwilioUsageHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminTwilioUsageHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>> = ({ signal }) => getAdminTwilioUsageHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAdminTwilioUsageHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>>
+export type GetAdminTwilioUsageHistoryQueryError = ErrorType<void>
+
+
+export function useGetAdminTwilioUsageHistory<TData = Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminTwilioUsageHistory<TData = Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminTwilioUsageHistory<TData = Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetAdminTwilioUsageHistory<TData = Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminTwilioUsageHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAdminTwilioUsageHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListAdminUsersUrl = () => {
 

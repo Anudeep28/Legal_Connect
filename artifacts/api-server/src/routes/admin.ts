@@ -8,7 +8,7 @@ import { lawyerViews } from "../lib/legal";
 import { paymentsEnabled } from "../lib/razorpay";
 import { getLegalReviewApproval } from "../lib/legal-review";
 import { getConsultationCheckoutState, setConsultationCheckoutPaused } from "../lib/consultation-checkout";
-import { getTwilioUsageBudgetState, refreshTwilioUsageBudget, saveTwilioUsageBudgetConfig } from "../lib/twilio-usage-budget";
+import { getTwilioUsageBudgetState, getTwilioUsageHistory, refreshTwilioUsageBudget, saveTwilioUsageBudgetConfig } from "../lib/twilio-usage-budget";
 import { getAdminAiUsage } from "../lib/ai-usage";
 
 const router: IRouter = Router();
@@ -134,6 +134,10 @@ router.put("/admin/twilio-usage-budget", requireOwnerAdmin, async (req, res): Pr
 router.post("/admin/twilio-usage-budget/refresh", requireOwnerAdmin, async (req, res): Promise<void> => {
   const state = await refreshTwilioUsageBudget({ force: true, ownerId: req.account.id });
   res.set("Cache-Control", "no-store").json(api.RefreshAdminTwilioUsageBudgetResponse.parse(state));
+});
+router.get("/admin/twilio-usage-history", requireOwnerAdmin, async (_req, res): Promise<void> => {
+  const history = await getTwilioUsageHistory();
+  res.set("Cache-Control", "no-store").json(api.GetAdminTwilioUsageHistoryResponse.parse(history));
 });
 router.get("/admin/users", async (_req, res): Promise<void> => {
   res.json(api.ListAdminUsersResponse.parse(await db.select().from(accounts).orderBy(desc(accounts.createdAt))));

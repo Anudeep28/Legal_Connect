@@ -3,9 +3,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Info, Loader2, RefreshCw } from 'lucide-react';
 import {
   getGetAdminTwilioUsageBudgetQueryKey,
+  getGetAdminTwilioUsageHistoryQueryKey,
   useGetAdminTwilioUsageBudget,
+  useGetAdminTwilioUsageHistory,
   useRefreshAdminTwilioUsageBudget,
   useUpdateAdminTwilioUsageBudget,
+  type AdminTwilioUsageHistoryItem,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +44,20 @@ function formatDate(value: string | null) {
   }).format(date) + ' UTC';
 }
 
+function formatMonth(value: string) {
+  const date = new Date(`${value}T00:00:00Z`);
+  if (!Number.isFinite(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date);
+}
+
+function historyStatus(status: AdminTwilioUsageHistoryItem['status']) {
+  switch (status) {
+    case 'success': return 'Posted total';
+    case 'partial': return 'Partial data';
+    case 'no_data': return 'No data posted';
+  }
+}
+
 function lookupMessage(status: string) {
   switch (status) {
     case 'checking': return 'A Twilio usage lookup is in progress.';
@@ -56,6 +73,9 @@ function lookupMessage(status: string) {
 export function AdminTwilioUsage() {
   const queryKey = getGetAdminTwilioUsageBudgetQueryKey();
   const query = useGetAdminTwilioUsageBudget({ query: { queryKey } });
+  const historyQuery = useGetAdminTwilioUsageHistory({
+    query: { queryKey: getGetAdminTwilioUsageHistoryQueryKey() },
+  });
   const save = useUpdateAdminTwilioUsageBudget();
   const refresh = useRefreshAdminTwilioUsageBudget();
   const queryClient = useQueryClient();
@@ -119,6 +139,7 @@ export function AdminTwilioUsage() {
   const runRefresh = () => refresh.mutate(undefined, {
     onSuccess: (result) => {
       queryClient.setQueryData(queryKey, result);
+      queryClient.invalidateQueries({ queryKey: getGetAdminTwilioUsageHistoryQueryKey() });
       toast({
         title: result.lookupStatus === 'success' ? 'Twilio usage refreshed' : 'Usage lookup status updated',
         description: lookupMessage(result.lookupStatus),
@@ -261,6 +282,65 @@ export function AdminTwilioUsage() {
             Save alert settings
           </Button>
         </form>
+      </section>
+
+      <section aria-labelledby="twilio-usage-history-title" className="space-y-4 rounded-3xl border bg-card p-5 md:p-7">
+        <div>
+          <h2 id="twilio-usage-history-title" className="font-display text-2xl font-semibold">Monthly usage history</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Account-level posted Programmable Video charges and Group Room minutes from Twilio. Charges come from Twilio records; no rate-based estimates are added. After the first refresh, snapshots update hourly even when budget alerts are off.
+          </p>
+        </div>
+        {historyQuery.isLoading ? (
+          <p role="status" className="text-sm text-muted-foreground">Loading monthly usage history…</p>
+        ) : historyQuery.isError ? (
+          <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+            <p className="text-sm">Monthly usage history could not be loaded.</p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => historyQuery.refetch()}>Try again</Button>
+          </div>
+        ) : historyQuery.data?.months.length ? (
+          <ul className="space-y-3" data-testid="list-twilio-usage-history">
+            {historyQuery.data.months.map((month) => (
+              <li key={month.periodStart} className="rounded-2xl border bg-background p-4" data-testid={`row-twilio-usage-${month.periodStart}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-semibold">{formatMonth(month.periodStart)}</h3>
+                  <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium">{historyStatus(month.status)}</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {month.status === 'no_data' ? 'Month checked (UTC)' : 'Twilio period'}: {month.periodStart}{month.periodEnd ? ` – ${month.periodEnd}` : ''}
+                </p>
+                <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Programmable Video charges</dt>
+                    <dd className="mt-1 font-medium">
+                      {month.status === 'success' && month.spend !== null
+                        ? formatMoney(month.spend, month.currency)
+                        : month.status === 'no_data' ? 'No data reported' : 'Not reported'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Group Room participant minutes</dt>
+                    <dd className="mt-1 font-medium">
+                      {month.participantMinutes === null ? 'Not available' : month.participantMinutes.toLocaleString()}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Twilio data as of</dt>
+                    <dd className="mt-1 text-sm">{formatDate(month.usageAsOf)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Last checked</dt>
+                    <dd className="mt-1 text-sm">{formatDate(month.checkedAt)}</dd>
+                  </div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-2xl border border-dashed p-4 text-sm text-muted-foreground" data-testid="empty-twilio-usage-history">
+            No monthly snapshots are saved yet. History starts when Twilio returns the first completed lookup; earlier periods are not reconstructed from the latest snapshot.
+          </p>
+        )}
       </section>
     </div>
   );

@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   accounts,
   auditLogs,
   db,
   notifications,
   twilioUsageBudget,
+  twilioUsageHistory,
   type TwilioUsageBudget,
 } from "@workspace/db";
 import { twilioUsageLookupConfigured } from "./communication-config";
@@ -29,6 +30,13 @@ type RefreshOptions = {
 
 function currentMonthStart(now: Date) {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
+}
+
+function currentMonthRange(now: Date) {
+  return {
+    start: currentMonthStart(now),
+    end: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).toISOString().slice(0, 10),
+  };
 }
 
 function amount(value: string | null) {
@@ -85,6 +93,22 @@ export async function getTwilioUsageBudgetState(now = new Date(), configId = CON
   return stateView(row, now);
 }
 
+export async function getTwilioUsageHistory() {
+  const rows = await db.select().from(twilioUsageHistory).orderBy(desc(twilioUsageHistory.periodStart));
+  return {
+    months: rows.map((row) => ({
+      periodStart: row.periodStart,
+      periodEnd: row.periodEnd,
+      status: row.status,
+      spend: amount(row.spend),
+      currency: row.currency,
+      participantMinutes: amount(row.participantMinutes),
+      usageAsOf: row.usageAsOf ? new Date(row.usageAsOf).toISOString() : null,
+      checkedAt: new Date(row.checkedAt).toISOString(),
+    })),
+  };
+}
+
 export async function saveTwilioUsageBudgetConfig(
   input: { enabled: boolean; budgetAmount: number | null; budgetCurrency: string; warningPercent: number },
   ownerId: string,
@@ -93,7 +117,7 @@ export async function saveTwilioUsageBudgetConfig(
 ) {
   if (input.enabled && (input.budgetAmount === null || input.budgetAmount <= 0))
     throw new Error("A positive monthly budget is required when alerts are enabled.");
-  const nextCheckAt = input.enabled ? now.toISOString() : null;
+  const nextCheckAt = now.toISOString();
   await db.insert(twilioUsageBudget).values({
     id: configId,
     enabled: input.enabled,
@@ -134,7 +158,7 @@ async function claimLookup(options: RefreshOptions, now: Date) {
     const lastAttempt = row.lastAttemptAt ? new Date(row.lastAttemptAt).getTime() : 0;
     const currentlyLocked = row.lookupStatus === "checking" && now.getTime() - lastAttempt < LOOKUP_LOCK_MS;
     if (currentlyLocked) return null;
-    if (!options.force && (!row.enabled || !row.nextCheckAt || new Date(row.nextCheckAt).getTime() > now.getTime()))
+    if (!options.force && row.nextCheckAt && new Date(row.nextCheckAt).getTime() > now.getTime())
       return null;
 
     const [claimed] = await tx.update(twilioUsageBudget).set({
@@ -181,6 +205,32 @@ async function saveUsageAndNotify(
     const nextCheckAt = new Date(now.getTime() + CHECK_INTERVAL_MS).toISOString();
     const periodStart = snapshot.periodStart;
     const periodEnd = snapshot.periodEnd;
+    const fallbackPeriod = currentMonthRange(now);
+    const historyPeriodStart = periodStart ?? (snapshot.status === "success" ? null : fallbackPeriod.start);
+    if (historyPeriodStart) {
+      const historyValues = {
+        periodStart: historyPeriodStart,
+        periodEnd: periodEnd ?? (periodStart ? null : fallbackPeriod.end),
+        status: snapshot.status,
+        spend: snapshot.spend,
+        currency: snapshot.currency,
+        participantMinutes: snapshot.participantMinutes,
+        usageAsOf: snapshot.asOf,
+        checkedAt: now.toISOString(),
+      };
+      await tx.insert(twilioUsageHistory).values(historyValues).onConflictDoUpdate({
+        target: twilioUsageHistory.periodStart,
+        set: {
+          periodEnd: historyValues.periodEnd,
+          status: historyValues.status,
+          spend: historyValues.spend,
+          currency: historyValues.currency,
+          participantMinutes: historyValues.participantMinutes,
+          usageAsOf: historyValues.usageAsOf,
+          checkedAt: historyValues.checkedAt,
+        },
+      });
+    }
     await tx.update(twilioUsageBudget).set({
       lookupStatus: snapshot.status,
       currentSpend: snapshot.spend,

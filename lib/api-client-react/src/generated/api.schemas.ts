@@ -312,6 +312,35 @@ export interface AdminTwilioUsageBudget {
   alertLevel: AdminTwilioUsageBudgetAlertLevel;
 }
 
+export type AdminTwilioUsageHistoryItemStatus = typeof AdminTwilioUsageHistoryItemStatus[keyof typeof AdminTwilioUsageHistoryItemStatus];
+
+
+export const AdminTwilioUsageHistoryItemStatus = {
+  success: 'success',
+  partial: 'partial',
+  no_data: 'no_data',
+} as const;
+
+export interface AdminTwilioUsageHistoryItem {
+  periodStart: string;
+  /** @nullable */
+  periodEnd: string | null;
+  status: AdminTwilioUsageHistoryItemStatus;
+  /** @nullable */
+  spend: number | null;
+  /** @nullable */
+  currency: string | null;
+  /** @nullable */
+  participantMinutes: number | null;
+  /** @nullable */
+  usageAsOf: string | null;
+  checkedAt: string;
+}
+
+export interface AdminTwilioUsageHistory {
+  months: AdminTwilioUsageHistoryItem[];
+}
+
 export type AccountRole = typeof AccountRole[keyof typeof AccountRole];
 
 

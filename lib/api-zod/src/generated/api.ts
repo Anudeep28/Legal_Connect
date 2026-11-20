@@ -1391,6 +1391,20 @@ export const RefreshAdminTwilioUsageBudgetResponse = zod.object({
 })
 
 
+export const GetAdminTwilioUsageHistoryResponse = zod.object({
+  "months": zod.array(zod.object({
+  "periodStart": zod.coerce.date(),
+  "periodEnd": zod.coerce.date().nullable(),
+  "status": zod.enum(['success', 'partial', 'no_data']),
+  "spend": zod.number().nullable(),
+  "currency": zod.string().nullable(),
+  "participantMinutes": zod.number().nullable(),
+  "usageAsOf": zod.coerce.date().nullable(),
+  "checkedAt": zod.coerce.date()
+}))
+})
+
+
 export const ListAdminUsersResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),

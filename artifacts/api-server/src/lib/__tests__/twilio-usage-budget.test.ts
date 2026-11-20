@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import { eq, inArray, like } from "drizzle-orm";
 import nock from "nock";
+import { GetAdminTwilioUsageHistoryResponse } from "@workspace/api-zod";
 import {
   accounts,
   auditLogs,
@@ -10,21 +11,32 @@ import {
   notifications,
   pool,
   twilioUsageBudget,
+  twilioUsageHistory,
 } from "@workspace/db";
 import { getTwilioVideoUsage, type TwilioVideoUsageSnapshot } from "../consultation-calls";
-import { getTwilioUsageBudgetState, refreshTwilioUsageBudget, saveTwilioUsageBudgetConfig } from "../twilio-usage-budget";
+import { getTwilioUsageBudgetState, getTwilioUsageHistory, refreshTwilioUsageBudget, saveTwilioUsageBudgetConfig } from "../twilio-usage-budget";
 
 assert.equal(process.env.NODE_ENV, "test");
 const prefix = `twilio-budget-fixture-${randomUUID()}`;
+const fixtureYear = 2090 + Number.parseInt(randomUUID().slice(0, 2), 16) % 8;
 const accountSid = `AC${"1".repeat(32)}`;
 const ownerId = `${prefix}-owner`;
 const alertConfigId = `${prefix}-alert`;
 const mismatchConfigId = `${prefix}-mismatch`;
 const partialConfigId = `${prefix}-partial`;
 const noDataConfigId = `${prefix}-no-data`;
-const monthStart = "2026-11-01";
-const monthEnd = "2026-11-30";
-const now = new Date("2026-11-17T10:00:00.000Z");
+const historyZeroConfigId = `${prefix}-history-zero`;
+const historyPartialConfigId = `${prefix}-history-partial`;
+const historyNoDataConfigId = `${prefix}-history-no-data`;
+const monthStart = `${fixtureYear}-11-01`;
+const monthEnd = `${fixtureYear}-11-30`;
+const now = new Date(`${fixtureYear}-11-17T10:00:00.000Z`);
+const noDataStart = `${fixtureYear}-12-01`;
+const noDataNow = new Date(`${fixtureYear}-12-17T10:00:00.000Z`);
+const historyZeroStart = `${fixtureYear + 1}-01-01`;
+const historyPartialStart = `${fixtureYear + 1}-02-01`;
+const historyNoDataStart = `${fixtureYear + 1}-03-01`;
+const historyNoDataNow = new Date(`${fixtureYear + 1}-03-17T10:00:00.000Z`);
 const testSnapshot = (spend: string, currency = "USD"): TwilioVideoUsageSnapshot => ({
   status: "success",
   spend,
@@ -59,7 +71,13 @@ after(async () => {
   nock.cleanAll();
   nock.enableNetConnect();
   await db.delete(notifications).where(eq(notifications.userId, ownerId));
-  await db.delete(twilioUsageBudget).where(inArray(twilioUsageBudget.id, [alertConfigId, mismatchConfigId, partialConfigId, noDataConfigId]));
+  await db.delete(twilioUsageBudget).where(inArray(twilioUsageBudget.id, [
+    alertConfigId, mismatchConfigId, partialConfigId, noDataConfigId,
+    historyZeroConfigId, historyPartialConfigId, historyNoDataConfigId,
+  ]));
+  await db.delete(twilioUsageHistory).where(inArray(twilioUsageHistory.periodStart, [
+    monthStart, noDataStart, historyZeroStart, historyPartialStart, historyNoDataStart,
+  ]));
   await db.delete(auditLogs).where(eq(auditLogs.actorId, ownerId));
   await db.delete(accounts).where(eq(accounts.id, ownerId));
   await pool.end();
@@ -137,12 +155,12 @@ test("no posted records remain unavailable instead of implying zero spend", asyn
     budgetAmount: 10,
     budgetCurrency: "USD",
     warningPercent: 80,
-  }, ownerId, now, noDataConfigId);
+  }, ownerId, noDataNow, noDataConfigId);
   const result = await refreshTwilioUsageBudget({
     force: true,
     ownerId,
     configId: noDataConfigId,
-    now,
+    now: noDataNow,
     fetchUsage: async () => usage,
   });
   assert.equal(result.lookupStatus, "no_data");
@@ -257,4 +275,92 @@ test("currency mismatch suppresses comparisons and participant-only data remains
   const partialNotifications = await db.select().from(notifications)
     .where(like(notifications.eventKey, `twilio-video-budget:${partialConfigId}:%`));
   assert.equal(partialNotifications.length, 0);
+});
+
+test("monthly history keeps posted zero, partial and missing data distinct and upserts by provider period", async () => {
+  await saveTwilioUsageBudgetConfig({
+    enabled: false,
+    budgetAmount: 10,
+    budgetCurrency: "USD",
+    warningPercent: 80,
+  }, ownerId, now, historyZeroConfigId);
+  const zeroSnapshot: TwilioVideoUsageSnapshot = {
+    ...testSnapshot("0.000000"),
+    periodStart: historyZeroStart,
+    periodEnd: `${fixtureYear + 1}-01-31`,
+  };
+  await refreshTwilioUsageBudget({
+    configId: historyZeroConfigId,
+    now,
+    fetchUsage: async () => zeroSnapshot,
+  });
+  const laterCheck = new Date(now.getTime() + 60_000);
+  await refreshTwilioUsageBudget({
+    force: true,
+    configId: historyZeroConfigId,
+    now: laterCheck,
+    fetchUsage: async () => ({ ...zeroSnapshot, asOf: laterCheck.toISOString() }),
+  });
+
+  await saveTwilioUsageBudgetConfig({
+    enabled: false,
+    budgetAmount: 10,
+    budgetCurrency: "USD",
+    warningPercent: 80,
+  }, ownerId, now, historyPartialConfigId);
+  await refreshTwilioUsageBudget({
+    force: true,
+    configId: historyPartialConfigId,
+    now,
+    fetchUsage: async () => ({
+      status: "partial",
+      spend: null,
+      currency: null,
+      participantMinutes: "250.0000",
+      periodStart: historyPartialStart,
+      periodEnd: `${fixtureYear + 1}-02-28`,
+      asOf: now.toISOString(),
+    }),
+  });
+
+  await saveTwilioUsageBudgetConfig({
+    enabled: false,
+    budgetAmount: 10,
+    budgetCurrency: "USD",
+    warningPercent: 80,
+  }, ownerId, historyNoDataNow, historyNoDataConfigId);
+  await refreshTwilioUsageBudget({
+    force: true,
+    configId: historyNoDataConfigId,
+    now: historyNoDataNow,
+    fetchUsage: async () => ({
+      status: "no_data",
+      spend: null,
+      currency: null,
+      participantMinutes: null,
+      periodStart: null,
+      periodEnd: null,
+      asOf: null,
+    }),
+  });
+
+  const history = await getTwilioUsageHistory();
+  assert.doesNotThrow(() => GetAdminTwilioUsageHistoryResponse.parse(history));
+  const zero = history.months.filter((month) => month.periodStart === historyZeroStart);
+  assert.equal(zero.length, 1, "rechecking one provider period must update its existing history row");
+  assert.equal(zero[0]?.status, "success");
+  assert.equal(zero[0]?.spend, 0, "a posted zero is stored as a real charge value");
+  assert.equal(zero[0]?.usageAsOf, laterCheck.toISOString());
+
+  const partial = history.months.find((month) => month.periodStart === historyPartialStart);
+  assert.equal(partial?.status, "partial");
+  assert.equal(partial?.spend, null);
+  assert.equal(partial?.participantMinutes, 250);
+
+  const missing = history.months.find((month) => month.periodStart === historyNoDataStart);
+  assert.equal(missing?.status, "no_data");
+  assert.equal(missing?.spend, null);
+  assert.equal(missing?.participantMinutes, null);
+  assert.equal(missing?.periodEnd, `${fixtureYear + 1}-03-31`);
+  assert.equal(missing?.usageAsOf, null);
 });

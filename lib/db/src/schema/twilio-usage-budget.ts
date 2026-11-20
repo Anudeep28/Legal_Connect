@@ -41,3 +41,18 @@ export const insertTwilioUsageBudgetSchema = createInsertSchema(twilioUsageBudge
 });
 export type InsertTwilioUsageBudget = z.infer<typeof insertTwilioUsageBudgetSchema>;
 export type TwilioUsageBudget = typeof twilioUsageBudget.$inferSelect;
+
+export const twilioUsageHistoryStatuses = ["success", "partial", "no_data"] as const;
+
+export const twilioUsageHistory = pgTable("twilio_usage_history", {
+  periodStart: date("period_start", { mode: "string" }).primaryKey(),
+  periodEnd: date("period_end", { mode: "string" }),
+  status: text("status").$type<(typeof twilioUsageHistoryStatuses)[number]>().notNull(),
+  spend: numeric("spend", { precision: 18, scale: 6 }),
+  currency: text("currency"),
+  participantMinutes: numeric("participant_minutes", { precision: 18, scale: 4 }),
+  usageAsOf: timestamp("usage_as_of", { withTimezone: true, mode: "string" }),
+  checkedAt: timestamp("checked_at", { withTimezone: true, mode: "string" }).notNull(),
+});
+
+export type TwilioUsageHistory = typeof twilioUsageHistory.$inferSelect;

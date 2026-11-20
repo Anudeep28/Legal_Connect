@@ -721,6 +721,17 @@ paths:
               schema: { $ref: "#/components/schemas/AdminTwilioUsageBudget" }
         "403":
           description: Only the owner-designated administrator may request a lookup
+  /admin/twilio-usage-history:
+    get:
+      operationId: getAdminTwilioUsageHistory
+      responses:
+        "200":
+          description: Stored monthly snapshots of account-level Twilio Programmable Video usage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTwilioUsageHistory" }
+        "403":
+          description: Only the owner-designated administrator may view call usage
   /admin/users:
     get:
       operationId: listAdminUsers
@@ -1119,6 +1130,25 @@ components:
         currencyMatches: { type: boolean }
         periodCurrent: { type: boolean }
         alertLevel: { type: string, enum: [none, approaching, reached] }
+    AdminTwilioUsageHistory:
+      type: object
+      required: [months]
+      properties:
+        months:
+          type: array
+          items: { $ref: "#/components/schemas/AdminTwilioUsageHistoryItem" }
+    AdminTwilioUsageHistoryItem:
+      type: object
+      required: [periodStart, periodEnd, status, spend, currency, participantMinutes, usageAsOf, checkedAt]
+      properties:
+        periodStart: { type: string, format: date }
+        periodEnd: { type: ["string", "null"], format: date }
+        status: { type: string, enum: [success, partial, no_data] }
+        spend: { type: ["number", "null"] }
+        currency: { type: ["string", "null"] }
+        participantMinutes: { type: ["number", "null"] }
+        usageAsOf: { type: ["string", "null"], format: date-time }
+        checkedAt: { type: string, format: date-time }
     Account:
       type: object
       required: [id, name, email, role, status, emailNotifications, pushNotifications, phone, phoneVerifiedAt, subscriptionPlan, documentCredits, createdAt]
