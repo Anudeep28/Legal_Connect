@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { db, accounts, aiUsage, aiUsageDaily, lawyers } from "@workspace/db";
 import { HttpError } from "../middlewares/access";
 import { logger } from "./logger";
+import { getAdminAiUsageBudgetState, notifyAiUsageBudgetAlertsSafely } from "./ai-usage-budget";
 
 type Kind = "drafting" | "transcription";
 export type AiPlan = "trial" | "single" | "monthly";
@@ -120,6 +121,7 @@ export async function recordAiProviderSuccess(
   kind: Kind,
   usage: { inputTokens: number; outputTokens: number } | null = null,
   now = new Date(),
+  budgetConfigId = "platform",
 ): Promise<void> {
   const { day } = aiUsageWindow(now);
   const provider = providerForKind(kind);
@@ -157,6 +159,7 @@ export async function recordAiProviderSuccess(
     target: [aiUsageDaily.accountId, aiUsageDaily.provider, aiUsageDaily.day],
     set,
   });
+  if (cost !== null) await notifyAiUsageBudgetAlertsSafely(now, budgetConfigId);
 }
 
 export async function recordAiProviderSuccessSafely(
@@ -251,7 +254,8 @@ export async function getAdminAiUsage(days: number, now = new Date()) {
   }
   const rows = [...report.values()].sort((a, b) =>
     b.day.localeCompare(a.day) || a.lawyerName.localeCompare(b.lawyerName) || a.provider.localeCompare(b.provider));
-  return { days, retentionDays: AI_USAGE_RETENTION_DAYS, rows };
+  const monthlyBudget = await getAdminAiUsageBudgetState(now);
+  return { days, retentionDays: AI_USAGE_RETENTION_DAYS, monthlyBudget, rows };
 }
 
 export async function pruneAiUsageData(now = new Date()): Promise<void> {

@@ -1,4 +1,4 @@
-import { pgTable, text, integer, date, numeric, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, date, numeric, primaryKey, boolean, timestamp } from "drizzle-orm/pg-core";
 import { accounts } from "./accounts";
 
 // No prompt text or case facts belong in usage counters.
@@ -22,3 +22,13 @@ export const aiUsageDaily = pgTable("ai_usage_daily", {
   pricedRequests: integer("priced_requests").notNull().default(0),
   estimatedCostUsd: numeric("estimated_cost_usd", { precision: 20, scale: 12, mode: "number" }),
 }, (table) => [primaryKey({ columns: [table.accountId, table.provider, table.day] })]);
+
+export const aiUsageBudget = pgTable("ai_usage_budget", {
+  id: text("id").primaryKey().default("platform"),
+  enabled: boolean("enabled").notNull().default(false),
+  monthlyBudgetUsd: numeric("monthly_budget_usd", { precision: 18, scale: 6, mode: "number" }),
+  warningPercent: integer("warning_percent").notNull().default(80),
+  configuredBy: text("configured_by").references(() => accounts.id),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow().$onUpdate(() => new Date().toISOString()),
+});

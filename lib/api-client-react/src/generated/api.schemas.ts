@@ -998,6 +998,51 @@ export interface AdminOverview {
   documents: number;
 }
 
+export type AdminAiUsageBudgetCostCoverage = typeof AdminAiUsageBudgetCostCoverage[keyof typeof AdminAiUsageBudgetCostCoverage];
+
+
+export const AdminAiUsageBudgetCostCoverage = {
+  no_usage: 'no_usage',
+  unavailable: 'unavailable',
+  partial: 'partial',
+  complete: 'complete',
+} as const;
+
+export type AdminAiUsageBudgetAlertLevel = typeof AdminAiUsageBudgetAlertLevel[keyof typeof AdminAiUsageBudgetAlertLevel];
+
+
+export const AdminAiUsageBudgetAlertLevel = {
+  none: 'none',
+  approaching: 'approaching',
+  reached: 'reached',
+} as const;
+
+export interface AdminAiUsageBudget {
+  enabled: boolean;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  monthlyBudgetUsd: number | null;
+  /**
+     * @minimum 50
+     * @maximum 95
+     */
+  warningPercent: number;
+  monthStart: string;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  currentMonthEstimatedUsd: number | null;
+  costCoverage: AdminAiUsageBudgetCostCoverage;
+  /** @minimum 0 */
+  requests: number;
+  /** @minimum 0 */
+  pricedRequests: number;
+  alertLevel: AdminAiUsageBudgetAlertLevel;
+}
+
 export type AdminAiUsageRowProvider = typeof AdminAiUsageRowProvider[keyof typeof AdminAiUsageRowProvider];
 
 
@@ -1028,7 +1073,23 @@ export interface AdminAiUsageRow {
 export interface AdminAiUsage {
   days: number;
   retentionDays: number;
+  monthlyBudget: AdminAiUsageBudget;
   rows: AdminAiUsageRow[];
+}
+
+export interface AiUsageBudgetInput {
+  enabled: boolean;
+  /**
+     * @minimum 0.01
+     * @maximum 1000000000
+     * @nullable
+     */
+  monthlyBudgetUsd: number | null;
+  /**
+     * @minimum 50
+     * @maximum 95
+     */
+  warningPercent: number;
 }
 
 export type UserModerationStatus = typeof UserModerationStatus[keyof typeof UserModerationStatus];

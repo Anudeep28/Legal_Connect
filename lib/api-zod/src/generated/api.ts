@@ -1180,6 +1180,17 @@ export const GetAdminAiUsageQueryParams = zod.object({
   "days": zod.coerce.number().int().min(1).max(getAdminAiUsageQueryDaysMax).default(getAdminAiUsageQueryDaysDefault)
 })
 
+export const getAdminAiUsageResponseMonthlyBudgetMonthlyBudgetUsdMin = 0;
+
+export const getAdminAiUsageResponseMonthlyBudgetWarningPercentMin = 50;
+export const getAdminAiUsageResponseMonthlyBudgetWarningPercentMax = 95;
+
+export const getAdminAiUsageResponseMonthlyBudgetCurrentMonthEstimatedUsdMin = 0;
+
+export const getAdminAiUsageResponseMonthlyBudgetRequestsMin = 0;
+
+export const getAdminAiUsageResponseMonthlyBudgetPricedRequestsMin = 0;
+
 export const getAdminAiUsageResponseRowsItemEstimatedCostUsdMin = 0;
 
 
@@ -1187,6 +1198,17 @@ export const getAdminAiUsageResponseRowsItemEstimatedCostUsdMin = 0;
 export const GetAdminAiUsageResponse = zod.object({
   "days": zod.number().int(),
   "retentionDays": zod.number().int(),
+  "monthlyBudget": zod.object({
+  "enabled": zod.boolean(),
+  "monthlyBudgetUsd": zod.number().min(getAdminAiUsageResponseMonthlyBudgetMonthlyBudgetUsdMin).nullable(),
+  "warningPercent": zod.number().int().min(getAdminAiUsageResponseMonthlyBudgetWarningPercentMin).max(getAdminAiUsageResponseMonthlyBudgetWarningPercentMax),
+  "monthStart": zod.coerce.date(),
+  "currentMonthEstimatedUsd": zod.number().min(getAdminAiUsageResponseMonthlyBudgetCurrentMonthEstimatedUsdMin).nullable(),
+  "costCoverage": zod.enum(['no_usage', 'unavailable', 'partial', 'complete']),
+  "requests": zod.number().int().min(getAdminAiUsageResponseMonthlyBudgetRequestsMin),
+  "pricedRequests": zod.number().int().min(getAdminAiUsageResponseMonthlyBudgetPricedRequestsMin),
+  "alertLevel": zod.enum(['none', 'approaching', 'reached'])
+}),
   "rows": zod.array(zod.object({
   "day": zod.coerce.date(),
   "lawyerId": zod.string(),
@@ -1201,6 +1223,46 @@ export const GetAdminAiUsageResponse = zod.object({
   "pricedRequests": zod.number().int(),
   "estimatedCostUsd": zod.number().min(getAdminAiUsageResponseRowsItemEstimatedCostUsdMin).nullable()
 }))
+})
+
+
+export const updateAdminAiUsageBudgetBodyMonthlyBudgetUsdMin = 0.01;
+export const updateAdminAiUsageBudgetBodyMonthlyBudgetUsdMax = 1000000000;
+
+export const updateAdminAiUsageBudgetBodyWarningPercentMin = 50;
+export const updateAdminAiUsageBudgetBodyWarningPercentMax = 95;
+
+
+
+export const UpdateAdminAiUsageBudgetBody = zod.object({
+  "enabled": zod.boolean(),
+  "monthlyBudgetUsd": zod.number().min(updateAdminAiUsageBudgetBodyMonthlyBudgetUsdMin).max(updateAdminAiUsageBudgetBodyMonthlyBudgetUsdMax).nullable(),
+  "warningPercent": zod.number().int().min(updateAdminAiUsageBudgetBodyWarningPercentMin).max(updateAdminAiUsageBudgetBodyWarningPercentMax)
+})
+
+export const updateAdminAiUsageBudgetResponseMonthlyBudgetUsdMin = 0;
+
+export const updateAdminAiUsageBudgetResponseWarningPercentMin = 50;
+export const updateAdminAiUsageBudgetResponseWarningPercentMax = 95;
+
+export const updateAdminAiUsageBudgetResponseCurrentMonthEstimatedUsdMin = 0;
+
+export const updateAdminAiUsageBudgetResponseRequestsMin = 0;
+
+export const updateAdminAiUsageBudgetResponsePricedRequestsMin = 0;
+
+
+
+export const UpdateAdminAiUsageBudgetResponse = zod.object({
+  "enabled": zod.boolean(),
+  "monthlyBudgetUsd": zod.number().min(updateAdminAiUsageBudgetResponseMonthlyBudgetUsdMin).nullable(),
+  "warningPercent": zod.number().int().min(updateAdminAiUsageBudgetResponseWarningPercentMin).max(updateAdminAiUsageBudgetResponseWarningPercentMax),
+  "monthStart": zod.coerce.date(),
+  "currentMonthEstimatedUsd": zod.number().min(updateAdminAiUsageBudgetResponseCurrentMonthEstimatedUsdMin).nullable(),
+  "costCoverage": zod.enum(['no_usage', 'unavailable', 'partial', 'complete']),
+  "requests": zod.number().int().min(updateAdminAiUsageBudgetResponseRequestsMin),
+  "pricedRequests": zod.number().int().min(updateAdminAiUsageBudgetResponsePricedRequestsMin),
+  "alertLevel": zod.enum(['none', 'approaching', 'reached'])
 })
 
 

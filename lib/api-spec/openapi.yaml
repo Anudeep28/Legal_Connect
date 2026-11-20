@@ -642,6 +642,24 @@ paths:
               schema: { $ref: "#/components/schemas/AdminAiUsage" }
         "403":
           description: Only the owner-designated administrator may view AI usage
+  /admin/ai-usage-budget:
+    put:
+      operationId: updateAdminAiUsageBudget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AiUsageBudgetInput" }
+      responses:
+        "200":
+          description: Updated monthly AI spend alert settings and current estimate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAiUsageBudget" }
+        "400":
+          description: Invalid monthly budget or warning threshold
+        "403":
+          description: Only the owner-designated administrator may configure alerts
   /admin/legal-review:
     get:
       operationId: getAdminLegalReview
@@ -1534,13 +1552,34 @@ components:
         documents: { type: integer }
     AdminAiUsage:
       type: object
-      required: [days, retentionDays, rows]
+      required: [days, retentionDays, rows, monthlyBudget]
       properties:
         days: { type: integer }
         retentionDays: { type: integer }
+        monthlyBudget: { $ref: "#/components/schemas/AdminAiUsageBudget" }
         rows:
           type: array
           items: { $ref: "#/components/schemas/AdminAiUsageRow" }
+    AdminAiUsageBudget:
+      type: object
+      required: [enabled, monthlyBudgetUsd, warningPercent, monthStart, currentMonthEstimatedUsd, costCoverage, requests, pricedRequests, alertLevel]
+      properties:
+        enabled: { type: boolean }
+        monthlyBudgetUsd: { type: ["number", "null"], minimum: 0 }
+        warningPercent: { type: integer, minimum: 50, maximum: 95 }
+        monthStart: { type: string, format: date }
+        currentMonthEstimatedUsd: { type: ["number", "null"], minimum: 0 }
+        costCoverage: { type: string, enum: [no_usage, unavailable, partial, complete] }
+        requests: { type: integer, minimum: 0 }
+        pricedRequests: { type: integer, minimum: 0 }
+        alertLevel: { type: string, enum: [none, approaching, reached] }
+    AiUsageBudgetInput:
+      type: object
+      required: [enabled, monthlyBudgetUsd, warningPercent]
+      properties:
+        enabled: { type: boolean }
+        monthlyBudgetUsd: { type: ["number", "null"], minimum: 0.01, maximum: 1000000000 }
+        warningPercent: { type: integer, minimum: 50, maximum: 95 }
     AdminAiUsageRow:
       type: object
       required: [day, lawyerId, lawyerName, provider, requests, successfulRequests, successfulRequestsKnown, tokenUsageRequests, inputTokens, outputTokens, pricedRequests, estimatedCostUsd]

@@ -29,12 +29,14 @@ import type {
   AccountInput,
   ActionResult,
   AdminAiUsage,
+  AdminAiUsageBudget,
   AdminGrievance,
   AdminGrievanceUpdate,
   AdminLegalReview,
   AdminOverview,
   AdminTwilioUsageBudget,
   AdminTwilioUsageHistory,
+  AiUsageBudgetInput,
   AudioInput,
   CallAccess,
   CallAvailability,
@@ -4615,6 +4617,88 @@ export function useGetAdminAiUsage<TData = Awaited<ReturnType<typeof getAdminAiU
 
 
 
+
+export const getUpdateAdminAiUsageBudgetUrl = () => {
+
+
+
+
+  return `/api/admin/ai-usage-budget`
+}
+
+export const updateAdminAiUsageBudget = async (aiUsageBudgetInput: AiUsageBudgetInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminAiUsageBudget> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminAiUsageBudget>(getUpdateAdminAiUsageBudgetUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(aiUsageBudgetInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminAiUsageBudgetMutationKey = () => ['updateAdminAiUsageBudget'] as const;
+
+export const getUpdateAdminAiUsageBudgetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminAiUsageBudget>>, TError,UpdateAdminAiUsageBudgetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminAiUsageBudget>>, TError,UpdateAdminAiUsageBudgetMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAdminAiUsageBudgetMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminAiUsageBudget>>, UpdateAdminAiUsageBudgetMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAdminAiUsageBudget(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminAiUsageBudgetMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminAiUsageBudget>>>
+    export type UpdateAdminAiUsageBudgetMutationBody = BodyType<AiUsageBudgetInput>
+    export type UpdateAdminAiUsageBudgetMutationError = ErrorType<void>
+    export type UpdateAdminAiUsageBudgetMutationVariables = {data: BodyType<AiUsageBudgetInput>}
+
+    export const useUpdateAdminAiUsageBudget = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminAiUsageBudget>>, TError,UpdateAdminAiUsageBudgetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminAiUsageBudget>>,
+        TError,
+        UpdateAdminAiUsageBudgetMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAdminAiUsageBudgetMutationOptions(options), queryClient);
+    }
 
 export const getGetAdminLegalReviewUrl = () => {
 

@@ -1,8 +1,78 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, before, test } from "node:test";
+import { randomUUID } from "node:crypto";
+import { eq, inArray, like } from "drizzle-orm";
 
 process.env.DATABASE_URL ??= "postgres://usage-test:usage-test@127.0.0.1:1/usage_test";
-const { aiDailyLimit, estimateDeepSeekCostUsd, resolveAiPlan } = await import("../ai-usage");
+const {
+  aiDailyLimit,
+  estimateDeepSeekCostUsd,
+  getAdminAiUsage,
+  recordAiProviderSuccess,
+  resolveAiPlan,
+} = await import("../ai-usage");
+const {
+  getAdminAiUsageBudgetState,
+  notifyAiUsageBudgetAlerts,
+  saveAdminAiUsageBudgetConfig,
+} = await import("../ai-usage-budget");
+const { GetAdminAiUsageResponse } = await import("@workspace/api-zod");
+const { accounts, aiUsageBudget, aiUsageDaily, auditLogs, db, notifications, pool } = await import("@workspace/db");
+
+const prefix = `ai-spend-alert-${randomUUID()}`;
+const ownerId = `${prefix}-owner`;
+const pricedLawyerId = `${prefix}-priced-lawyer`;
+const unpricedLawyerId = `${prefix}-unpriced-lawyer`;
+const pricedConfigId = `${prefix}-priced-config`;
+const unpricedConfigId = `${prefix}-unpriced-config`;
+const pricedNow = new Date("2096-11-18T12:00:00.000Z");
+const unpricedNow = new Date("2096-12-18T12:00:00.000Z");
+
+before(async () => {
+  await db.insert(accounts).values([
+    { id: ownerId, name: "Synthetic AI budget owner", email: `${ownerId}@example.com`, role: "admin" },
+    { id: pricedLawyerId, name: "Synthetic priced lawyer", email: `${pricedLawyerId}@example.com`, role: "lawyer" },
+    { id: unpricedLawyerId, name: "Synthetic unpriced lawyer", email: `${unpricedLawyerId}@example.com`, role: "lawyer" },
+  ]);
+  await db.insert(auditLogs).values({
+    id: randomUUID(),
+    actorId: ownerId,
+    targetId: ownerId,
+    action: "admin:owner-designated",
+    reason: "Synthetic AI spend alert fixture",
+  });
+});
+
+after(async () => {
+  await db.delete(notifications).where(eq(notifications.userId, ownerId));
+  await db.delete(aiUsageBudget).where(inArray(aiUsageBudget.id, [pricedConfigId, unpricedConfigId]));
+  await db.delete(aiUsageDaily).where(inArray(aiUsageDaily.accountId, [pricedLawyerId, unpricedLawyerId]));
+  await db.delete(auditLogs).where(eq(auditLogs.actorId, ownerId));
+  await db.delete(accounts).where(inArray(accounts.id, [ownerId, pricedLawyerId, unpricedLawyerId]));
+  await pool.end();
+});
+
+async function insertUsageRow(
+  accountId: string,
+  provider: "deepseek" | "elevenlabs",
+  day: string,
+  requests: number,
+  pricedRequests: number,
+  estimatedCostUsd: number | null,
+) {
+  await db.insert(aiUsageDaily).values({
+    accountId,
+    provider,
+    day,
+    requests,
+    successfulRequests: requests,
+    tokenUsageRequests: provider === "deepseek" ? pricedRequests : 0,
+    inputTokens: provider === "deepseek" ? pricedRequests * 1000 : 0,
+    outputTokens: provider === "deepseek" ? pricedRequests * 500 : 0,
+    pricedRequests,
+    estimatedCostUsd,
+  });
+}
 
 test("daily AI limits differ by plan and support per-plan and legacy overrides", () => {
   assert.equal(aiDailyLimit("drafting", "trial", {}), 5);
@@ -74,4 +144,107 @@ test("DeepSeek cost stays unavailable if usage or either rate is missing or inva
     DEEPSEEK_INPUT_USD_PER_MILLION_TOKENS: "0.10",
     DEEPSEEK_OUTPUT_USD_PER_MILLION_TOKENS: "0.20",
   }), null);
+});
+
+test("monthly AI alerts use known estimates, disclose partial coverage, and deduplicate by month", async () => {
+  await saveAdminAiUsageBudgetConfig({
+    enabled: true,
+    monthlyBudgetUsd: 10,
+    warningPercent: 80,
+  }, ownerId, pricedNow, pricedConfigId);
+  await insertUsageRow(pricedLawyerId, "deepseek", "2096-11-18", 2, 0, null);
+  await insertUsageRow(pricedLawyerId, "elevenlabs", "2096-11-04", 3, 0, null);
+
+  const oldInputRate = process.env.DEEPSEEK_INPUT_USD_PER_MILLION_TOKENS;
+  const oldOutputRate = process.env.DEEPSEEK_OUTPUT_USD_PER_MILLION_TOKENS;
+  process.env.DEEPSEEK_INPUT_USD_PER_MILLION_TOKENS = "1";
+  process.env.DEEPSEEK_OUTPUT_USD_PER_MILLION_TOKENS = "0";
+  try {
+    await recordAiProviderSuccess(pricedLawyerId, "drafting", {
+      inputTokens: 8_250_000,
+      outputTokens: 0,
+    }, pricedNow, pricedConfigId);
+  } finally {
+    if (oldInputRate === undefined) delete process.env.DEEPSEEK_INPUT_USD_PER_MILLION_TOKENS;
+    else process.env.DEEPSEEK_INPUT_USD_PER_MILLION_TOKENS = oldInputRate;
+    if (oldOutputRate === undefined) delete process.env.DEEPSEEK_OUTPUT_USD_PER_MILLION_TOKENS;
+    else process.env.DEEPSEEK_OUTPUT_USD_PER_MILLION_TOKENS = oldOutputRate;
+  }
+  let state = await getAdminAiUsageBudgetState(pricedNow, pricedConfigId);
+  assert.equal(state.currentMonthEstimatedUsd, 8.25);
+  assert.equal(state.costCoverage, "partial");
+  assert.equal(state.requests, 5);
+  assert.equal(state.pricedRequests, 1);
+  assert.equal(state.alertLevel, "approaching");
+
+  let alerts = await db.select().from(notifications)
+    .where(like(notifications.eventKey, `ai-usage-budget:${pricedConfigId}:%`));
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0]!.body, /at least/);
+  assert.match(alerts[0]!.body, /not counted as zero/);
+  assert.match(alerts[0]!.body, /not a provider invoice or a spending cap/);
+
+  const inputRate = process.env.DEEPSEEK_INPUT_USD_PER_MILLION_TOKENS;
+  const outputRate = process.env.DEEPSEEK_OUTPUT_USD_PER_MILLION_TOKENS;
+  process.env.DEEPSEEK_INPUT_USD_PER_MILLION_TOKENS = "1";
+  process.env.DEEPSEEK_OUTPUT_USD_PER_MILLION_TOKENS = "0";
+  try {
+    await recordAiProviderSuccess(pricedLawyerId, "drafting", {
+      inputTokens: 3_250_000,
+      outputTokens: 0,
+    }, pricedNow, pricedConfigId);
+  } finally {
+    if (inputRate === undefined) delete process.env.DEEPSEEK_INPUT_USD_PER_MILLION_TOKENS;
+    else process.env.DEEPSEEK_INPUT_USD_PER_MILLION_TOKENS = inputRate;
+    if (outputRate === undefined) delete process.env.DEEPSEEK_OUTPUT_USD_PER_MILLION_TOKENS;
+    else process.env.DEEPSEEK_OUTPUT_USD_PER_MILLION_TOKENS = outputRate;
+  }
+  await notifyAiUsageBudgetAlerts(pricedNow, pricedConfigId);
+  await notifyAiUsageBudgetAlerts(pricedNow, pricedConfigId);
+  state = await getAdminAiUsageBudgetState(pricedNow, pricedConfigId);
+  assert.equal(state.currentMonthEstimatedUsd, 11.5);
+  assert.equal(state.costCoverage, "partial");
+  assert.equal(state.alertLevel, "reached");
+
+  alerts = await db.select().from(notifications)
+    .where(like(notifications.eventKey, `ai-usage-budget:${pricedConfigId}:%`));
+  assert.equal(alerts.length, 2, "one warning and one reached alert are created, without duplicates");
+});
+
+test("unpriced AI requests stay unavailable rather than becoming zero spend", async () => {
+  await saveAdminAiUsageBudgetConfig({
+    enabled: true,
+    monthlyBudgetUsd: 1,
+    warningPercent: 50,
+  }, ownerId, unpricedNow, unpricedConfigId);
+  await insertUsageRow(unpricedLawyerId, "elevenlabs", "2096-12-03", 2, 0, null);
+  await notifyAiUsageBudgetAlerts(unpricedNow, unpricedConfigId);
+
+  const state = await getAdminAiUsageBudgetState(unpricedNow, unpricedConfigId);
+  assert.equal(state.currentMonthEstimatedUsd, null);
+  assert.equal(state.costCoverage, "unavailable");
+  assert.equal(state.alertLevel, "none");
+  assert.equal(state.requests, 2);
+  assert.equal(state.pricedRequests, 0);
+
+  const report = GetAdminAiUsageResponse.parse(await getAdminAiUsage(30, unpricedNow));
+  assert.equal(report.monthlyBudget.currentMonthEstimatedUsd, null);
+  assert.equal(report.monthlyBudget.costCoverage, "unavailable");
+  assert.equal(report.monthlyBudget.alertLevel, "none");
+  const alerts = await db.select().from(notifications)
+    .where(like(notifications.eventKey, `ai-usage-budget:${unpricedConfigId}:%`));
+  assert.equal(alerts.length, 0);
+});
+
+test("AI monthly alert settings reject invalid warning and missing enabled thresholds", async () => {
+  await assert.rejects(() => saveAdminAiUsageBudgetConfig({
+    enabled: true,
+    monthlyBudgetUsd: null,
+    warningPercent: 80,
+  }, ownerId, pricedNow, `${prefix}-missing-threshold`), /positive monthly threshold/i);
+  await assert.rejects(() => saveAdminAiUsageBudgetConfig({
+    enabled: false,
+    monthlyBudgetUsd: 10,
+    warningPercent: 100,
+  }, ownerId, pricedNow, `${prefix}-bad-percent`), /between 50% and 95%/i);
 });

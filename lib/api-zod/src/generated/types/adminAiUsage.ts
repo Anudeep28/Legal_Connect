@@ -5,10 +5,12 @@
  * Consult with Lawyer — independent legal consultation platform.
  * OpenAPI spec version: 1.0.0
  */
+import type { AdminAiUsageBudget } from './adminAiUsageBudget';
 import type { AdminAiUsageRow } from './adminAiUsageRow';
 
 export interface AdminAiUsage {
   days: number;
   retentionDays: number;
+  monthlyBudget: AdminAiUsageBudget;
   rows: AdminAiUsageRow[];
 }

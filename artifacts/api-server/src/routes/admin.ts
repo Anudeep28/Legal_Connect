@@ -10,6 +10,7 @@ import { getLegalReviewApproval } from "../lib/legal-review";
 import { getConsultationCheckoutState, setConsultationCheckoutPaused } from "../lib/consultation-checkout";
 import { getTwilioUsageBudgetState, getTwilioUsageHistory, refreshTwilioUsageBudget, saveTwilioUsageBudgetConfig } from "../lib/twilio-usage-budget";
 import { getAdminAiUsage } from "../lib/ai-usage";
+import { saveAdminAiUsageBudgetConfig } from "../lib/ai-usage-budget";
 
 const router: IRouter = Router();
 router.use("/admin", requireAccount, requireAdmin);
@@ -29,6 +30,11 @@ router.get("/admin/ai-usage", requireOwnerAdmin, async (req, res): Promise<void>
   const { days } = api.GetAdminAiUsageQueryParams.parse(req.query);
   const report = await getAdminAiUsage(days);
   res.set("Cache-Control", "no-store").json(api.GetAdminAiUsageResponse.parse(report));
+});
+router.put("/admin/ai-usage-budget", requireOwnerAdmin, async (req, res): Promise<void> => {
+  const input = api.UpdateAdminAiUsageBudgetBody.parse(req.body);
+  const state = await saveAdminAiUsageBudgetConfig(input, req.account.id);
+  res.set("Cache-Control", "no-store").json(api.UpdateAdminAiUsageBudgetResponse.parse(state));
 });
 router.get("/admin/legal-review", async (req, res): Promise<void> => {
   const [approval, canRecord, canReviewGrievances, consultationCheckout] = await Promise.all([
