@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { ErrorState, ListSkeleton, Notice } from '@/components/kit';
 import { useToast } from '@/hooks/use-toast';
 import { errMsg } from '@/lib/format';
+import { trackEvent } from '@/lib/analytics';
 
 function formatMoney(value: number | null, currency: string | null) {
   if (value === null || !currency) return 'Not available';
@@ -108,6 +109,7 @@ export function AdminTwilioUsage() {
         setBudgetCurrency(result.budgetCurrency);
         setWarningPercent(String(result.warningPercent));
         setEnabled(result.enabled);
+        trackEvent('twilio_alert_settings_saved', { enabled: result.enabled });
         toast({ title: 'Twilio usage alert settings saved' });
       },
       onError: (error) => toast({ title: 'Could not save usage settings', description: errMsg(error), variant: 'destructive' }),
