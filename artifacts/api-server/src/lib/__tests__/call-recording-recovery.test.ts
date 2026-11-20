@@ -363,6 +363,79 @@ test("late recording callbacks after withdrawal create deletion-only work and st
   assert.equal(persistedConsultation?.callRecordingMode, "unrecorded");
 });
 
+test("withdrawn audio stays private when Twilio deletion fails and a later worker retries", async () => {
+  const consultation = await createConsultation();
+  await grantMutualConsent(consultation.id);
+  const roomSid = testSid("RM");
+  const recordingSid = testSid("RT");
+  const [session] = await insertSession(consultation.id, roomSid, {
+    roomEnded: true,
+    inventoryComplete: true,
+  });
+  const [track] = await db.insert(callRecordingTracks).values({
+    id: randomUUID(),
+    sessionId: session.id,
+    recordingSid,
+    participantId: clientId,
+    speaker: "client",
+    status: "queued",
+  }).returning();
+
+  const withdrawal = await saveCallRecordingConsent(fixtureAccounts.get(clientId)!, consultation.id, false);
+  assert.equal(withdrawal.mode, "unrecorded");
+  let transcriptionCalls = 0;
+  const options = {
+    transcribe: async () => {
+      transcriptionCalls++;
+      return { text: "This must never be transcribed.", languageCode: "en", words: [] };
+    },
+  };
+
+  await processCallRecordingQueue(1, options);
+  let [pending] = await db.select().from(callRecordingTracks).where(eq(callRecordingTracks.id, track.id));
+  let [withdrawn] = await db.select().from(callRecordingSessions).where(eq(callRecordingSessions.id, session.id));
+  assert.equal(pending?.status, "failed_delete_pending");
+  assert.equal(pending?.lastError, "consent_withdrawn");
+  assert.equal(pending?.transcribedAt, null);
+  assert.deepEqual(pending?.transcriptWords, []);
+  assert.equal(withdrawn?.status, "withdrawn");
+  assert.equal(withdrawn?.generatedTranscript, "");
+  assert.equal(withdrawn?.editedTranscript, "");
+  assert.equal(transcriptionCalls, 0);
+
+  const failedDelete = nock("https://video.twilio.com")
+    .delete(`/v1/Recordings/${recordingSid}`)
+    .reply(503, { message: "synthetic temporary deletion outage" });
+  await processCallRecordingQueue(1, options);
+  assert.ok(failedDelete.isDone());
+  [pending] = await db.select().from(callRecordingTracks).where(eq(callRecordingTracks.id, track.id));
+  [withdrawn] = await db.select().from(callRecordingSessions).where(eq(callRecordingSessions.id, session.id));
+  assert.equal(pending?.status, "failed_delete_pending", "failed removal remains durable retry work");
+  assert.equal(pending?.lastError, "consent_withdrawn", "the withdrawal reason survives provider outages");
+  assert.equal(pending?.transcribedAt, null);
+  assert.deepEqual(pending?.transcriptWords, []);
+  assert.equal(withdrawn?.status, "withdrawn");
+  assert.equal(withdrawn?.generatedTranscript, "");
+  assert.equal(withdrawn?.editedTranscript, "");
+  assert.equal(transcriptionCalls, 0);
+
+  const successfulDelete = nock("https://video.twilio.com")
+    .delete(`/v1/Recordings/${recordingSid}`)
+    .reply(204);
+  await processCallRecordingQueue(1, options);
+  assert.ok(successfulDelete.isDone());
+  [pending] = await db.select().from(callRecordingTracks).where(eq(callRecordingTracks.id, track.id));
+  [withdrawn] = await db.select().from(callRecordingSessions).where(eq(callRecordingSessions.id, session.id));
+  assert.equal(pending?.status, "failed");
+  assert.ok(pending?.deletedAt);
+  assert.equal(pending?.transcribedAt, null);
+  assert.deepEqual(pending?.transcriptWords, []);
+  assert.equal(withdrawn?.status, "withdrawn");
+  assert.equal(withdrawn?.generatedTranscript, "");
+  assert.equal(withdrawn?.editedTranscript, "");
+  assert.equal(transcriptionCalls, 0, "recovery deletes audio without calling transcription");
+});
+
 test("consent withdrawn during transcription prevents transcript save and retries raw-audio deletion", async () => {
   const consultation = await createConsultation();
   await grantMutualConsent(consultation.id);

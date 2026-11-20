@@ -348,7 +348,7 @@ export async function processCallRecordingQueue(
         await db.update(callRecordingTracks).set({
           updatedAt: new Date().toISOString(),
           status: claimed.deleteStatus,
-          lastError: "media_deletion_pending",
+          lastError: track.lastError === "consent_withdrawn" ? "consent_withdrawn" : "media_deletion_pending",
         }).where(eq(callRecordingTracks.id, track.id));
       }
       await finishSessionIfReady(session.id);
