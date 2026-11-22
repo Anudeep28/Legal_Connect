@@ -2,8 +2,36 @@
 // Have them reviewed by qualified legal counsel for your specific business entity
 // before going live. Update the company name, address, and contact details below.
 
-export const policies: Record<string, string> = {
-  terms: `TERMS OF SERVICE
+export type PolicyReviewStatus = 'approved' | 'pending-review';
+
+export type PolicyRevision = {
+  revisionId: string;
+  effectiveDate: string;
+  reviewStatus: PolicyReviewStatus;
+  reviewedFingerprint?: string;
+  content: string;
+};
+
+// Treat each entry as an immutable published revision. To change wording, append
+// a new entry with a new revisionId and effectiveDate; never overwrite an older
+// revision. New revisions must start as pending-review until counsel reviews them.
+// A reviewed fingerprint prevents edited wording from inheriting an old approval.
+export function policyTextFingerprint(content: string): string {
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(content)) {
+    hash ^= BigInt(byte);
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return hash.toString(16).padStart(16, '0');
+}
+
+export const policyRevisionHistory: Record<string, PolicyRevision[]> = {
+  terms: [{
+    revisionId: 'terms-2026-11-17',
+    effectiveDate: '2026-11-17',
+    reviewStatus: 'approved',
+    reviewedFingerprint: 'b79d71163c4d7050',
+    content: `TERMS OF SERVICE
 
 Last updated: 17 November 2026
 
@@ -86,8 +114,14 @@ We may update these Terms from time to time. Material changes will be notified v
 14. CONTACT
 
 For questions about these Terms, contact us at support@consultwithlawyer.in.`,
+  }],
 
-  privacy: `PRIVACY POLICY
+  privacy: [{
+    revisionId: 'privacy-2026-11-17',
+    effectiveDate: '2026-11-17',
+    reviewStatus: 'approved',
+    reviewedFingerprint: 'ca79c139cf7677a1',
+    content: `PRIVACY POLICY
 
 Last updated: 17 November 2026
 
@@ -200,8 +234,14 @@ We may update this Privacy Policy to reflect changes in law or our practices. Ma
 13. CONTACT
 
 For privacy-related queries: privacy@consultwithlawyer.in`,
+  }],
 
-  refunds: `REFUND & CANCELLATION POLICY
+  refunds: [{
+    revisionId: 'refunds-2026-10-08',
+    effectiveDate: '2026-10-08',
+    reviewStatus: 'approved',
+    reviewedFingerprint: '4531531e3c8eaed6',
+    content: `REFUND & CANCELLATION POLICY
 
 Last updated: 8 October 2026
 
@@ -243,8 +283,14 @@ This Refund and Cancellation Policy applies to all paid services on the Consult 
 
 Email: support@consultwithlawyer.in
 Response time: We aim to respond within 2 business days.`,
+  }],
 
-  disclaimer: `DISCLAIMER
+  disclaimer: [{
+    revisionId: 'disclaimer-2026-10-08',
+    effectiveDate: '2026-10-08',
+    reviewStatus: 'approved',
+    reviewedFingerprint: 'ec45fc897af9196b',
+    content: `DISCLAIMER
 
 Last updated: 8 October 2026
 
@@ -297,7 +343,34 @@ This Disclaimer is governed by the laws of India. Any disputes arising from this
 10. CONTACT
 
 For questions about this Disclaimer: support@consultwithlawyer.in`,
+  }],
 };
+
+export const policies: Record<string, string> = Object.fromEntries(
+  Object.entries(policyRevisionHistory).map(([key, revisions]) => [
+    key,
+    revisions.at(-1)?.content ?? '',
+  ]),
+);
+
+export function getCurrentPolicyRevision(key: string): PolicyRevision | undefined {
+  return policyRevisionHistory[key]?.at(-1);
+}
+
+export function getPolicyReviewStatus(
+  revision: PolicyRevision | undefined,
+  platformCounselApprovalRecorded: boolean,
+): PolicyReviewStatus {
+  if (
+    !revision
+    || revision.reviewStatus !== 'approved'
+    || revision.reviewedFingerprint !== policyTextFingerprint(revision.content)
+    || !platformCounselApprovalRecorded
+  ) {
+    return 'pending-review';
+  }
+  return 'approved';
+}
 
 export const policyTitles: Record<string, string> = {
   terms: 'Terms of Service',

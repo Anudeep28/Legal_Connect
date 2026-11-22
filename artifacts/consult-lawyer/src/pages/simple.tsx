@@ -23,7 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAccount } from '@/lib/account';
 import { cn } from '@/lib/utils';
 import { errMsg, fmtDate, inr, relTime } from '@/lib/format';
-import { policies } from '@/data/policies';
+import { getCurrentPolicyRevision, getPolicyReviewStatus, policyRevisionHistory, policies } from '@/data/policies';
 import { usePaymentCheckout } from '@/hooks/use-payment-checkout';
 import { PaymentHistory } from '@/components/payment-history';
 import { PolicySectionIndex } from '@/components/policy-section-index';
@@ -420,6 +420,9 @@ const policyMap: Record<string, { key: string; title: string; context: string }>
 export function Policy({ path }: { path: string }) {
   const p = policyMap[path];
   const platform = useGetPlatform();
+  const revisions = policyRevisionHistory[p.key] ?? [];
+  const currentRevision = getCurrentPolicyRevision(p.key);
+  const reviewStatus = getPolicyReviewStatus(currentRevision, Boolean(platform.data?.legalReviewComplete));
   const text = useMemo(() => {
     let content = policies[p.key] ?? '';
     const contacts = platform.data?.policyContacts;
@@ -444,11 +447,46 @@ export function Policy({ path }: { path: string }) {
       <div className="mx-auto max-w-3xl">
         <PageHeader eyebrow="Policies" title={p.title} />
         <Notice icon={<Info />} className="mb-8">{p.context}</Notice>
-        <Notice icon={<Info />} className="mb-8">
-          {platform.data?.legalReviewComplete
-            ? <>These policies and contact details have a recorded qualified-counsel approval. Paid consultation checkout also requires Razorpay verification.</>
-            : <>These policies and contact details are drafts pending qualified-counsel approval. Paid consultation checkout remains closed until counsel approval and Razorpay verification are both complete.</>}
-        </Notice>
+        <section className="mb-8 rounded-2xl border bg-card p-5" aria-label="Policy version and review status" data-testid="policy-revision-status">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Revision {currentRevision?.revisionId ?? 'not recorded'}</h2>
+              {currentRevision && <p className="mt-1 text-sm text-muted-foreground">Effective <time dateTime={currentRevision.effectiveDate}>{fmtDate(currentRevision.effectiveDate)}</time></p>}
+            </div>
+            <span
+              role="status"
+              className={cn(
+                'rounded-full px-3 py-1 text-sm font-medium',
+                reviewStatus === 'approved'
+                  ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
+                  : 'bg-amber-100 text-amber-950 dark:bg-amber-950 dark:text-amber-200',
+              )}
+              data-testid="policy-review-status"
+            >
+              {reviewStatus === 'approved' ? 'Counsel review recorded' : 'Pending counsel review'}
+            </span>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {reviewStatus === 'approved'
+              ? 'This revision is covered by the recorded counsel review.'
+              : 'This revision is not marked as counsel-approved. A previous approval does not carry forward to changed wording.'}
+          </p>
+          {revisions.length > 1 && (
+            <div className="mt-5 border-t pt-4">
+              <h3 className="font-medium">Previous revisions</h3>
+              <div className="mt-3 space-y-3">
+                {revisions.slice(0, -1).reverse().map((revision) => (
+                  <details key={revision.revisionId} className="rounded-xl border p-4">
+                    <summary className="cursor-pointer font-medium">
+                      {revision.revisionId} · effective {fmtDate(revision.effectiveDate)} · {revision.reviewStatus === 'approved' ? 'Counsel review recorded' : 'Pending counsel review'}
+                    </summary>
+                    <pre className="mt-4 max-h-[32rem] overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/85">{revision.content}</pre>
+                  </details>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
         <PolicySectionIndex sections={sections} />
         <article aria-label={p.title} className="space-y-4 rounded-3xl border bg-card p-6 md:p-10">
           {blocks.slice(1).map((b, i) => {

@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { communicationServices } from "../communication-config";
+import {
+  getCurrentPolicyRevision,
+  getPolicyReviewStatus,
+  policyTextFingerprint,
+  policies,
+  policyRevisionHistory,
+} from "../../../../consult-lawyer/src/data/policies.ts";
 
 const policySource = readFileSync(
   new URL("../../../../consult-lawyer/src/data/policies.ts", import.meta.url),
@@ -28,19 +35,16 @@ const viteConfigSource = readFileSync(
   "utf8",
 );
 
-function readPolicy(name: "terms" | "privacy" | "disclaimer" | "refunds", nextField?: string): string {
-  const boundary = nextField
-    ? `,\\n\\n  ${nextField}:`
-    : `,\\n};`;
-  const pattern = new RegExp(`\\b${name}: \\x60([\\s\\S]*?)\\x60(?=${boundary})`);
+function readPolicy(name: "terms" | "privacy" | "disclaimer" | "refunds"): string {
+  const pattern = new RegExp(`\\b${name}: \\[\\{[\\s\\S]*?content: \\x60([\\s\\S]*?)\\x60`);
   const match = policySource.match(pattern);
   assert.ok(match, `Could not find the ${name} policy template`);
   return match[1];
 }
 
-const privacy = readPolicy("privacy", "refunds");
-const terms = readPolicy("terms", "privacy");
-const refunds = readPolicy("refunds", "disclaimer");
+const privacy = readPolicy("privacy");
+const terms = readPolicy("terms");
+const refunds = readPolicy("refunds");
 const disclaimer = readPolicy("disclaimer");
 
 test("public privacy and disclaimer disclosures match configured providers", () => {
@@ -89,14 +93,47 @@ test("consultation checkout waits for counsel without changing client rights or 
   assert.match(terms, /Clients retain rights to their legal content/i);
   assert.match(refunds, /Client-initiated cancellations do not qualify for a consultation refund/i);
   assert.match(refunds, /Unused document credits: Refundable within 7 days/i);
-  assert.match(simplePagesSource, /Paid consultation checkout remains closed until counsel approval and Razorpay verification are both complete/i);
+  assert.match(simplePagesSource, /A previous approval does not carry forward to changed wording/i);
+});
+
+test("policy revisions carry dates, review status, and retained wording", () => {
+  for (const key of ["terms", "privacy", "refunds", "disclaimer"]) {
+    const revisions = policyRevisionHistory[key];
+    assert.ok(revisions.length > 0, `${key} should have a published revision`);
+    assert.equal(policies[key], revisions.at(-1)?.content, `${key} should render its latest revision`);
+    assert.equal(new Set(revisions.map((revision) => revision.revisionId)).size, revisions.length, `${key} revision IDs should be unique`);
+    for (const revision of revisions) {
+      assert.match(revision.effectiveDate, /^\d{4}-\d{2}-\d{2}$/);
+      assert.ok(revision.content.length > 0, "revision text must remain available for comparison");
+      assert.ok(["approved", "pending-review"].includes(revision.reviewStatus));
+      if (revision.reviewStatus === "approved") {
+        assert.equal(revision.reviewedFingerprint, policyTextFingerprint(revision.content), "approved wording must match its reviewed fingerprint");
+      }
+    }
+  }
+
+  const approved = getCurrentPolicyRevision("terms")!;
+  assert.equal(getPolicyReviewStatus(approved, true), "approved");
+  assert.equal(getPolicyReviewStatus(approved, false), "pending-review", "a missing counsel record must not show approval");
+  assert.equal(
+    getPolicyReviewStatus({ ...approved, revisionId: "terms-next", content: "Changed wording", reviewStatus: "pending-review" }, true),
+    "pending-review",
+    "a new revision must not inherit the prior revision's approval",
+  );
+  assert.equal(
+    getPolicyReviewStatus({ ...approved, content: `${approved.content}\nChanged wording` }, true),
+    "pending-review",
+    "editing approved wording in place must invalidate its approval",
+  );
+  assert.match(simplePagesSource, /Previous revisions/);
+  assert.match(simplePagesSource, /A previous approval does not carry forward to changed wording/);
 });
 
 test("signed-out visitors can open every policy from the footer or directly", () => {
   const policyRoutes = [
     {
       path: "/privacy",
-      footerLabel: "Privacy policy",
+      footerLabel: "Privacy Policy",
       key: "privacy",
       title: "Privacy Policy",
       contentHeading: "PRIVACY POLICY",
@@ -110,14 +147,14 @@ test("signed-out visitors can open every policy from the footer or directly", ()
     },
     {
       path: "/terms",
-      footerLabel: "Terms of service",
+      footerLabel: "Terms of Service",
       key: "terms",
       title: "Terms of Service",
       contentHeading: "TERMS OF SERVICE",
     },
     {
       path: "/refund-policy",
-      footerLabel: "Refund policy",
+      footerLabel: "Refund and Cancellation Policy",
       key: "refunds",
       title: "Refund & Cancellation Policy",
       contentHeading: "REFUND & CANCELLATION POLICY",
@@ -151,8 +188,8 @@ test("signed-out visitors can open every policy from the footer or directly", ()
       ),
       `${policy.path} should map to the matching page title and content key`,
     );
-    assert.ok(
-      policiesSource.includes(`${policy.key}: \`${policy.contentHeading}`),
+      assert.ok(
+        policiesSource.includes(`${policy.key}: [{`) && policiesSource.includes(`content: \`${policy.contentHeading}`),
       `${policy.key} should have policy content`,
     );
   }
