@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BookingDialog } from '@/components/booking-dialog';
 import { DemoTag, EmptyState, ErrorState, Notice, PersonAvatar, Stars } from '@/components/kit';
+import { LawyerPresence } from '@/components/lawyer-presence';
 import { AppPage } from '@/components/shell';
 import { WEEKDAYS, fmtDate, inr } from '@/lib/format';
 
@@ -55,10 +56,7 @@ export default function LawyerDetail() {
               <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4 text-haldi" />{l.city}</span>
               <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-haldi" />{l.experienceYears} years in practice</span>
               <span className="flex items-center gap-1.5"><Languages className="h-4 w-4 text-haldi" />{l.languages.join(', ')}</span>
-              <span className="flex items-center gap-1.5">
-                <span className={`h-2 w-2 rounded-full ${l.online ? 'live-dot bg-[hsl(152_55%_50%)]' : 'bg-white/40'}`} />
-                {l.online ? 'Marked available now' : 'Offline'}
-              </span>
+              <LawyerPresence status={l.presenceStatus} changedAt={l.presenceChangedAt} dark />
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { MapPin, Languages, BadgeCheck, Clock } from 'lucide-react';
 import type { Lawyer } from '@workspace/api-client-react';
 import { inr } from '@/lib/format';
 import { DemoTag, PersonAvatar, Stars } from '@/components/kit';
+import { LawyerPresence } from '@/components/lawyer-presence';
 
 export function LawyerCard({ lawyer, index = 0 }: { lawyer: Lawyer; index?: number }) {
   return (
@@ -16,8 +17,8 @@ export function LawyerCard({ lawyer, index = 0 }: { lawyer: Lawyer; index?: numb
         <div className="relative">
           <PersonAvatar name={lawyer.name} src={lawyer.avatarUrl} className="h-16 w-16" />
           <span
-            className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-card ${lawyer.online ? 'live-dot bg-[hsl(152_55%_40%)]' : 'bg-muted-foreground/40'}`}
-            title={lawyer.online ? 'Marked available now' : 'Offline'}
+            className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-card ${lawyer.presenceStatus === 'online' ? 'live-dot bg-[hsl(152_55%_40%)]' : lawyer.presenceStatus === 'in_court' ? 'bg-amber-500' : 'bg-muted-foreground/40'}`}
+            title={lawyer.presenceStatus === 'in_court' ? 'In court' : lawyer.presenceStatus === 'online' ? 'Online' : 'Offline'}
           />
         </div>
         <div className="min-w-0 flex-1">
@@ -26,6 +27,11 @@ export function LawyerCard({ lawyer, index = 0 }: { lawyer: Lawyer; index?: numb
             {lawyer.verified && !lawyer.demo && <BadgeCheck className="h-4 w-4 text-primary" aria-label="Credentials reviewed" />}
           </div>
           <p className="truncate text-[13px] text-muted-foreground">{lawyer.title}</p>
+          <LawyerPresence
+            status={lawyer.presenceStatus}
+            changedAt={lawyer.presenceChangedAt}
+            className="mt-2 max-w-full"
+          />
           <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
             {lawyer.reviewCount > 0 ? (
               <>

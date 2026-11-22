@@ -42,7 +42,7 @@ export default function Home() {
           <div>
             <p className="rise inline-flex items-center gap-2 rounded-full border border-primary/15 bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
               <span className="live-dot h-2 w-2 rounded-full bg-[hsl(152_55%_40%)]" />
-              {p ? `${p.onlineCount} of ${p.lawyerCount} listed advocates marked available` : 'Advocates across India'}
+              {p ? `${p.onlineCount} of ${p.lawyerCount} listed advocates online now` : 'Advocates across India'}
             </p>
             <h1 className="rise rise-1 mt-6 text-[2.75rem] font-semibold leading-[0.98] sm:text-6xl lg:text-[4.6rem]">
               A legal worry is heavy. <span className="italic text-primary">Talking it through</span> <span className="haldi-underline">should not be.</span>

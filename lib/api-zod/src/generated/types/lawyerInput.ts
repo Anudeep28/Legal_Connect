@@ -5,6 +5,7 @@
  * Consult with Lawyer — independent legal consultation platform.
  * OpenAPI spec version: 1.0.0
  */
+import type { LawyerInputPresenceStatus } from './lawyerInputPresenceStatus';
 
 export interface LawyerInput {
   /**
@@ -57,5 +58,5 @@ export interface LawyerInput {
      * @items.maximum 6
      */
   availability: number[];
-  online: boolean;
+  presenceStatus: LawyerInputPresenceStatus;
 }

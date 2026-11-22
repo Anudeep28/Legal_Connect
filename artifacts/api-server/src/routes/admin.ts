@@ -165,7 +165,13 @@ router.patch("/admin/users/:id", async (req, res): Promise<void> => {
     const [updated] = await tx.update(accounts).set({ status: input.status }).where(eq(accounts.id, id)).returning();
     await tx.insert(auditLogs).values({ id: randomUUID(), actorId: req.account.id, targetId: id, action: `account:${input.status}`, reason: input.reason.trim() });
     // A suspended lawyer must stop appearing publicly and receiving requests.
-    if (input.status !== "active") await tx.update(lawyers).set({ approvalStatus: "pending", verified: false, online: false }).where(eq(lawyers.ownerId, id));
+    if (input.status !== "active") await tx.update(lawyers).set({
+      approvalStatus: "pending",
+      verified: false,
+      presenceStatus: "offline",
+      online: false,
+      presenceChangedAt: sql`CASE WHEN ${lawyers.presenceStatus} <> 'offline' THEN NOW() ELSE ${lawyers.presenceChangedAt} END`,
+    }).where(eq(lawyers.ownerId, id));
     return updated;
   });
   res.json(api.ModerateUserResponse.parse(result));

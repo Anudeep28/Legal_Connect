@@ -1343,7 +1343,7 @@ components:
         createdAt: { type: string }
     Lawyer:
       type: object
-      required: [id, name, title, bio, practiceAreas, languages, experienceYears, barCouncil, enrollmentNumber, fee, documentFeePercent, rating, reviewCount, verified, approvalStatus, online, city, avatarUrl, demo, availability, rejectionReason]
+      required: [id, name, title, bio, practiceAreas, languages, experienceYears, barCouncil, enrollmentNumber, fee, documentFeePercent, rating, reviewCount, verified, approvalStatus, presenceStatus, presenceChangedAt, city, avatarUrl, demo, availability, rejectionReason]
       properties:
         id: { type: string }
         name: { type: string }
@@ -1360,7 +1360,8 @@ components:
         reviewCount: { type: integer }
         verified: { type: boolean }
         approvalStatus: { type: string, enum: [pending, approved, rejected] }
-        online: { type: boolean }
+        presenceStatus: { type: string, enum: [online, offline, in_court] }
+        presenceChangedAt: { type: string, format: date-time }
         city: { type: string }
         avatarUrl: { type: string }
         demo: { type: boolean }
@@ -1368,7 +1369,7 @@ components:
         rejectionReason: { type: string }
     LawyerInput:
       type: object
-      required: [name, title, bio, practiceAreas, languages, experienceYears, barCouncil, enrollmentNumber, fee, city, availability, online]
+      required: [name, title, bio, practiceAreas, languages, experienceYears, barCouncil, enrollmentNumber, fee, city, availability, presenceStatus]
       properties:
         name: { type: string, minLength: 2, maxLength: 100 }
         title: { type: string, minLength: 3, maxLength: 150 }
@@ -1381,7 +1382,7 @@ components:
         fee: { type: integer, minimum: 1, maximum: 100000 }
         city: { type: string, minLength: 2, maxLength: 100 }
         availability: { type: array, minItems: 1, items: { type: integer, minimum: 0, maximum: 6 } }
-        online: { type: boolean }
+        presenceStatus: { type: string, enum: [online, offline, in_court] }
     Consultation:
       type: object
       required: [id, userId, clientName, lawyerId, lawyerName, lawyerAvatar, topic, notes, mode, package, status, paymentStatus, startsAt, endsAt, fee, transcript, callRecordingLanguageCode, demo, createdAt]

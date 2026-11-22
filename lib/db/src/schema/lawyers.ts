@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 import { accounts } from "./accounts";
 
 export const lawyers = pgTable("lawyers", {
@@ -16,6 +16,9 @@ export const lawyers = pgTable("lawyers", {
   documentFeePercent: integer("document_fee_percent").notNull().default(50),
   verified: boolean("verified").notNull().default(false),
   approvalStatus: text("approval_status").$type<"pending" | "approved" | "rejected">().notNull().default("pending"),
+  presenceStatus: text("presence_status").$type<"online" | "offline" | "in_court">().notNull().default("offline"),
+  presenceChangedAt: timestamp("presence_changed_at", { withTimezone: true }).notNull().defaultNow(),
+  // Retained for non-destructive upgrades and compatibility with older app versions.
   online: boolean("online").notNull().default(false),
   city: text("city").notNull(),
   avatarUrl: text("avatar_url").notNull().default(""),

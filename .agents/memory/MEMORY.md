@@ -1,4 +1,5 @@
 - [Product scope](product-scope.md) — separate successor to the owner's existing legal app; preserve its full client/lawyer/admin and document workflows.
+- [Lawyer presence rollout](lawyer-presence.md) — older lawyer profiles should default to Offline; retain prior data during the additive status migration.
 - [Payment policy](payment-policy.md) — owner-selected refund rules and client rights for the separate legal app.
 - [Communication providers](communication-providers.md) — owner chose Resend and Twilio verification; evaluate the original repo’s calling service before choosing Twilio calls.
 - [External webhook access](external-webhook-access.md) — private Preview may pass in-workspace checks while external callbacks hit Replit login; verify externally.

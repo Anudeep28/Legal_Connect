@@ -616,6 +616,15 @@ export const LawyerApprovalStatus = {
   rejected: 'rejected',
 } as const;
 
+export type LawyerPresenceStatus = typeof LawyerPresenceStatus[keyof typeof LawyerPresenceStatus];
+
+
+export const LawyerPresenceStatus = {
+  online: 'online',
+  offline: 'offline',
+  in_court: 'in_court',
+} as const;
+
 export interface Lawyer {
   id: string;
   name: string;
@@ -633,13 +642,23 @@ export interface Lawyer {
   reviewCount: number;
   verified: boolean;
   approvalStatus: LawyerApprovalStatus;
-  online: boolean;
+  presenceStatus: LawyerPresenceStatus;
+  presenceChangedAt: string;
   city: string;
   avatarUrl: string;
   demo: boolean;
   availability: number[];
   rejectionReason: string;
 }
+
+export type LawyerInputPresenceStatus = typeof LawyerInputPresenceStatus[keyof typeof LawyerInputPresenceStatus];
+
+
+export const LawyerInputPresenceStatus = {
+  online: 'online',
+  offline: 'offline',
+  in_court: 'in_court',
+} as const;
 
 export interface LawyerInput {
   /**
@@ -692,7 +711,7 @@ export interface LawyerInput {
      * @items.maximum 6
      */
   availability: number[];
-  online: boolean;
+  presenceStatus: LawyerInputPresenceStatus;
 }
 
 export type ConsultationMode = typeof ConsultationMode[keyof typeof ConsultationMode];
