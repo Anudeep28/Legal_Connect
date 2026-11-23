@@ -280,3 +280,71 @@ test("a failed dictation request releases the lawyer lock for a later request", 
     await new Promise<void>((resolve) => server.once("close", resolve));
   }
 });
+
+test("usage history uses the authenticated lawyer and returns counts only", async () => {
+  process.env.DATABASE_URL = "postgres://smoke:smoke@127.0.0.1:1/writing_route_test";
+  const [{ createWritingRouter }, { apiErrorHandler }] = await Promise.all([
+    import("./writing"),
+    import("../middlewares/access"),
+  ]);
+  let requestedAccount = "";
+  let requestedDays = 0;
+  const app = express();
+  app.use(express.json());
+  app.use(pinoHttp({ quietReqLogger: true, logger: pino({ level: "silent" }) }));
+  app.use((req, _res, next) => {
+    req.account = { id: "synthetic-history-lawyer", role: "lawyer" } as never;
+    next();
+  });
+  app.use(createWritingRouter({
+    authMiddlewares: [(_req, _res, next) => next()],
+    getAiUsageHistory: async (accountId, days) => {
+      const requestedHistoryDays = days ?? 30;
+      requestedAccount = accountId;
+      requestedDays = requestedHistoryDays;
+      return {
+        days: requestedHistoryDays,
+        retentionDays: 90,
+        entries: [{
+          day: "2026-11-24",
+          plans: ["monthly"],
+          planHistoryComplete: true,
+          draftingRequests: 2,
+          transcriptionRequests: 1,
+        }],
+      };
+    },
+  }));
+  app.use(apiErrorHandler);
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/writing/usage-history?days=7&accountId=another-account`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    assert.deepEqual(await response.json(), {
+      days: 7,
+      retentionDays: 90,
+      entries: [{
+        day: "2026-11-24",
+        plans: ["monthly"],
+        planHistoryComplete: true,
+        draftingRequests: 2,
+        transcriptionRequests: 1,
+      }],
+    });
+    assert.equal(requestedAccount, "synthetic-history-lawyer");
+    assert.equal(requestedDays, 7);
+
+    const invalidRange = await fetch(`http://127.0.0.1:${address.port}/writing/usage-history?days=91`);
+    assert.equal(invalidRange.status, 400);
+  } finally {
+    server.close();
+    await new Promise<void>((resolve) => server.once("close", resolve));
+  }
+});

@@ -7,6 +7,8 @@ export const aiUsage = pgTable("ai_usage", {
   kind: text("kind").$type<"drafting" | "transcription">().notNull(),
   day: date("day", { mode: "string" }).notNull(),
   used: integer("used").notNull().default(0),
+  plans: text("plans").array().notNull().default([]),
+  planHistoryComplete: boolean("plan_history_complete").notNull().default(false),
 }, (table) => [primaryKey({ columns: [table.accountId, table.kind, table.day] })]);
 
 // Daily operational aggregates only; never store prompts, transcripts, or case facts.

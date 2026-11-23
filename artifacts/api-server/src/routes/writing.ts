@@ -9,7 +9,7 @@ import { legalTemplates } from "../data/templates";
 import { accessibleConsultation } from "../lib/legal";
 import { ensureCompatibleAudio } from "../lib/audio";
 import { buildWritingMessages } from "../lib/writing-prompts";
-import { getAiUsage, recordAiProviderSuccessSafely, reserveAiAttempt } from "../lib/ai-usage";
+import { getAiUsage, getAiUsageHistory, recordAiProviderSuccessSafely, reserveAiAttempt } from "../lib/ai-usage";
 import {
   hasDeepSeekKey,
   ProviderConfigurationError,
@@ -47,6 +47,7 @@ export function createWritingRouter(dependencies: {
   requestDeepSeek?: typeof requestDeepSeek;
   transcribeAudio?: typeof transcribeWithElevenLabs;
   getAiUsage?: typeof getAiUsage;
+  getAiUsageHistory?: typeof getAiUsageHistory;
   reserveAiAttempt?: typeof reserveAiAttempt;
   recordAiProviderSuccess?: typeof recordAiProviderSuccessSafely;
 } = {}): IRouter {
@@ -56,11 +57,17 @@ const aiKeyReady = dependencies.hasDeepSeekKey ?? hasDeepSeekKey;
 const completeWithAi = dependencies.requestDeepSeek ?? requestDeepSeek;
 const transcribeAudio = dependencies.transcribeAudio ?? transcribeWithElevenLabs;
 const readUsage = dependencies.getAiUsage ?? getAiUsage;
+const readUsageHistory = dependencies.getAiUsageHistory ?? getAiUsageHistory;
 const reserveUsage = dependencies.reserveAiAttempt ?? reserveAiAttempt;
 const recordProviderSuccess = dependencies.recordAiProviderSuccess ?? recordAiProviderSuccessSafely;
 router.use("/writing", ...(dependencies.authMiddlewares ?? [requireAccount, requireLawyer]));
 router.get("/writing/usage", async (req, res) => {
   res.json(api.GetWritingUsageResponse.parse(await readUsage(req.account.id)));
+});
+router.get("/writing/usage-history", async (req, res) => {
+  const { days } = api.GetWritingUsageHistoryQueryParams.parse(req.query);
+  res.set("Cache-Control", "private, no-store")
+    .json(api.GetWritingUsageHistoryResponse.parse(await readUsageHistory(req.account.id, days)));
 });
 router.use("/writing", aiLimit);
 

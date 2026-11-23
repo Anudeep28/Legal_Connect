@@ -496,6 +496,18 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/WritingAllowance" }
+  /writing/usage-history:
+    get:
+      operationId: getWritingUsageHistory
+      description: Daily AI request counts and plan snapshots for the authenticated lawyer only. Contains no prompts, transcripts, or case facts.
+      parameters:
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 90, default: 30 } }
+      responses:
+        "200":
+          description: Bounded daily usage history for the signed-in lawyer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WritingUsageHistory" }
   /writing/assist:
     post:
       operationId: assistWriting
@@ -1503,6 +1515,26 @@ components:
         drafting: { $ref: "#/components/schemas/AiAllowance" }
         transcription: { $ref: "#/components/schemas/AiAllowance" }
         resetsAt: { type: string, format: date-time }
+    WritingUsageHistory:
+      type: object
+      required: [days, retentionDays, entries]
+      properties:
+        days: { type: integer, minimum: 1, maximum: 90 }
+        retentionDays: { type: integer }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/WritingUsageHistoryEntry" }
+    WritingUsageHistoryEntry:
+      type: object
+      required: [day, plans, planHistoryComplete, draftingRequests, transcriptionRequests]
+      properties:
+        day: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        plans:
+          type: array
+          items: { type: string, enum: [trial, single, monthly] }
+        planHistoryComplete: { type: boolean, description: "False when some requests predate plan snapshots." }
+        draftingRequests: { type: integer, minimum: 0 }
+        transcriptionRequests: { type: integer, minimum: 0 }
     AiAllowance:
       type: object
       required: [limit, used, remaining]

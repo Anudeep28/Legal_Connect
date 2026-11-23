@@ -951,6 +951,37 @@ export interface WritingAllowance {
   resetsAt: string;
 }
 
+export type WritingUsageHistoryEntryPlansItem = typeof WritingUsageHistoryEntryPlansItem[keyof typeof WritingUsageHistoryEntryPlansItem];
+
+
+export const WritingUsageHistoryEntryPlansItem = {
+  trial: 'trial',
+  single: 'single',
+  monthly: 'monthly',
+} as const;
+
+export interface WritingUsageHistoryEntry {
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  day: string;
+  plans: WritingUsageHistoryEntryPlansItem[];
+  /** False when some requests predate plan snapshots. */
+  planHistoryComplete: boolean;
+  /** @minimum 0 */
+  draftingRequests: number;
+  /** @minimum 0 */
+  transcriptionRequests: number;
+}
+
+export interface WritingUsageHistory {
+  /**
+     * @minimum 1
+     * @maximum 90
+     */
+  days: number;
+  retentionDays: number;
+  entries: WritingUsageHistoryEntry[];
+}
+
 export type WritingInputAction = typeof WritingInputAction[keyof typeof WritingInputAction];
 
 
@@ -1283,6 +1314,14 @@ export const ListLawyersSort = {
   experience: 'experience',
   rating: 'rating',
 } as const;
+
+export type GetWritingUsageHistoryParams = {
+/**
+ * @minimum 1
+ * @maximum 90
+ */
+days?: number;
+};
 
 export type GetAdminAiUsageParams = {
 /**

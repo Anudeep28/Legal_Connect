@@ -1,14 +1,16 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { randomUUID } from "node:crypto";
-import { eq, inArray, like } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 
 process.env.DATABASE_URL ??= "postgres://usage-test:usage-test@127.0.0.1:1/usage_test";
 const {
   aiDailyLimit,
   estimateDeepSeekCostUsd,
   getAdminAiUsage,
+  getAiUsageHistory,
   recordAiProviderSuccess,
+  reserveAiAttempt,
   resolveAiPlan,
 } = await import("../ai-usage");
 const {
@@ -17,7 +19,7 @@ const {
   saveAdminAiUsageBudgetConfig,
 } = await import("../ai-usage-budget");
 const { GetAdminAiUsageResponse } = await import("@workspace/api-zod");
-const { accounts, aiUsageBudget, aiUsageDaily, auditLogs, db, notifications, pool } = await import("@workspace/db");
+const { accounts, aiUsage, aiUsageBudget, aiUsageDaily, auditLogs, db, notifications, pool } = await import("@workspace/db");
 
 const prefix = `ai-spend-alert-${randomUUID()}`;
 const ownerId = `${prefix}-owner`;
@@ -113,6 +115,77 @@ test("effective AI plan follows active monthly access, then available credits", 
     subscriptionExpiresAt: "2026-11-17T12:00:00.000Z",
     documentCredits: 0,
   }, now), "trial");
+});
+
+test("usage attempts record every plan applied during a day", async () => {
+  const firstRequestAt = new Date("2096-11-19T10:00:00.000Z");
+  const secondRequestAt = new Date("2096-11-19T14:00:00.000Z");
+  try {
+    await db.update(accounts).set({
+      documentCredits: 1,
+      subscriptionPlan: "trial",
+      subscriptionExpiresAt: null,
+    }).where(eq(accounts.id, unpricedLawyerId));
+    await reserveAiAttempt(unpricedLawyerId, "drafting", firstRequestAt);
+
+    await db.update(accounts).set({
+      documentCredits: 0,
+      subscriptionPlan: "monthly",
+      subscriptionExpiresAt: "2096-11-20T00:00:00.000Z",
+    }).where(eq(accounts.id, unpricedLawyerId));
+    await reserveAiAttempt(unpricedLawyerId, "drafting", secondRequestAt);
+
+    const [usage] = await db.select().from(aiUsage).where(and(
+      eq(aiUsage.accountId, unpricedLawyerId),
+      eq(aiUsage.kind, "drafting"),
+      eq(aiUsage.day, "2096-11-19"),
+    ));
+    assert.equal(usage?.used, 2);
+    assert.deepEqual(usage?.plans, ["single", "monthly"]);
+    assert.equal(usage?.planHistoryComplete, true);
+  } finally {
+    await db.delete(aiUsage).where(and(
+      eq(aiUsage.accountId, unpricedLawyerId),
+      eq(aiUsage.day, "2096-11-19"),
+    ));
+    await db.delete(aiUsageDaily).where(and(
+      eq(aiUsageDaily.accountId, unpricedLawyerId),
+      eq(aiUsageDaily.day, "2096-11-19"),
+    ));
+  }
+});
+
+test("lawyer AI history is account-scoped, separates request types, and reports plan snapshots", async () => {
+  const today = "2096-11-18";
+  const yesterday = "2096-11-17";
+  await db.insert(aiUsage).values([
+    { accountId: pricedLawyerId, kind: "drafting", day: today, used: 3, plans: ["single"], planHistoryComplete: true },
+    { accountId: pricedLawyerId, kind: "transcription", day: today, used: 2, plans: ["single", "monthly"], planHistoryComplete: true },
+    { accountId: pricedLawyerId, kind: "drafting", day: yesterday, used: 4, plans: [], planHistoryComplete: false },
+    { accountId: unpricedLawyerId, kind: "drafting", day: today, used: 99, plans: ["monthly"], planHistoryComplete: true },
+  ]);
+
+  const history = await getAiUsageHistory(pricedLawyerId, 7, new Date(`${today}T12:00:00.000Z`));
+  assert.equal(history.days, 7);
+  assert.equal(history.retentionDays, 90);
+  assert.deepEqual(history.entries, [
+    {
+      day: today,
+      plans: ["single", "monthly"],
+      planHistoryComplete: true,
+      draftingRequests: 3,
+      transcriptionRequests: 2,
+    },
+    {
+      day: yesterday,
+      plans: [],
+      planHistoryComplete: false,
+      draftingRequests: 4,
+      transcriptionRequests: 0,
+    },
+  ]);
+  assert.equal("accountId" in history.entries[0]!, false);
+  await assert.rejects(getAiUsageHistory(pricedLawyerId, 91), /1 to 90 days/i);
 });
 
 test("DeepSeek cost is estimated only from exact token usage and both configured rates", () => {

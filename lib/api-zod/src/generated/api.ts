@@ -979,6 +979,40 @@ export const GetWritingUsageResponse = zod.object({
 })
 
 
+/**
+ * Daily AI request counts and plan snapshots for the authenticated lawyer only. Contains no prompts, transcripts, or case facts.
+ */
+export const getWritingUsageHistoryQueryDaysDefault = 30;
+export const getWritingUsageHistoryQueryDaysMax = 90;
+
+
+
+export const GetWritingUsageHistoryQueryParams = zod.object({
+  "days": zod.coerce.number().int().min(1).max(getWritingUsageHistoryQueryDaysMax).default(getWritingUsageHistoryQueryDaysDefault)
+})
+
+export const getWritingUsageHistoryResponseDaysMax = 90;
+
+export const getWritingUsageHistoryResponseEntriesItemDayRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getWritingUsageHistoryResponseEntriesItemDraftingRequestsMin = 0;
+
+export const getWritingUsageHistoryResponseEntriesItemTranscriptionRequestsMin = 0;
+
+
+
+export const GetWritingUsageHistoryResponse = zod.object({
+  "days": zod.number().int().min(1).max(getWritingUsageHistoryResponseDaysMax),
+  "retentionDays": zod.number().int(),
+  "entries": zod.array(zod.object({
+  "day": zod.string().regex(getWritingUsageHistoryResponseEntriesItemDayRegExp),
+  "plans": zod.array(zod.enum(['trial', 'single', 'monthly'])),
+  "planHistoryComplete": zod.boolean().describe('False when some requests predate plan snapshots.'),
+  "draftingRequests": zod.number().int().min(getWritingUsageHistoryResponseEntriesItemDraftingRequestsMin),
+  "transcriptionRequests": zod.number().int().min(getWritingUsageHistoryResponseEntriesItemTranscriptionRequestsMin)
+}))
+})
+
+
 export const assistWritingBodyTextMax = 30000;
 
 export const assistWritingBodyLanguageMin = 2;

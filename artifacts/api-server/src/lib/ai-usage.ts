@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, lt, sql } from "drizzle-orm";
 import { db, accounts, aiUsage, aiUsageDaily, lawyers } from "@workspace/db";
 import { HttpError } from "../middlewares/access";
 import { logger } from "./logger";
@@ -8,6 +8,7 @@ type Kind = "drafting" | "transcription";
 export type AiPlan = "trial" | "single" | "monthly";
 type Env = Record<string, string | undefined>;
 export const AI_USAGE_RETENTION_DAYS = 90;
+export const AI_USAGE_HISTORY_MAX_DAYS = 90;
 const DEFAULT_DAILY_LIMITS: Record<Kind, Record<AiPlan, number>> = {
   drafting: { trial: 5, single: 15, monthly: 30 },
   transcription: { trial: 5, single: 15, monthly: 30 },
@@ -83,6 +84,59 @@ export async function getAiUsage(accountId: string, now = new Date()) {
   return { plan, drafting: allowance("drafting"), transcription: allowance("transcription"), resetsAt };
 }
 
+export async function getAiUsageHistory(accountId: string, days = 30, now = new Date()) {
+  if (!Number.isInteger(days) || days < 1 || days > AI_USAGE_HISTORY_MAX_DAYS)
+    throw new HttpError(400, "Choose a history period from 1 to 90 days.");
+
+  const today = aiUsageWindow(now).day;
+  const firstDayDate = new Date(`${today}T00:00:00.000Z`);
+  firstDayDate.setUTCDate(firstDayDate.getUTCDate() - days + 1);
+  const firstDay = firstDayDate.toISOString().slice(0, 10);
+  const rows = await db.select({
+    day: aiUsage.day,
+    kind: aiUsage.kind,
+    requests: aiUsage.used,
+    plans: aiUsage.plans,
+    planHistoryComplete: aiUsage.planHistoryComplete,
+  }).from(aiUsage).where(and(
+    eq(aiUsage.accountId, accountId),
+    gte(aiUsage.day, firstDay),
+    lte(aiUsage.day, today),
+  )).orderBy(desc(aiUsage.day));
+
+  const history = new Map<string, {
+    day: string;
+    plans: Set<AiPlan>;
+    planHistoryComplete: boolean;
+    draftingRequests: number;
+    transcriptionRequests: number;
+  }>();
+  for (const row of rows) {
+    const entry = history.get(row.day) ?? {
+      day: row.day,
+      plans: new Set<AiPlan>(),
+      planHistoryComplete: true,
+      draftingRequests: 0,
+      transcriptionRequests: 0,
+    };
+    if (row.kind === "drafting") entry.draftingRequests = row.requests;
+    else entry.transcriptionRequests = row.requests;
+    for (const plan of row.plans) {
+      if (plan === "trial" || plan === "single" || plan === "monthly") entry.plans.add(plan);
+    }
+    entry.planHistoryComplete &&= row.planHistoryComplete;
+    history.set(row.day, entry);
+  }
+
+  return {
+    days,
+    retentionDays: AI_USAGE_RETENTION_DAYS,
+    entries: [...history.values()]
+      .sort((a, b) => b.day.localeCompare(a.day))
+      .map((entry) => ({ ...entry, plans: [...entry.plans] })),
+  };
+}
+
 // Atomic insert-or-increment: multiple processes share the same strict allowance.
 // Charge immediately before provider invocation, never refund uncertain failures:
 // a timeout can still have incurred provider charges.
@@ -96,10 +150,15 @@ export async function reserveAiAttempt(accountId: string, kind: Kind, now = new 
     const exhausted = () => new HttpError(429,
       `Your daily ${kind} limit (${limit} requests for the ${plan} plan) has been reached. It resets at ${resetsAt} (midnight UTC). Your document has not been changed.`);
     if (!limit) throw exhausted();
-    const [reserved] = await tx.insert(aiUsage).values({ accountId, kind, day, used: 1 })
+    const [reserved] = await tx.insert(aiUsage).values({
+      accountId, kind, day, used: 1, plans: [plan], planHistoryComplete: true,
+    })
       .onConflictDoUpdate({
         target: [aiUsage.accountId, aiUsage.kind, aiUsage.day],
-        set: { used: sql`${aiUsage.used} + 1` },
+        set: {
+          used: sql`${aiUsage.used} + 1`,
+          plans: sql`CASE WHEN ${aiUsage.plans} @> ARRAY[${plan}]::text[] THEN ${aiUsage.plans} ELSE array_append(${aiUsage.plans}, ${plan}) END`,
+        },
         setWhere: lt(aiUsage.used, limit),
       }).returning({ used: aiUsage.used });
     if (!reserved) throw exhausted();

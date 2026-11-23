@@ -63,6 +63,7 @@ import type {
   Document,
   DocumentInput,
   GetAdminAiUsageParams,
+  GetWritingUsageHistoryParams,
   GrievanceInput,
   HealthStatus,
   Lawyer,
@@ -91,7 +92,8 @@ import type {
   UserModeration,
   VerificationChallenge,
   WritingAllowance,
-  WritingInput
+  WritingInput,
+  WritingUsageHistory
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -3627,6 +3629,111 @@ export function useGetWritingUsage<TData = Awaited<ReturnType<typeof getWritingU
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetWritingUsageQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetWritingUsageHistoryUrl = (params?: GetWritingUsageHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/writing/usage-history?${stringifiedParams}` : `/api/writing/usage-history`
+}
+
+/**
+ * Daily AI request counts and plan snapshots for the authenticated lawyer only. Contains no prompts, transcripts, or case facts.
+ */
+export const getWritingUsageHistory = async (params?: GetWritingUsageHistoryParams, options?: Parameters<typeof customFetch>[1]): Promise<WritingUsageHistory> => {
+
+  return customFetch<WritingUsageHistory>(getGetWritingUsageHistoryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWritingUsageHistoryQueryKey = (params?: GetWritingUsageHistoryParams,) => {
+    return [
+    `/api/writing/usage-history`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetWritingUsageHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getWritingUsageHistory>>, TError = ErrorType<unknown>>(params?: GetWritingUsageHistoryParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWritingUsageHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWritingUsageHistoryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWritingUsageHistory>>> = ({ signal }) => getWritingUsageHistory(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWritingUsageHistory>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetWritingUsageHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getWritingUsageHistory>>>
+export type GetWritingUsageHistoryQueryError = ErrorType<unknown>
+
+
+export function useGetWritingUsageHistory<TData = Awaited<ReturnType<typeof getWritingUsageHistory>>, TError = ErrorType<unknown>>(
+ params: undefined |  GetWritingUsageHistoryParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWritingUsageHistory>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWritingUsageHistory>>,
+          TError,
+          Awaited<ReturnType<typeof getWritingUsageHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWritingUsageHistory<TData = Awaited<ReturnType<typeof getWritingUsageHistory>>, TError = ErrorType<unknown>>(
+ params?: GetWritingUsageHistoryParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWritingUsageHistory>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWritingUsageHistory>>,
+          TError,
+          Awaited<ReturnType<typeof getWritingUsageHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWritingUsageHistory<TData = Awaited<ReturnType<typeof getWritingUsageHistory>>, TError = ErrorType<unknown>>(
+ params?: GetWritingUsageHistoryParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWritingUsageHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetWritingUsageHistory<TData = Awaited<ReturnType<typeof getWritingUsageHistory>>, TError = ErrorType<unknown>>(
+ params?: GetWritingUsageHistoryParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWritingUsageHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetWritingUsageHistoryQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
