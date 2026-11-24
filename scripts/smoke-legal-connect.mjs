@@ -5,6 +5,14 @@ import process from "node:process";
 
 const basePath = "/smoke-legal-connect/";
 const appFilter = "@workspace/consult-lawyer";
+const bookmarkedRoutes = [
+  ["lawyers", "lawyer directory"],
+  ["lawyers/smoke-lawyer-id", "lawyer profile"],
+  ["dashboard", "client dashboard"],
+  ["consultations/smoke-consultation-id", "consultation details"],
+  ["documents/smoke-document-id", "document editor"],
+  ["lawyer/profile", "lawyer profile editor"],
+];
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -77,6 +85,26 @@ async function waitForServer(processRef, url, label) {
   return response;
 }
 
+async function verifyDeepLinkResponses(baseUrl, label, checkHtml) {
+  for (const [route, description] of bookmarkedRoutes) {
+    const routeUrl = new URL(route, baseUrl);
+    assert.ok(routeUrl.pathname.startsWith(basePath), `${description} escaped BASE_PATH: ${routeUrl.pathname}`);
+    const response = await fetch(routeUrl, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(5000),
+    });
+    assert.equal(response.status, 200, `${label} returned HTTP ${response.status} for ${routeUrl.pathname}`);
+    assert.equal(response.url, routeUrl.href, `${label} redirected ${routeUrl.pathname} outside its requested URL.`);
+    assert.match(
+      response.headers.get("content-type") ?? "",
+      /text\/html/i,
+      `${label} did not return the application HTML for ${routeUrl.pathname}`,
+    );
+    await checkHtml(await response.text(), routeUrl, description);
+  }
+  console.log(`${label} deep-link smoke test passed: ${bookmarkedRoutes.length} lawyer/client routes stayed under ${basePath}`);
+}
+
 async function verifyDevelopmentEntry() {
   const port = await freePort();
   const dev = launch(["--filter", appFilter, "run", "dev"], smokeEnv(port, "development"));
@@ -86,6 +114,15 @@ async function verifyDevelopmentEntry() {
     const html = await response.text();
     assert.match(html, /Consult with Lawyer/i, "Expected the application entry page.");
     assert.match(html, /\/smoke-legal-connect\/src\/main\.tsx/, "Vite entry must honor BASE_PATH.");
+    const baseUrl = new URL(basePath, url);
+    await verifyDeepLinkResponses(baseUrl, "Vite development server", async (routeHtml, routeUrl, description) => {
+      assert.match(routeHtml, /Consult with Lawyer/i, `Expected the application entry page for ${description}.`);
+      assert.match(
+        routeHtml,
+        /\/smoke-legal-connect\/src\/main\.tsx/,
+        `Vite entry escaped BASE_PATH for ${description} at ${routeUrl.pathname}.`,
+      );
+    });
     console.log(`Development smoke test passed: ${url}`);
   } finally {
     await stop(dev.child);
@@ -149,6 +186,18 @@ async function verifyProductionAssets() {
       const contents = await assetResponse.arrayBuffer();
       assert.ok(contents.byteLength > 0, `Built asset was empty: ${assetUrl.pathname}`);
     }
+    await verifyDeepLinkResponses(
+      new URL(basePath, url),
+      "Vite production preview",
+      async (routeHtml, routeUrl, description) => {
+        assert.match(routeHtml, /Consult with Lawyer/i, `Expected the built application entry page for ${description}.`);
+        const routeAssets = getBuiltAssets(routeHtml, url);
+        assert.ok(
+          routeAssets.some(([assetUrl]) => /\.m?js$/i.test(assetUrl.pathname)),
+          `Built application JavaScript was missing for ${description} at ${routeUrl.pathname}.`,
+        );
+      },
+    );
     console.log(`Production smoke test passed: ${assets.length} bundled JS/CSS assets loaded under ${basePath}`);
   } finally {
     await stop(preview.child);
