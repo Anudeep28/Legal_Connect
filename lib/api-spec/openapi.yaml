@@ -672,6 +672,24 @@ paths:
           description: Invalid monthly budget or warning threshold
         "403":
           description: Only the owner-designated administrator may configure alerts
+  /admin/ai-usage-limits:
+    put:
+      operationId: updateAdminAiUsageLimits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AiUsageLimitsInput" }
+      responses:
+        "200":
+          description: Updated daily AI request limits for each plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAiUsageLimits" }
+        "400":
+          description: A daily AI limit is not a whole number from 0 to 10,000
+        "403":
+          description: Only the owner-designated administrator may change daily limits
   /admin/legal-review:
     get:
       operationId: getAdminLegalReview
@@ -1585,14 +1603,36 @@ components:
         documents: { type: integer }
     AdminAiUsage:
       type: object
-      required: [days, retentionDays, rows, monthlyBudget]
+      required: [days, retentionDays, rows, monthlyBudget, dailyLimits]
       properties:
         days: { type: integer }
         retentionDays: { type: integer }
         monthlyBudget: { $ref: "#/components/schemas/AdminAiUsageBudget" }
+        dailyLimits: { $ref: "#/components/schemas/AdminAiUsageLimits" }
         rows:
           type: array
           items: { $ref: "#/components/schemas/AdminAiUsageRow" }
+    AiPlanLimits:
+      type: object
+      required: [trial, single, monthly]
+      properties:
+        trial: { type: integer, minimum: 0, maximum: 10000 }
+        single: { type: integer, minimum: 0, maximum: 10000 }
+        monthly: { type: integer, minimum: 0, maximum: 10000 }
+    AiUsageLimitsInput:
+      type: object
+      required: [drafting, transcription]
+      properties:
+        drafting: { $ref: "#/components/schemas/AiPlanLimits" }
+        transcription: { $ref: "#/components/schemas/AiPlanLimits" }
+    AdminAiUsageLimits:
+      allOf:
+        - $ref: "#/components/schemas/AiUsageLimitsInput"
+        - type: object
+          required: [source, updatedAt]
+          properties:
+            source: { type: string, enum: [server_settings, owner] }
+            updatedAt: { type: ["string", "null"], format: date-time }
     AdminAiUsageBudget:
       type: object
       required: [enabled, monthlyBudgetUsd, warningPercent, monthStart, currentMonthEstimatedUsd, costCoverage, requests, pricedRequests, alertLevel]

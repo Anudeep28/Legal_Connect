@@ -5,6 +5,7 @@ export * from "./documents";
 export * from "./notifications";
 export * from "./payments";
 export * from "./ai-usage";
+export * from "./ai-usage-limits";
 export * from "./platform-compliance";
 export * from "./consultation-checkout-control";
 export * from "./grievances";

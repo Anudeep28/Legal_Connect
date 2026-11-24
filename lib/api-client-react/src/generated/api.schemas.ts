@@ -1093,6 +1093,43 @@ export interface AdminAiUsageBudget {
   alertLevel: AdminAiUsageBudgetAlertLevel;
 }
 
+export interface AiPlanLimits {
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  trial: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  single: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  monthly: number;
+}
+
+export interface AiUsageLimitsInput {
+  drafting: AiPlanLimits;
+  transcription: AiPlanLimits;
+}
+
+export type AdminAiUsageLimitsSource = typeof AdminAiUsageLimitsSource[keyof typeof AdminAiUsageLimitsSource];
+
+
+export const AdminAiUsageLimitsSource = {
+  server_settings: 'server_settings',
+  owner: 'owner',
+} as const;
+
+export type AdminAiUsageLimits = AiUsageLimitsInput & ({
+  source: AdminAiUsageLimitsSource;
+  /** @nullable */
+  updatedAt: string | null;
+});
+
 export type AdminAiUsageRowProvider = typeof AdminAiUsageRowProvider[keyof typeof AdminAiUsageRowProvider];
 
 
@@ -1124,6 +1161,7 @@ export interface AdminAiUsage {
   days: number;
   retentionDays: number;
   monthlyBudget: AdminAiUsageBudget;
+  dailyLimits: AdminAiUsageLimits;
   rows: AdminAiUsageRow[];
 }
 

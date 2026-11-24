@@ -1229,6 +1229,24 @@ export const getAdminAiUsageResponseMonthlyBudgetRequestsMin = 0;
 
 export const getAdminAiUsageResponseMonthlyBudgetPricedRequestsMin = 0;
 
+export const getAdminAiUsageResponseDailyLimitsOneDraftingTrialMin = 0;
+export const getAdminAiUsageResponseDailyLimitsOneDraftingTrialMax = 10000;
+
+export const getAdminAiUsageResponseDailyLimitsOneDraftingSingleMin = 0;
+export const getAdminAiUsageResponseDailyLimitsOneDraftingSingleMax = 10000;
+
+export const getAdminAiUsageResponseDailyLimitsOneDraftingMonthlyMin = 0;
+export const getAdminAiUsageResponseDailyLimitsOneDraftingMonthlyMax = 10000;
+
+export const getAdminAiUsageResponseDailyLimitsOneTranscriptionTrialMin = 0;
+export const getAdminAiUsageResponseDailyLimitsOneTranscriptionTrialMax = 10000;
+
+export const getAdminAiUsageResponseDailyLimitsOneTranscriptionSingleMin = 0;
+export const getAdminAiUsageResponseDailyLimitsOneTranscriptionSingleMax = 10000;
+
+export const getAdminAiUsageResponseDailyLimitsOneTranscriptionMonthlyMin = 0;
+export const getAdminAiUsageResponseDailyLimitsOneTranscriptionMonthlyMax = 10000;
+
 export const getAdminAiUsageResponseRowsItemEstimatedCostUsdMin = 0;
 
 
@@ -1247,6 +1265,21 @@ export const GetAdminAiUsageResponse = zod.object({
   "pricedRequests": zod.number().int().min(getAdminAiUsageResponseMonthlyBudgetPricedRequestsMin),
   "alertLevel": zod.enum(['none', 'approaching', 'reached'])
 }),
+  "dailyLimits": zod.object({
+  "drafting": zod.object({
+  "trial": zod.number().int().min(getAdminAiUsageResponseDailyLimitsOneDraftingTrialMin).max(getAdminAiUsageResponseDailyLimitsOneDraftingTrialMax),
+  "single": zod.number().int().min(getAdminAiUsageResponseDailyLimitsOneDraftingSingleMin).max(getAdminAiUsageResponseDailyLimitsOneDraftingSingleMax),
+  "monthly": zod.number().int().min(getAdminAiUsageResponseDailyLimitsOneDraftingMonthlyMin).max(getAdminAiUsageResponseDailyLimitsOneDraftingMonthlyMax)
+}),
+  "transcription": zod.object({
+  "trial": zod.number().int().min(getAdminAiUsageResponseDailyLimitsOneTranscriptionTrialMin).max(getAdminAiUsageResponseDailyLimitsOneTranscriptionTrialMax),
+  "single": zod.number().int().min(getAdminAiUsageResponseDailyLimitsOneTranscriptionSingleMin).max(getAdminAiUsageResponseDailyLimitsOneTranscriptionSingleMax),
+  "monthly": zod.number().int().min(getAdminAiUsageResponseDailyLimitsOneTranscriptionMonthlyMin).max(getAdminAiUsageResponseDailyLimitsOneTranscriptionMonthlyMax)
+})
+}).and(zod.object({
+  "source": zod.enum(['server_settings', 'owner']),
+  "updatedAt": zod.coerce.date().nullable()
+})),
   "rows": zod.array(zod.object({
   "day": zod.coerce.date(),
   "lawyerId": zod.string(),
@@ -1302,6 +1335,76 @@ export const UpdateAdminAiUsageBudgetResponse = zod.object({
   "pricedRequests": zod.number().int().min(updateAdminAiUsageBudgetResponsePricedRequestsMin),
   "alertLevel": zod.enum(['none', 'approaching', 'reached'])
 })
+
+
+export const updateAdminAiUsageLimitsBodyDraftingTrialMin = 0;
+export const updateAdminAiUsageLimitsBodyDraftingTrialMax = 10000;
+
+export const updateAdminAiUsageLimitsBodyDraftingSingleMin = 0;
+export const updateAdminAiUsageLimitsBodyDraftingSingleMax = 10000;
+
+export const updateAdminAiUsageLimitsBodyDraftingMonthlyMin = 0;
+export const updateAdminAiUsageLimitsBodyDraftingMonthlyMax = 10000;
+
+export const updateAdminAiUsageLimitsBodyTranscriptionTrialMin = 0;
+export const updateAdminAiUsageLimitsBodyTranscriptionTrialMax = 10000;
+
+export const updateAdminAiUsageLimitsBodyTranscriptionSingleMin = 0;
+export const updateAdminAiUsageLimitsBodyTranscriptionSingleMax = 10000;
+
+export const updateAdminAiUsageLimitsBodyTranscriptionMonthlyMin = 0;
+export const updateAdminAiUsageLimitsBodyTranscriptionMonthlyMax = 10000;
+
+
+
+export const UpdateAdminAiUsageLimitsBody = zod.object({
+  "drafting": zod.object({
+  "trial": zod.number().int().min(updateAdminAiUsageLimitsBodyDraftingTrialMin).max(updateAdminAiUsageLimitsBodyDraftingTrialMax),
+  "single": zod.number().int().min(updateAdminAiUsageLimitsBodyDraftingSingleMin).max(updateAdminAiUsageLimitsBodyDraftingSingleMax),
+  "monthly": zod.number().int().min(updateAdminAiUsageLimitsBodyDraftingMonthlyMin).max(updateAdminAiUsageLimitsBodyDraftingMonthlyMax)
+}),
+  "transcription": zod.object({
+  "trial": zod.number().int().min(updateAdminAiUsageLimitsBodyTranscriptionTrialMin).max(updateAdminAiUsageLimitsBodyTranscriptionTrialMax),
+  "single": zod.number().int().min(updateAdminAiUsageLimitsBodyTranscriptionSingleMin).max(updateAdminAiUsageLimitsBodyTranscriptionSingleMax),
+  "monthly": zod.number().int().min(updateAdminAiUsageLimitsBodyTranscriptionMonthlyMin).max(updateAdminAiUsageLimitsBodyTranscriptionMonthlyMax)
+})
+})
+
+export const updateAdminAiUsageLimitsResponseOneDraftingTrialMin = 0;
+export const updateAdminAiUsageLimitsResponseOneDraftingTrialMax = 10000;
+
+export const updateAdminAiUsageLimitsResponseOneDraftingSingleMin = 0;
+export const updateAdminAiUsageLimitsResponseOneDraftingSingleMax = 10000;
+
+export const updateAdminAiUsageLimitsResponseOneDraftingMonthlyMin = 0;
+export const updateAdminAiUsageLimitsResponseOneDraftingMonthlyMax = 10000;
+
+export const updateAdminAiUsageLimitsResponseOneTranscriptionTrialMin = 0;
+export const updateAdminAiUsageLimitsResponseOneTranscriptionTrialMax = 10000;
+
+export const updateAdminAiUsageLimitsResponseOneTranscriptionSingleMin = 0;
+export const updateAdminAiUsageLimitsResponseOneTranscriptionSingleMax = 10000;
+
+export const updateAdminAiUsageLimitsResponseOneTranscriptionMonthlyMin = 0;
+export const updateAdminAiUsageLimitsResponseOneTranscriptionMonthlyMax = 10000;
+
+
+
+export const UpdateAdminAiUsageLimitsResponse = zod.object({
+  "drafting": zod.object({
+  "trial": zod.number().int().min(updateAdminAiUsageLimitsResponseOneDraftingTrialMin).max(updateAdminAiUsageLimitsResponseOneDraftingTrialMax),
+  "single": zod.number().int().min(updateAdminAiUsageLimitsResponseOneDraftingSingleMin).max(updateAdminAiUsageLimitsResponseOneDraftingSingleMax),
+  "monthly": zod.number().int().min(updateAdminAiUsageLimitsResponseOneDraftingMonthlyMin).max(updateAdminAiUsageLimitsResponseOneDraftingMonthlyMax)
+}),
+  "transcription": zod.object({
+  "trial": zod.number().int().min(updateAdminAiUsageLimitsResponseOneTranscriptionTrialMin).max(updateAdminAiUsageLimitsResponseOneTranscriptionTrialMax),
+  "single": zod.number().int().min(updateAdminAiUsageLimitsResponseOneTranscriptionSingleMin).max(updateAdminAiUsageLimitsResponseOneTranscriptionSingleMax),
+  "monthly": zod.number().int().min(updateAdminAiUsageLimitsResponseOneTranscriptionMonthlyMin).max(updateAdminAiUsageLimitsResponseOneTranscriptionMonthlyMax)
+})
+}).and(zod.object({
+  "source": zod.enum(['server_settings', 'owner']),
+  "updatedAt": zod.coerce.date().nullable()
+}))
 
 
 export const GetAdminLegalReviewResponse = zod.object({

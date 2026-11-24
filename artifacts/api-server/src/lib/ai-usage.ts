@@ -3,16 +3,15 @@ import { db, accounts, aiUsage, aiUsageDaily, lawyers } from "@workspace/db";
 import { HttpError } from "../middlewares/access";
 import { logger } from "./logger";
 import { getAdminAiUsageBudgetState, notifyAiUsageBudgetAlertsSafely } from "./ai-usage-budget";
+import { getAiUsageLimitsState } from "./ai-usage-limits";
+import type { AiPlan } from "./ai-usage-limits";
 
 type Kind = "drafting" | "transcription";
-export type AiPlan = "trial" | "single" | "monthly";
 type Env = Record<string, string | undefined>;
+export type { AiPlan } from "./ai-usage-limits";
+export { aiDailyLimit } from "./ai-usage-limits";
 export const AI_USAGE_RETENTION_DAYS = 90;
 export const AI_USAGE_HISTORY_MAX_DAYS = 90;
-const DEFAULT_DAILY_LIMITS: Record<Kind, Record<AiPlan, number>> = {
-  drafting: { trial: 5, single: 15, monthly: 30 },
-  transcription: { trial: 5, single: 15, monthly: 30 },
-};
 
 function providerForKind(kind: Kind): "deepseek" | "elevenlabs" {
   return kind === "drafting" ? "deepseek" : "elevenlabs";
@@ -49,20 +48,6 @@ export function resolveAiPlan(
   return "trial";
 }
 
-export function aiDailyLimit(kind: Kind, plan: AiPlan, env: Env = process.env): number {
-  const prefix = kind === "drafting" ? "AI_DRAFTING" : "AI_TRANSCRIPTION";
-  const planKey = `${prefix}_DAILY_LIMIT_${plan.toUpperCase()}`;
-  const legacyKey = `${prefix}_DAILY_LIMIT`;
-  // The former one-size cap is retained as the monthly-tier fallback. Lower
-  // tiers keep their distinct defaults unless the owner sets their own caps.
-  const raw = env[planKey] ?? (plan === "monthly" ? env[legacyKey] : undefined);
-  if (raw === undefined) return DEFAULT_DAILY_LIMITS[kind][plan];
-  if (!/^\d+$/.test(raw) || Number(raw) > 10000) {
-    throw new HttpError(503, "AI usage limits are misconfigured. Please contact the administrator.");
-  }
-  return Number(raw);
-}
-
 export function aiUsageWindow(now = new Date()) {
   const day = now.toISOString().slice(0, 10);
   const resetsAt = new Date(`${day}T00:00:00.000Z`);
@@ -75,9 +60,12 @@ export async function getAiUsage(accountId: string, now = new Date()) {
   const [account] = await db.select().from(accounts).where(eq(accounts.id, accountId));
   if (!account) throw new HttpError(404, "Account not found.");
   const plan = resolveAiPlan(account, now);
-  const rows = await db.select().from(aiUsage).where(and(eq(aiUsage.accountId, accountId), eq(aiUsage.day, day)));
+  const [rows, limits] = await Promise.all([
+    db.select().from(aiUsage).where(and(eq(aiUsage.accountId, accountId), eq(aiUsage.day, day))),
+    getAiUsageLimitsState(),
+  ]);
   const allowance = (kind: Kind) => {
-    const limit = aiDailyLimit(kind, plan);
+    const limit = limits[kind][plan];
     const used = rows.find(row => row.kind === kind)?.used ?? 0;
     return { limit, used, remaining: Math.max(0, limit - used) };
   };
@@ -140,13 +128,19 @@ export async function getAiUsageHistory(accountId: string, days = 30, now = new 
 // Atomic insert-or-increment: multiple processes share the same strict allowance.
 // Charge immediately before provider invocation, never refund uncertain failures:
 // a timeout can still have incurred provider charges.
-export async function reserveAiAttempt(accountId: string, kind: Kind, now = new Date()) {
+export async function reserveAiAttempt(
+  accountId: string,
+  kind: Kind,
+  now = new Date(),
+  limitsConfigId = "platform",
+) {
   const { day, resetsAt } = aiUsageWindow(now);
   return db.transaction(async (tx) => {
     const [account] = await tx.select().from(accounts).where(eq(accounts.id, accountId)).for("update");
     if (!account) throw new HttpError(404, "Account not found.");
     const plan = resolveAiPlan(account, now);
-    const limit = aiDailyLimit(kind, plan);
+    const limits = await getAiUsageLimitsState(tx, true, limitsConfigId);
+    const limit = limits[kind][plan];
     const exhausted = () => new HttpError(429,
       `Your daily ${kind} limit (${limit} requests for the ${plan} plan) has been reached. It resets at ${resetsAt} (midnight UTC). Your document has not been changed.`);
     if (!limit) throw exhausted();
@@ -313,8 +307,11 @@ export async function getAdminAiUsage(days: number, now = new Date()) {
   }
   const rows = [...report.values()].sort((a, b) =>
     b.day.localeCompare(a.day) || a.lawyerName.localeCompare(b.lawyerName) || a.provider.localeCompare(b.provider));
-  const monthlyBudget = await getAdminAiUsageBudgetState(now);
-  return { days, retentionDays: AI_USAGE_RETENTION_DAYS, monthlyBudget, rows };
+  const [monthlyBudget, dailyLimits] = await Promise.all([
+    getAdminAiUsageBudgetState(now),
+    getAiUsageLimitsState(),
+  ]);
+  return { days, retentionDays: AI_USAGE_RETENTION_DAYS, monthlyBudget, dailyLimits, rows };
 }
 
 export async function pruneAiUsageData(now = new Date()): Promise<void> {

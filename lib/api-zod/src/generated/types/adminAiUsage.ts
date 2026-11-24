@@ -6,11 +6,13 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AdminAiUsageBudget } from './adminAiUsageBudget';
+import type { AdminAiUsageLimits } from './adminAiUsageLimits';
 import type { AdminAiUsageRow } from './adminAiUsageRow';
 
 export interface AdminAiUsage {
   days: number;
   retentionDays: number;
   monthlyBudget: AdminAiUsageBudget;
+  dailyLimits: AdminAiUsageLimits;
   rows: AdminAiUsageRow[];
 }

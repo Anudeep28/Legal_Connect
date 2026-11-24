@@ -5,6 +5,9 @@ import {
   getGetAdminAiUsageQueryKey,
   useGetAdminAiUsage,
   useUpdateAdminAiUsageBudget,
+  useUpdateAdminAiUsageLimits,
+  type AiUsageLimitsInput,
+  type AdminAiUsageLimits,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +19,43 @@ import { useToast } from '@/hooks/use-toast';
 import { errMsg } from '@/lib/format';
 
 const ranges = [7, 30, 90] as const;
+const plans = ['trial', 'single', 'monthly'] as const;
+const limitKinds = ['drafting', 'transcription'] as const;
+
+type AiLimitsForm = Record<'drafting' | 'transcription', Record<(typeof plans)[number], string>>;
+
+function limitsFormFromApi(limits: AiUsageLimitsInput): AiLimitsForm {
+  return {
+    drafting: {
+      trial: String(limits.drafting.trial),
+      single: String(limits.drafting.single),
+      monthly: String(limits.drafting.monthly),
+    },
+    transcription: {
+      trial: String(limits.transcription.trial),
+      single: String(limits.transcription.single),
+      monthly: String(limits.transcription.monthly),
+    },
+  };
+}
+
+function parseLimitsForm(form: AiLimitsForm): AiUsageLimitsInput | null {
+  const result = { drafting: { trial: 0, single: 0, monthly: 0 }, transcription: { trial: 0, single: 0, monthly: 0 } };
+  for (const kind of limitKinds) {
+    for (const plan of plans) {
+      const raw = form[kind][plan].trim();
+      if (!/^\d+$/.test(raw)) return null;
+      const value = Number(raw);
+      if (!Number.isSafeInteger(value) || value < 0 || value > 10_000) return null;
+      result[kind][plan] = value;
+    }
+  }
+  return result;
+}
+
+function limitsSourceLabel(limits: AdminAiUsageLimits) {
+  return limits.source === 'owner' ? 'Owner-configured' : 'Server settings';
+}
 
 function formatUsd(value: number | null) {
   if (value === null || !Number.isFinite(value)) return 'Not available';
@@ -39,12 +79,14 @@ export function AdminAiUsage() {
   const queryKey = getGetAdminAiUsageQueryKey({ days });
   const query = useGetAdminAiUsage({ days }, { query: { queryKey, staleTime: 30_000 } });
   const save = useUpdateAdminAiUsageBudget();
+  const saveLimits = useUpdateAdminAiUsageLimits();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [enabled, setEnabled] = useState(false);
   const [budgetAmount, setBudgetAmount] = useState('');
   const [warningPercent, setWarningPercent] = useState('80');
   const [formReady, setFormReady] = useState(false);
+  const [limitsForm, setLimitsForm] = useState<AiLimitsForm | null>(null);
 
   useEffect(() => {
     if (!query.data || formReady) return;
@@ -54,6 +96,11 @@ export function AdminAiUsage() {
     setWarningPercent(String(budget.warningPercent));
     setFormReady(true);
   }, [query.data, formReady]);
+
+  useEffect(() => {
+    if (!query.data || limitsForm) return;
+    setLimitsForm(limitsFormFromApi(query.data.dailyLimits));
+  }, [query.data, limitsForm]);
 
   if (query.isLoading) return <ListSkeleton />;
   if (query.isError || !query.data) return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
@@ -76,6 +123,28 @@ export function AdminAiUsage() {
     : Number.isFinite(numericBudget) && numericBudget >= 0.01 && numericBudget <= 1_000_000_000;
   const validWarning = Number.isInteger(numericWarning) && numericWarning >= 50 && numericWarning <= 95;
   const canSave = formReady && validBudget && validWarning && !save.isPending;
+  const parsedLimits = limitsForm ? parseLimitsForm(limitsForm) : null;
+  const canSaveLimits = parsedLimits !== null && !saveLimits.isPending;
+
+  const submitLimits = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!parsedLimits || !canSaveLimits) return;
+    saveLimits.mutate({ data: parsedLimits }, {
+      onSuccess: (result) => {
+        setLimitsForm(limitsFormFromApi(result));
+        queryClient.setQueryData(queryKey, (current) => current
+          ? { ...current, dailyLimits: result }
+          : current);
+        void queryClient.invalidateQueries({ queryKey: getGetAdminAiUsageQueryKey() });
+        toast({ title: 'Daily AI limits saved', description: 'The new limits are enforced on the next request.' });
+      },
+      onError: (error) => toast({
+        title: 'Could not save daily AI limits',
+        description: errMsg(error),
+        variant: 'destructive',
+      }),
+    });
+  };
 
   const submitBudget = (event: React.FormEvent) => {
     event.preventDefault();
@@ -110,6 +179,62 @@ export function AdminAiUsage() {
       <Notice>
         This owner-only report stores daily counts and provider-reported token totals only. It never stores prompts, transcripts, or case facts, and these aggregates are deleted after {query.data.retentionDays} days. Requests include attempts that may have failed. Cost is an estimate only when token usage and both configured DeepSeek rates are available; ElevenLabs charges are not estimated without provider-reported billable usage.
       </Notice>
+
+      <section className="space-y-4 rounded-3xl border bg-card p-5 md:p-7" data-testid="admin-ai-daily-limits">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="font-display text-2xl font-semibold">Daily AI request limits</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Set the maximum drafting and transcription requests each lawyer can make per UTC day.</p>
+          </div>
+          <span className="rounded-full border px-3 py-1 text-xs text-muted-foreground" data-testid="text-ai-limits-source">
+            {limitsSourceLabel(query.data.dailyLimits)}
+          </span>
+        </div>
+        <Notice>
+          Limits reset at midnight UTC. Set a limit to 0 to block that request type for the plan. If a limit is lowered below a lawyer’s requests already used today, further requests of that type will be blocked until reset. In-flight reservations finish with the limit they checked.
+        </Notice>
+        {limitsForm && (
+          <form className="space-y-4" onSubmit={submitLimits}>
+            <div className="grid gap-4 md:grid-cols-2">
+              {limitKinds.map((kind) => (
+                <fieldset key={kind} className="space-y-3 rounded-2xl border p-4">
+                  <legend className="px-1 font-medium capitalize">{kind}</legend>
+                  {plans.map((plan) => {
+                    const id = `ai-limit-${kind}-${plan}`;
+                    const label = `${plan === 'single' ? 'Single-credit' : plan} plan`;
+                    return (
+                      <div key={plan}>
+                        <Label htmlFor={id} className="capitalize">{label}</Label>
+                        <Input
+                          id={id}
+                          className="mt-1.5 max-w-40"
+                          type="number"
+                          min="0"
+                          max="10000"
+                          step="1"
+                          inputMode="numeric"
+                          value={limitsForm[kind][plan]}
+                          onChange={(event) => setLimitsForm((current) => current ? {
+                            ...current,
+                            [kind]: { ...current[kind], [plan]: event.target.value },
+                          } : current)}
+                          data-testid={id}
+                          required
+                        />
+                      </div>
+                    );
+                  })}
+                </fieldset>
+              ))}
+            </div>
+            {!parsedLimits && <p className="text-sm text-destructive">Enter a whole-number limit from 0 to 10,000 in every field.</p>}
+            <Button type="submit" className="rounded-full" disabled={!canSaveLimits} data-testid="button-save-ai-limits">
+              {saveLimits.isPending && <Loader2 className="animate-spin" />}
+              Save daily limits
+            </Button>
+          </form>
+        )}
+      </section>
 
       <section className="space-y-4 rounded-3xl border bg-card p-5 md:p-7" data-testid="admin-ai-spend-alerts">
         <div>

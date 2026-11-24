@@ -11,6 +11,7 @@ import { getConsultationCheckoutState, setConsultationCheckoutPaused } from "../
 import { getTwilioUsageBudgetState, getTwilioUsageHistory, refreshTwilioUsageBudget, saveTwilioUsageBudgetConfig } from "../lib/twilio-usage-budget";
 import { getAdminAiUsage } from "../lib/ai-usage";
 import { saveAdminAiUsageBudgetConfig } from "../lib/ai-usage-budget";
+import { saveAdminAiUsageLimits } from "../lib/ai-usage-limits";
 
 const router: IRouter = Router();
 router.use("/admin", requireAccount, requireAdmin);
@@ -35,6 +36,11 @@ router.put("/admin/ai-usage-budget", requireOwnerAdmin, async (req, res): Promis
   const input = api.UpdateAdminAiUsageBudgetBody.parse(req.body);
   const state = await saveAdminAiUsageBudgetConfig(input, req.account.id);
   res.set("Cache-Control", "no-store").json(api.UpdateAdminAiUsageBudgetResponse.parse(state));
+});
+router.put("/admin/ai-usage-limits", requireOwnerAdmin, async (req, res): Promise<void> => {
+  const input = api.UpdateAdminAiUsageLimitsBody.parse(req.body);
+  const state = await saveAdminAiUsageLimits(input, req.account.id);
+  res.set("Cache-Control", "no-store").json(api.UpdateAdminAiUsageLimitsResponse.parse(state));
 });
 router.get("/admin/legal-review", async (req, res): Promise<void> => {
   const [approval, canRecord, canReviewGrievances, consultationCheckout] = await Promise.all([

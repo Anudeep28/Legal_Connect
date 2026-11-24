@@ -13,13 +13,14 @@ const {
   reserveAiAttempt,
   resolveAiPlan,
 } = await import("../ai-usage");
+const { getAiUsageLimitsState, saveAdminAiUsageLimits } = await import("../ai-usage-limits");
 const {
   getAdminAiUsageBudgetState,
   notifyAiUsageBudgetAlerts,
   saveAdminAiUsageBudgetConfig,
 } = await import("../ai-usage-budget");
-const { GetAdminAiUsageResponse } = await import("@workspace/api-zod");
-const { accounts, aiUsage, aiUsageBudget, aiUsageDaily, auditLogs, db, notifications, pool } = await import("@workspace/db");
+const { GetAdminAiUsageResponse, UpdateAdminAiUsageLimitsBody } = await import("@workspace/api-zod");
+const { accounts, aiUsage, aiUsageBudget, aiUsageDaily, aiUsageLimits, auditLogs, db, notifications, pool } = await import("@workspace/db");
 
 const prefix = `ai-spend-alert-${randomUUID()}`;
 const ownerId = `${prefix}-owner`;
@@ -27,6 +28,8 @@ const pricedLawyerId = `${prefix}-priced-lawyer`;
 const unpricedLawyerId = `${prefix}-unpriced-lawyer`;
 const pricedConfigId = `${prefix}-priced-config`;
 const unpricedConfigId = `${prefix}-unpriced-config`;
+const limitsConfigId = `${prefix}-limits-config`;
+const concurrentLimitsConfigId = `${prefix}-concurrent-limits-config`;
 const pricedNow = new Date("2096-11-18T12:00:00.000Z");
 const unpricedNow = new Date("2096-12-18T12:00:00.000Z");
 
@@ -48,6 +51,7 @@ before(async () => {
 after(async () => {
   await db.delete(notifications).where(eq(notifications.userId, ownerId));
   await db.delete(aiUsageBudget).where(inArray(aiUsageBudget.id, [pricedConfigId, unpricedConfigId]));
+  await db.delete(aiUsageLimits).where(inArray(aiUsageLimits.id, [limitsConfigId, concurrentLimitsConfigId]));
   await db.delete(aiUsageDaily).where(inArray(aiUsageDaily.accountId, [pricedLawyerId, unpricedLawyerId]));
   await db.delete(auditLogs).where(eq(auditLogs.actorId, ownerId));
   await db.delete(accounts).where(inArray(accounts.id, [ownerId, pricedLawyerId, unpricedLawyerId]));
@@ -96,6 +100,78 @@ test("daily AI limits differ by plan and support per-plan and legacy overrides",
   assert.throws(() => aiDailyLimit("drafting", "trial", {
     AI_DRAFTING_DAILY_LIMIT_TRIAL: "not-a-number",
   }), /misconfigured/i);
+});
+
+test("owner AI limit settings save every plan together and reject invalid values", async () => {
+  const input = {
+    drafting: { trial: 2, single: 9, monthly: 41 },
+    transcription: { trial: 3, single: 11, monthly: 37 },
+  };
+  assert.deepEqual(UpdateAdminAiUsageLimitsBody.parse(input), input);
+  assert.throws(() => UpdateAdminAiUsageLimitsBody.parse({
+    ...input,
+    drafting: { ...input.drafting, single: 10_001 },
+  }));
+  assert.throws(() => UpdateAdminAiUsageLimitsBody.parse({
+    ...input,
+    transcription: { ...input.transcription, trial: 1.5 },
+  }));
+  const savedAt = new Date("2096-11-18T12:00:00.000Z");
+  const saved = await saveAdminAiUsageLimits(input, ownerId, savedAt, limitsConfigId);
+  assert.deepEqual({
+    drafting: saved.drafting,
+    transcription: saved.transcription,
+    source: saved.source,
+  }, {
+    ...input,
+    source: "owner",
+  });
+  assert.equal(Date.parse(saved.updatedAt ?? ""), savedAt.getTime());
+  assert.deepEqual(await getAiUsageLimitsState(db, false, limitsConfigId), saved);
+
+  await assert.rejects(saveAdminAiUsageLimits({
+    ...input,
+    drafting: { ...input.drafting, trial: -1 },
+  }, ownerId, savedAt, limitsConfigId), /whole number from 0 to 10,000/i);
+  await assert.rejects(saveAdminAiUsageLimits({
+    ...input,
+    transcription: { ...input.transcription, monthly: 10_001 },
+  }, ownerId, savedAt, limitsConfigId), /whole number from 0 to 10,000/i);
+  assert.deepEqual(await getAiUsageLimitsState(db, false, limitsConfigId), saved);
+
+  const logs = await db.select().from(auditLogs).where(and(
+    eq(auditLogs.actorId, ownerId),
+    eq(auditLogs.targetId, limitsConfigId),
+    eq(auditLogs.action, "admin:ai-usage-limits-updated"),
+  ));
+  assert.equal(logs.length, 1);
+  assert.match(logs[0]!.reason, /drafting trial 5→2/);
+});
+
+test("concurrent reservations obey a persisted plan cap without exceeding it", async () => {
+  const now = new Date("2097-01-15T12:00:00.000Z");
+  const day = "2097-01-15";
+  await saveAdminAiUsageLimits({
+    drafting: { trial: 2, single: 9, monthly: 41 },
+    transcription: { trial: 3, single: 11, monthly: 37 },
+  }, ownerId, now, concurrentLimitsConfigId);
+  try {
+    const results = await Promise.allSettled(Array.from({ length: 8 }, () =>
+      reserveAiAttempt(pricedLawyerId, "drafting", now, concurrentLimitsConfigId)));
+    assert.equal(results.filter((result) => result.status === "fulfilled").length, 2);
+    assert.equal(results.filter((result) => result.status === "rejected").length, 6);
+    const [usage] = await db.select().from(aiUsage).where(and(
+      eq(aiUsage.accountId, pricedLawyerId),
+      eq(aiUsage.kind, "drafting"),
+      eq(aiUsage.day, day),
+    ));
+    assert.equal(usage?.used, 2);
+  } finally {
+    await db.delete(aiUsage).where(and(eq(aiUsage.accountId, pricedLawyerId), eq(aiUsage.day, day)));
+    await db.delete(aiUsageDaily).where(and(eq(aiUsageDaily.accountId, pricedLawyerId), eq(aiUsageDaily.day, day)));
+    await db.delete(aiUsageLimits).where(eq(aiUsageLimits.id, concurrentLimitsConfigId));
+    await db.delete(auditLogs).where(and(eq(auditLogs.actorId, ownerId), eq(auditLogs.targetId, concurrentLimitsConfigId)));
+  }
 });
 
 test("effective AI plan follows active monthly access, then available credits", () => {
