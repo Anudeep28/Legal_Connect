@@ -9,6 +9,7 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "preview:smoke": "vite preview --config vite.config.ts --host 127.0.0.1",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:admin-status": "vitest run --config vitest.config.mts tests/admin-system-status.test.tsx",
     "test:ai-cancel": "vitest run --config vitest.config.mts tests/ai-cancel.test.tsx"
   },
   "devDependencies": {

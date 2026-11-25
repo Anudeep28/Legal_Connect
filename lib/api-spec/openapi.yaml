@@ -638,6 +638,22 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminOverview" }
+  /admin/system-status:
+    get:
+      operationId: getAdminSystemStatus
+      description: Returns safe API and database readiness status to the owner-designated administrator only.
+      responses:
+        "200":
+          description: Current API liveness and the latest database readiness check
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSystemStatus" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Owner-designated administrator access required
+        "503":
+          description: Owner access could not be verified while the database is unavailable
   /admin/ai-usage:
     get:
       operationId: getAdminAiUsage
@@ -1601,6 +1617,14 @@ components:
         consultations: { type: integer }
         completedConsultations: { type: integer }
         documents: { type: integer }
+    AdminSystemStatus:
+      type: object
+      required: [api, database, checkedAt, lastSuccessfulCheckAt]
+      properties:
+        api: { type: string, enum: [live] }
+        database: { type: string, enum: [unknown, ready, unavailable] }
+        checkedAt: { type: ["string", "null"], format: date-time }
+        lastSuccessfulCheckAt: { type: ["string", "null"], format: date-time }
     AdminAiUsage:
       type: object
       required: [days, retentionDays, rows, monthlyBudget, dailyLimits]

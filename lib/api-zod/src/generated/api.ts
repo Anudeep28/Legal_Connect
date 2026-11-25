@@ -1209,6 +1209,17 @@ export const GetAdminOverviewResponse = zod.object({
 })
 
 
+/**
+ * Returns safe API and database readiness status to the owner-designated administrator only.
+ */
+export const GetAdminSystemStatusResponse = zod.object({
+  "api": zod.enum(['live']),
+  "database": zod.enum(['unknown', 'ready', 'unavailable']),
+  "checkedAt": zod.coerce.date().nullable(),
+  "lastSuccessfulCheckAt": zod.coerce.date().nullable()
+})
+
+
 export const getAdminAiUsageQueryDaysDefault = 30;
 export const getAdminAiUsageQueryDaysMax = 90;
 

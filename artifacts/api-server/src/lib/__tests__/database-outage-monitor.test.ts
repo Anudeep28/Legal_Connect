@@ -54,6 +54,9 @@ test("database outage notices wait for sustained failures and send one recovery 
   await monitor.checkNow();
   assert.equal(notices.length, 1);
   assert.equal(notices[0].phase, "outage");
+  assert.equal(monitor.getStatus().database, "unavailable");
+  assert.ok(monitor.getStatus().checkedAt);
+  assert.equal(monitor.getStatus().lastSuccessfulCheckAt, null);
 
   healthy = true;
   assert.equal(await monitor.checkNow(), true);
@@ -61,6 +64,8 @@ test("database outage notices wait for sustained failures and send one recovery 
   assert.deepEqual(notices.map(({ phase }) => phase), ["outage", "recovered"]);
   assert.notEqual(notices[0].key, notices[1].key);
   assert.ok(notices.every(({ key }) => !key.includes("private")));
+  assert.equal(monitor.getStatus().database, "ready");
+  assert.equal(monitor.getStatus().checkedAt, monitor.getStatus().lastSuccessfulCheckAt);
 });
 
 test("brief database failures do not send an alert or resolution notice", async () => {

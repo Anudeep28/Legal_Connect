@@ -1048,6 +1048,31 @@ export interface AdminOverview {
   documents: number;
 }
 
+export type AdminSystemStatusApi = typeof AdminSystemStatusApi[keyof typeof AdminSystemStatusApi];
+
+
+export const AdminSystemStatusApi = {
+  live: 'live',
+} as const;
+
+export type AdminSystemStatusDatabase = typeof AdminSystemStatusDatabase[keyof typeof AdminSystemStatusDatabase];
+
+
+export const AdminSystemStatusDatabase = {
+  unknown: 'unknown',
+  ready: 'ready',
+  unavailable: 'unavailable',
+} as const;
+
+export interface AdminSystemStatus {
+  api: AdminSystemStatusApi;
+  database: AdminSystemStatusDatabase;
+  /** @nullable */
+  checkedAt: string | null;
+  /** @nullable */
+  lastSuccessfulCheckAt: string | null;
+}
+
 export type AdminAiUsageBudgetCostCoverage = typeof AdminAiUsageBudgetCostCoverage[keyof typeof AdminAiUsageBudgetCostCoverage];
 
 

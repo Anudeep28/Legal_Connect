@@ -32,10 +32,12 @@ import { cn } from '@/lib/utils';
 import { errMsg, fmtDate, inr } from '@/lib/format';
 import { AdminTwilioUsage } from '@/components/admin-twilio-usage';
 import { AdminAiUsage } from '@/components/admin-ai-usage';
+import { AdminSystemStatus } from '@/components/admin-system-status';
 
 export default function Admin() {
   return (
     <AppPage wide>
+      <AdminSystemStatus />
       <Guard roles={['admin']}>
         {() => <AdminWorkspace />}
       </Guard>

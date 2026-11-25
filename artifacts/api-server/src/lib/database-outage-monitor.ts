@@ -11,6 +11,12 @@ type DeliveryResult = "sent" | "disabled" | "failed";
 type ReadinessCheck = () => Promise<unknown>;
 type NoticeSender = (phase: NoticePhase, idempotencyKey: string) => Promise<DeliveryResult>;
 
+export type DatabaseOutageStatus = {
+  database: "unknown" | "ready" | "unavailable";
+  checkedAt: string | null;
+  lastSuccessfulCheckAt: string | null;
+};
+
 const noticeCopy: Record<NoticePhase, { subject: string; text: string }> = {
   outage: {
     subject: "Database availability alert",
@@ -77,6 +83,9 @@ export function createDatabaseOutageMonitor(options: {
   let tickRunning = false;
   let missingConfigLogged = false;
   let deliveryFailureLogged = false;
+  let databaseStatus: DatabaseOutageStatus["database"] = "unknown";
+  let checkedAt: string | null = null;
+  let lastSuccessfulCheckAt: string | null = null;
 
   async function boundedProbe(): Promise<boolean> {
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -128,6 +137,8 @@ export function createDatabaseOutageMonitor(options: {
     tickRunning = true;
     try {
       const healthy = await boundedProbe();
+      checkedAt = new Date().toISOString();
+      databaseStatus = healthy ? "ready" : "unavailable";
       if (!healthy) {
         failures += 1;
         outageId ??= randomUUID();
@@ -137,6 +148,7 @@ export function createDatabaseOutageMonitor(options: {
         return false;
       }
 
+      lastSuccessfulCheckAt = checkedAt;
       failures = 0;
       if (outageId && alertAccepted) {
         const recovered = await notify("recovered", outageId);
@@ -162,9 +174,19 @@ export function createDatabaseOutageMonitor(options: {
     };
   }
 
-  return { checkNow, start };
+  function getStatus(): DatabaseOutageStatus {
+    return { database: databaseStatus, checkedAt, lastSuccessfulCheckAt };
+  }
+
+  return { checkNow, start, getStatus };
 }
 
+const processDatabaseOutageMonitor = createDatabaseOutageMonitor();
+
 export function startDatabaseOutageMonitor() {
-  return createDatabaseOutageMonitor().start();
+  return processDatabaseOutageMonitor.start();
+}
+
+export function getDatabaseOutageStatus() {
+  return processDatabaseOutageMonitor.getStatus();
 }

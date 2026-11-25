@@ -3,7 +3,7 @@ import { eq, desc, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, accounts, lawyers, consultations, documents, reviews, auditLogs, notifications, platformCompliance } from "@workspace/db";
 import * as api from "@workspace/api-zod";
-import { requireAccount, requireAdmin, requireOwnerAdmin, canManageGrievances, isOwnerDesignatedAdmin, HttpError } from "../middlewares/access";
+import { requireAccount, requireAdmin, requireOwnerAdmin, requireOwnerSystemStatus, canManageGrievances, isOwnerDesignatedAdmin, HttpError } from "../middlewares/access";
 import { lawyerViews } from "../lib/legal";
 import { paymentsEnabled } from "../lib/razorpay";
 import { getLegalReviewApproval } from "../lib/legal-review";
@@ -12,8 +12,15 @@ import { getTwilioUsageBudgetState, getTwilioUsageHistory, refreshTwilioUsageBud
 import { getAdminAiUsage } from "../lib/ai-usage";
 import { saveAdminAiUsageBudgetConfig } from "../lib/ai-usage-budget";
 import { saveAdminAiUsageLimits } from "../lib/ai-usage-limits";
+import { getDatabaseOutageStatus } from "../lib/database-outage-monitor";
 
 const router: IRouter = Router();
+router.get("/admin/system-status", requireOwnerSystemStatus, (_req, res): void => {
+  res.set("Cache-Control", "no-store").json(api.GetAdminSystemStatusResponse.parse({
+    api: "live",
+    ...getDatabaseOutageStatus(),
+  }));
+});
 router.use("/admin", requireAccount, requireAdmin);
 router.get("/admin/overview", async (_req, res): Promise<void> => {
   const [u, l, c, d] = await Promise.all([
