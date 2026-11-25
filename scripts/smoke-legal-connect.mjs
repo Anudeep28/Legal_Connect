@@ -89,18 +89,24 @@ async function verifyDeepLinkResponses(baseUrl, label, checkHtml) {
   for (const [route, description] of bookmarkedRoutes) {
     const routeUrl = new URL(route, baseUrl);
     assert.ok(routeUrl.pathname.startsWith(basePath), `${description} escaped BASE_PATH: ${routeUrl.pathname}`);
-    const response = await fetch(routeUrl, {
-      redirect: "manual",
-      signal: AbortSignal.timeout(5000),
-    });
-    assert.equal(response.status, 200, `${label} returned HTTP ${response.status} for ${routeUrl.pathname}`);
-    assert.equal(response.url, routeUrl.href, `${label} redirected ${routeUrl.pathname} outside its requested URL.`);
-    assert.match(
-      response.headers.get("content-type") ?? "",
-      /text\/html/i,
-      `${label} did not return the application HTML for ${routeUrl.pathname}`,
-    );
-    await checkHtml(await response.text(), routeUrl, description);
+    for (const navigation of ["direct navigation", "refresh"]) {
+      const response = await fetch(routeUrl, {
+        redirect: "manual",
+        headers: { accept: "text/html", "cache-control": "no-cache" },
+        signal: AbortSignal.timeout(5000),
+      });
+      const context = `${label} ${navigation} for ${routeUrl.pathname}`;
+      assert.equal(response.status, 200, `${context} returned HTTP ${response.status}`);
+      assert.equal(response.url, routeUrl.href, `${context} redirected outside its requested URL.`);
+      assert.match(
+        response.headers.get("content-type") ?? "",
+        /text\/html/i,
+        `${context} did not return the application HTML`,
+      );
+      const html = await response.text();
+      assert.match(html, /<div\s+id=["']root["']/, `${context} did not return the React mount point.`);
+      await checkHtml(html, routeUrl, description);
+    }
   }
   console.log(`${label} deep-link smoke test passed: ${bookmarkedRoutes.length} lawyer/client routes stayed under ${basePath}`);
 }
@@ -191,10 +197,11 @@ async function verifyProductionAssets() {
       "Vite production preview",
       async (routeHtml, routeUrl, description) => {
         assert.match(routeHtml, /Consult with Lawyer/i, `Expected the built application entry page for ${description}.`);
-        const routeAssets = getBuiltAssets(routeHtml, url);
-        assert.ok(
-          routeAssets.some(([assetUrl]) => /\.m?js$/i.test(assetUrl.pathname)),
-          `Built application JavaScript was missing for ${description} at ${routeUrl.pathname}.`,
+        const routeAssets = getBuiltAssets(routeHtml, routeUrl);
+        assert.deepEqual(
+          routeAssets.map(([assetUrl]) => assetUrl.href),
+          assets.map(([assetUrl]) => assetUrl.href),
+          `Built assets differed for ${description} at ${routeUrl.pathname}.`,
         );
       },
     );
