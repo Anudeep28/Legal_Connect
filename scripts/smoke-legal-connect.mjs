@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readdir } from "node:fs/promises";
+import path from "node:path";
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import process from "node:process";
@@ -148,6 +150,127 @@ function getBuiltAssets(html, origin) {
   return [...javascript.map((url) => [url, /javascript|ecmascript/i]), ...stylesheets.map((url) => [url, /text\/css/i])];
 }
 
+function extractHtmlReferences(html) {
+  return [...html.matchAll(/(?:src|href)=["']([^"']+)["']/gi)].map((match) => match[1]);
+}
+
+function extractCssReferences(css) {
+  const urls = [...css.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gi)].map((match) => match[2].trim());
+  const imports = [...css.matchAll(/@import\s*(?:url\(\s*)?(['"]?)(https?:\/\/[^"'\s;)]+)\1/gi)]
+    .map((match) => match[2]);
+  return [...urls, ...imports];
+}
+
+function inspectAssetReferences(references, baseUrl) {
+  const fontStylesheets = [];
+  const localAssets = new Map();
+  for (const reference of references) {
+    if (!reference || reference.startsWith("#") || reference.startsWith("data:")) continue;
+    const assetUrl = new URL(reference, baseUrl);
+    if (assetUrl.origin !== baseUrl.origin) {
+      if (assetUrl.hostname === "fonts.googleapis.com") {
+        assert.equal(assetUrl.protocol, "https:", `Font stylesheet must use HTTPS: ${assetUrl.href}`);
+        fontStylesheets.push(assetUrl);
+      }
+      continue;
+    }
+    assert.ok(
+      assetUrl.pathname.startsWith(basePath),
+      `Local asset escaped BASE_PATH: ${assetUrl.pathname} (from ${reference})`,
+    );
+    if (/\.(?:svg|ico|png|jpe?g|webp|gif|woff2?|ttf|otf)$/i.test(assetUrl.pathname)) {
+      localAssets.set(assetUrl.href, assetUrl);
+    }
+  }
+  return { fontStylesheets, localAssets: [...localAssets.values()] };
+}
+
+async function listBuiltFiles(directory, subdirectory = "") {
+  const entries = await readdir(path.join(directory, subdirectory), { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const relativePath = path.posix.join(subdirectory, entry.name);
+    if (entry.isDirectory()) files.push(...await listBuiltFiles(directory, relativePath));
+    else if (entry.isFile()) files.push(relativePath);
+  }
+  return files;
+}
+
+function assetType(pathname) {
+  const extension = path.extname(pathname).toLowerCase();
+  if (extension === ".svg") return /image\/svg\+xml/i;
+  if (extension === ".ico") return /image\/(?:x-icon|vnd\.microsoft\.icon)/i;
+  if (extension === ".png") return /image\/png/i;
+  if (extension === ".jpg" || extension === ".jpeg") return /image\/jpeg/i;
+  if (extension === ".webp") return /image\/webp/i;
+  if (extension === ".gif") return /image\/gif/i;
+  if (extension === ".woff2") return /font\/woff2|application\/font-woff/i;
+  if (extension === ".woff") return /font\/woff|application\/font-woff/i;
+  if (extension === ".ttf") return /font\/ttf|application\/x-font-ttf|application\/octet-stream/i;
+  if (extension === ".otf") return /font\/otf|application\/vnd\.ms-opentype|application\/octet-stream/i;
+  return null;
+}
+
+async function verifyAssetResponse(assetUrl, expectedContentType, description) {
+  const response = await fetch(assetUrl, { signal: AbortSignal.timeout(5000) });
+  assert.equal(response.status, 200, `${description} returned HTTP ${response.status}: ${assetUrl.pathname}`);
+  assert.match(
+    response.headers.get("content-type") ?? "",
+    expectedContentType,
+    `${description} had an unexpected content type: ${assetUrl.pathname}`,
+  );
+  const contents = await response.arrayBuffer();
+  assert.ok(contents.byteLength > 0, `${description} was empty: ${assetUrl.pathname}`);
+}
+
+async function verifyPublicAssets(html, cssAssets, baseUrl) {
+  const inspectedHtml = inspectAssetReferences(extractHtmlReferences(html), baseUrl);
+  const inspectedCss = cssAssets.map(({ url, css }) =>
+    inspectAssetReferences(extractCssReferences(css), url));
+  const builtFiles = await listBuiltFiles(
+    path.resolve(import.meta.dirname, "..", "artifacts/consult-lawyer/dist/public"),
+  );
+  const publicFiles = builtFiles.filter((file) => !file.startsWith("assets/"));
+  const imageFiles = publicFiles.filter((file) => /\.(?:png|jpe?g|webp|gif)$/i.test(file));
+  const iconFiles = publicFiles.filter((file) => /\.(?:svg|ico)$/i.test(file));
+  const fontFiles = publicFiles.filter((file) => /\.(?:woff2?|ttf|otf)$/i.test(file));
+  assert.ok(imageFiles.length > 0, "Production build must include a public image to verify under BASE_PATH.");
+  assert.ok(iconFiles.length > 0, "Production build must include a public icon to verify under BASE_PATH.");
+  assert.ok(
+    fontFiles.length > 0 || inspectedHtml.fontStylesheets.length > 0 ||
+      inspectedCss.some(({ fontStylesheets }) => fontStylesheets.length > 0),
+    "Production build must include a local font or an HTTPS font stylesheet reference.",
+  );
+
+  const assetsToCheck = new Map();
+  for (const assetUrl of [
+    ...inspectedHtml.localAssets,
+    ...inspectedCss.flatMap(({ localAssets }) => localAssets),
+  ]) {
+    const type = assetType(assetUrl.pathname);
+    if (type) assetsToCheck.set(assetUrl.href, { assetUrl, type, description: "Referenced public asset" });
+  }
+  for (const file of [...imageFiles, ...iconFiles, ...fontFiles]) {
+    const type = assetType(file);
+    if (!type) continue;
+    const assetUrl = new URL(file, baseUrl);
+    assert.ok(assetUrl.pathname.startsWith(basePath), `Public asset escaped BASE_PATH: ${assetUrl.pathname}`);
+    assetsToCheck.set(assetUrl.href, {
+      assetUrl,
+      type,
+      description: file.match(/\.(?:woff2?|ttf|otf)$/i) ? "Public font" :
+        file.match(/\.(?:svg|ico)$/i) ? "Public icon" : "Public image",
+    });
+  }
+  for (const { assetUrl, type, description } of assetsToCheck.values()) {
+    await verifyAssetResponse(assetUrl, type, description);
+  }
+  console.log(
+    `Production public assets passed: ${imageFiles.length} images, ${iconFiles.length} icons, ` +
+    `${fontFiles.length} local fonts and ${inspectedHtml.fontStylesheets.length + inspectedCss.reduce((count, { fontStylesheets }) => count + fontStylesheets.length, 0)} HTTPS font stylesheets.`,
+  );
+}
+
 async function verifyProductionAssets() {
   const buildPort = await freePort();
   const build = launch(
@@ -181,6 +304,7 @@ async function verifyProductionAssets() {
     const html = await response.text();
     assert.match(html, /Consult with Lawyer/i, "Expected the built application entry page.");
     const assets = getBuiltAssets(html, url);
+    const stylesheets = [];
     for (const [assetUrl, contentTypePattern] of assets) {
       const assetResponse = await fetch(assetUrl, { signal: AbortSignal.timeout(5000) });
       assert.equal(assetResponse.status, 200, `Built asset returned HTTP ${assetResponse.status}: ${assetUrl.pathname}`);
@@ -191,7 +315,11 @@ async function verifyProductionAssets() {
       );
       const contents = await assetResponse.arrayBuffer();
       assert.ok(contents.byteLength > 0, `Built asset was empty: ${assetUrl.pathname}`);
+      if (/\.css$/i.test(assetUrl.pathname)) {
+        stylesheets.push({ url: assetUrl, css: new TextDecoder().decode(contents) });
+      }
     }
+    await verifyPublicAssets(html, stylesheets, url);
     await verifyDeepLinkResponses(
       new URL(basePath, url),
       "Vite production preview",
