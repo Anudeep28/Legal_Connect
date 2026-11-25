@@ -1523,6 +1523,18 @@ export const UpdateAdminConsultationCheckoutResponse = zod.object({
 })
 
 
+export const GetAdminConsultationCheckoutHistoryResponse = zod.object({
+  "events": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "action": zod.enum(['paused', 'resumed']),
+  "reason": zod.string(),
+  "changedAt": zod.coerce.date(),
+  "actorName": zod.string(),
+  "actorEmail": zod.string().email()
+}))
+})
+
+
 export const GetAdminTwilioUsageBudgetResponse = zod.object({
   "enabled": zod.boolean(),
   "budgetAmount": zod.number().nullable(),

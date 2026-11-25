@@ -177,6 +177,27 @@ export interface ConsultationCheckoutPauseInput {
   reason: string;
 }
 
+export type AdminConsultationCheckoutHistoryEventAction = typeof AdminConsultationCheckoutHistoryEventAction[keyof typeof AdminConsultationCheckoutHistoryEventAction];
+
+
+export const AdminConsultationCheckoutHistoryEventAction = {
+  paused: 'paused',
+  resumed: 'resumed',
+} as const;
+
+export interface AdminConsultationCheckoutHistoryEvent {
+  id: string;
+  action: AdminConsultationCheckoutHistoryEventAction;
+  reason: string;
+  changedAt: string;
+  actorName: string;
+  actorEmail: string;
+}
+
+export interface AdminConsultationCheckoutHistory {
+  events: AdminConsultationCheckoutHistoryEvent[];
+}
+
 export type GrievanceInputCategory = typeof GrievanceInputCategory[keyof typeof GrievanceInputCategory];
 
 

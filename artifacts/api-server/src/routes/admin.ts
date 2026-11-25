@@ -1,5 +1,5 @@
-import { Router, type IRouter } from "express";
-import { eq, desc, sql } from "drizzle-orm";
+import { Router, type IRouter, type RequestHandler } from "express";
+import { and, eq, desc, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, accounts, lawyers, consultations, documents, reviews, auditLogs, notifications, platformCompliance } from "@workspace/db";
 import * as api from "@workspace/api-zod";
@@ -15,6 +15,51 @@ import { saveAdminAiUsageLimits } from "../lib/ai-usage-limits";
 import { getDatabaseOutageStatus } from "../lib/database-outage-monitor";
 
 const router: IRouter = Router();
+const checkoutHistoryActions = [
+  "billing:consultation-checkout-paused",
+  "billing:consultation-checkout-resumed",
+] as const;
+
+export function createAdminConsultationCheckoutHistoryRouter(
+  authMiddlewares: RequestHandler[] = [requireAccount, requireAdmin],
+): IRouter {
+  const historyRouter: IRouter = Router();
+  historyRouter.use("/admin/consultation-checkout-history", ...authMiddlewares, requireOwnerAdmin);
+  historyRouter.get("/admin/consultation-checkout-history", async (_req, res): Promise<void> => {
+    const rows = await db.select({
+      id: auditLogs.id,
+      action: auditLogs.action,
+      reason: auditLogs.reason,
+      changedAt: auditLogs.createdAt,
+      actorName: accounts.name,
+      actorEmail: accounts.email,
+    }).from(auditLogs)
+      .innerJoin(accounts, eq(auditLogs.actorId, accounts.id))
+      .where(and(
+        eq(auditLogs.targetId, "platform"),
+        inArray(auditLogs.action, [...checkoutHistoryActions]),
+      ))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(100);
+    res.set("Cache-Control", "no-store").json(api.GetAdminConsultationCheckoutHistoryResponse.parse({
+      events: rows.map((row) => {
+        const action = row.action === "billing:consultation-checkout-paused" ? "paused" : "resumed";
+        const reasonPrefix = `Paid consultation checkout ${action}:`;
+        return {
+          id: row.id,
+          action,
+          reason: row.reason.startsWith(reasonPrefix) ? row.reason.slice(reasonPrefix.length).trim() : row.reason,
+          changedAt: row.changedAt,
+          actorName: row.actorName,
+          actorEmail: row.actorEmail,
+        };
+      }),
+    }));
+  });
+  return historyRouter;
+}
+
+router.use(createAdminConsultationCheckoutHistoryRouter());
 router.get("/admin/system-status", requireOwnerSystemStatus, (_req, res): void => {
   res.set("Cache-Control", "no-store").json(api.GetAdminSystemStatusResponse.parse({
     api: "live",

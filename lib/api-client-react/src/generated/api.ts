@@ -31,6 +31,7 @@ import type {
   AdminAiUsage,
   AdminAiUsageBudget,
   AdminAiUsageLimits,
+  AdminConsultationCheckoutHistory,
   AdminGrievance,
   AdminGrievanceUpdate,
   AdminLegalReview,
@@ -5248,6 +5249,101 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getUpdateAdminConsultationCheckoutMutationOptions(options), queryClient);
     }
+
+export const getGetAdminConsultationCheckoutHistoryUrl = () => {
+
+
+
+
+  return `/api/admin/consultation-checkout-history`
+}
+
+export const getAdminConsultationCheckoutHistory = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminConsultationCheckoutHistory> => {
+
+  return customFetch<AdminConsultationCheckoutHistory>(getGetAdminConsultationCheckoutHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminConsultationCheckoutHistoryQueryKey = () => {
+    return [
+    `/api/admin/consultation-checkout-history`
+    ] as const;
+    }
+
+
+export const getGetAdminConsultationCheckoutHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminConsultationCheckoutHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>> = ({ signal }) => getAdminConsultationCheckoutHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAdminConsultationCheckoutHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>>
+export type GetAdminConsultationCheckoutHistoryQueryError = ErrorType<void>
+
+
+export function useGetAdminConsultationCheckoutHistory<TData = Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminConsultationCheckoutHistory<TData = Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminConsultationCheckoutHistory<TData = Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetAdminConsultationCheckoutHistory<TData = Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminConsultationCheckoutHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAdminConsultationCheckoutHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetAdminTwilioUsageBudgetUrl = () => {
 

@@ -7,6 +7,7 @@
     "test:communications": "NODE_ENV=test tsx --test src/lib/__tests__/communications.test.ts src/lib/__tests__/call-diagnostics.test.ts src/lib/__tests__/call-recordings.test.ts src/lib/__tests__/call-recording-recovery.test.ts",
     "test:twilio-usage": "NODE_ENV=test tsx --test src/lib/__tests__/twilio-usage-budget.test.ts",
     "test:ai": "NODE_ENV=test tsx --test src/lib/__tests__/ai-providers.test.ts src/lib/__tests__/ai-usage.test.ts src/routes/writing.test.ts src/routes/writing-lock.test.ts src/routes/admin-ai-usage.test.ts",
+    "test:admin-checkout-history": "NODE_ENV=test tsx --test src/routes/admin-consultation-checkout-history.test.ts",
     "test:policy-disclosures": "NODE_ENV=test tsx --test src/lib/__tests__/policy-disclosures.test.ts",
     "test:grievances": "NODE_ENV=test tsx --test src/routes/grievances.test.ts",
     "test:health": "NODE_ENV=test tsx --test src/routes/health.test.ts src/routes/readiness.test.ts src/lib/__tests__/database-outage-monitor.test.ts src/routes/admin-system-status.test.ts",

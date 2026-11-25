@@ -10,6 +10,7 @@ import {
   useListAdminReviews, getListAdminReviewsQueryKey, useModerateReview,
   getGetAdminLegalReviewQueryKey, useRecordAdminLegalReview,
   useUpdateAdminConsultationCheckout,
+  getGetAdminConsultationCheckoutHistoryQueryKey, useGetAdminConsultationCheckoutHistory,
   useListAdminGrievances, getListAdminGrievancesQueryKey, useUpdateAdminGrievance,
   getGetPlatformQueryKey,
   getListLawyersQueryKey, getListLawyerReviewsQueryKey,
@@ -29,7 +30,7 @@ import { AppPage } from '@/components/shell';
 import { DemoTag, EmptyState, ErrorState, ListSkeleton, Notice, PageHeader, PersonAvatar, Stars } from '@/components/kit';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { errMsg, fmtDate, inr } from '@/lib/format';
+import { errMsg, fmtDate, fmtDateTime, inr } from '@/lib/format';
 import { AdminTwilioUsage } from '@/components/admin-twilio-usage';
 import { AdminAiUsage } from '@/components/admin-ai-usage';
 import { AdminSystemStatus } from '@/components/admin-system-status';
@@ -98,6 +99,9 @@ function LegalReviewTab() {
   const q = useGetAdminLegalReview();
   const save = useRecordAdminLegalReview();
   const checkoutChange = useUpdateAdminConsultationCheckout();
+  const checkoutHistory = useGetAdminConsultationCheckoutHistory({
+    query: { enabled: q.data?.canRecord === true },
+  });
   const qc = useQueryClient();
   const { toast } = useToast();
   const [form, setForm] = useState<CounselForm>(initialCounselForm);
@@ -143,6 +147,7 @@ function LegalReviewTab() {
                   consultationCheckout: result,
                   paidConsultationsEnabled: old.paymentVerificationComplete && Boolean(old.approval) && !result.paused,
                 } : old);
+                qc.invalidateQueries({ queryKey: getGetAdminConsultationCheckoutHistoryQueryKey() });
                 qc.invalidateQueries({ queryKey: getGetPlatformQueryKey() });
                 setCheckoutReason('');
                 toast({
@@ -175,6 +180,32 @@ function LegalReviewTab() {
           </form>
         )}
       </section>
+      {q.data.canRecord && (
+        <section className="space-y-4 rounded-3xl border bg-card p-5 md:p-7" data-testid="checkout-pause-history">
+          <div>
+            <h2 className="font-display text-2xl font-semibold">Checkout pause history</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Recent pause and resume events, including who made each change and why. Read-only; the most recent 100 events are shown.</p>
+          </div>
+          {checkoutHistory.isLoading ? <ListSkeleton /> : checkoutHistory.isError ? (
+            <ErrorState error={checkoutHistory.error} onRetry={() => checkoutHistory.refetch()} />
+          ) : checkoutHistory.data?.events.length ? (
+            <ol className="divide-y rounded-2xl border">
+              {checkoutHistory.data.events.map((event) => (
+                <li key={event.id} className="space-y-1 p-4" data-testid={`checkout-history-event-${event.id}`}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <strong>{event.action === 'paused' ? 'Consultation checkout paused' : 'Consultation checkout resumed'}</strong>
+                    <time className="text-sm text-muted-foreground" dateTime={event.changedAt}>{fmtDateTime(event.changedAt)}</time>
+                  </div>
+                  <p className="text-sm">{event.reason}</p>
+                  <p className="text-xs text-muted-foreground">Changed by {event.actorName} · {event.actorEmail}</p>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">No pause or resume changes have been recorded.</p>
+          )}
+        </section>
+      )}
       {!q.data.canRecord ? (
         <Notice icon={<Info />}>Only the owner-designated administrator can record or update this approval.</Notice>
       ) : (

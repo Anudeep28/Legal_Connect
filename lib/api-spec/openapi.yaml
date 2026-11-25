@@ -746,6 +746,17 @@ paths:
               schema: { $ref: "#/components/schemas/ConsultationCheckoutState" }
         "403":
           description: Only the owner-designated administrator may pause or resume checkout
+  /admin/consultation-checkout-history:
+    get:
+      operationId: getAdminConsultationCheckoutHistory
+      responses:
+        "200":
+          description: Most recent pause and resume events for paid consultation checkout
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminConsultationCheckoutHistory" }
+        "403":
+          description: Only the owner-designated administrator may view checkout history
   /admin/twilio-usage-budget:
     get:
       operationId: getAdminTwilioUsageBudget
@@ -1127,6 +1138,23 @@ components:
         paused: { type: boolean }
         reason: { type: ["string", "null"] }
         changedAt: { type: ["string", "null"], format: date-time }
+    AdminConsultationCheckoutHistory:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/AdminConsultationCheckoutHistoryEvent" }
+    AdminConsultationCheckoutHistoryEvent:
+      type: object
+      required: [id, action, reason, changedAt, actorName, actorEmail]
+      properties:
+        id: { type: string, format: uuid }
+        action: { type: string, enum: [paused, resumed] }
+        reason: { type: string }
+        changedAt: { type: string, format: date-time }
+        actorName: { type: string }
+        actorEmail: { type: string, format: email }
     GrievanceInput:
       type: object
       required: [category, description]
