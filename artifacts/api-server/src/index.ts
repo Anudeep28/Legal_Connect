@@ -5,6 +5,7 @@ import { startCallRecordingWorker } from "./lib/call-recordings";
 import { bootstrapConfiguredOwner } from "./lib/owner-admin";
 import { startTwilioUsageBudgetWorker } from "./lib/twilio-usage-budget";
 import { startAiUsageRetentionWorker } from "./lib/ai-usage";
+import { startDatabaseOutageMonitor } from "./lib/database-outage-monitor";
 
 const rawPort = process.env["PORT"];
 
@@ -33,4 +34,5 @@ app.listen(port, (err) => {
   startCallRecordingWorker();
   startTwilioUsageBudgetWorker();
   startAiUsageRetentionWorker();
+  startDatabaseOutageMonitor();
 });
