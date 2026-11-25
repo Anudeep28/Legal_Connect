@@ -110,6 +110,38 @@ it('discards an active recording when leaving, including delayed final chunks', 
   expect(stopTrack).toHaveBeenCalledOnce();
   expect(unexpected).toEqual([]);
 });
+it('stops a late microphone grant after leaving before recording starts', async () => {
+  let resolvePermission!: (stream: MediaStream) => void;
+  const permission = new Promise<MediaStream>((resolve) => { resolvePermission = resolve; });
+  const getUserMedia = vi.fn(() => permission);
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } });
+
+  const createRecorder = vi.fn();
+  const startRecorder = vi.fn();
+  class SyntheticRecorder {
+    static isTypeSupported() { return true; }
+    constructor() { createRecorder(); }
+    start = startRecorder;
+  }
+  vi.stubGlobal('MediaRecorder', SyntheticRecorder);
+
+  const user = mount('documents');
+  await user.click(await screen.findByTestId('button-record'));
+  expect(getUserMedia).toHaveBeenCalledOnce();
+
+  await user.click(screen.getByTestId('button-back-documents'));
+  await waitFor(() => expect(screen.queryByTestId('input-doc-content')).toBeNull());
+
+  const stopTrack = vi.fn();
+  const track = { stop: stopTrack } as unknown as MediaStreamTrack;
+  const stream = { getTracks: () => [track] } as unknown as MediaStream;
+  resolvePermission(stream);
+
+  await waitFor(() => expect(stopTrack).toHaveBeenCalledOnce());
+  expect(createRecorder).not.toHaveBeenCalled();
+  expect(startRecorder).not.toHaveBeenCalled();
+  expect(unexpected).toEqual([]);
+});
 it('cancel a private call transcript draft without sending the transcript or template', async () => {
   const user = mount('consultations');
   await user.click(await screen.findByTestId('button-generate-call-draft-session'));
