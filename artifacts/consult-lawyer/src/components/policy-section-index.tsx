@@ -4,7 +4,7 @@ export function PolicySectionIndex({ sections }: { sections: PolicySection[] }) 
   if (sections.length < 6) return null;
 
   return (
-    <details className="mb-5 rounded-2xl border bg-card px-4 py-3">
+    <details className="policy-section-index mb-5 rounded-2xl border bg-card px-4 py-3 print:hidden">
       <summary
         className="cursor-pointer rounded-md font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         data-testid="policy-section-index-toggle"

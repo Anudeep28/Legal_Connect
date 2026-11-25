@@ -207,6 +207,60 @@ body::before {
 .cl-socialButtonsBlockButton:hover { background: hsl(38 48% 90%) !important; }
 .cl-footerActionLink:hover { color: hsl(232 58% 22%) !important; }
 
+@media print {
+  @page { margin: 18mm; }
+
+  body:has(.policy-print-page) {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  body:has(.policy-print-page) header,
+  body:has(.policy-print-page) footer,
+  body:has(.policy-print-page) [data-testid='link-skip-policy'] {
+    display: none !important;
+  }
+
+  body:has(.policy-print-page) #main-content {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .policy-print-page {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
+  .policy-print-hide,
+  .policy-section-index {
+    display: none !important;
+  }
+
+  .policy-print-article {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    padding: 0 !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+
+  .policy-print-article h2 {
+    break-after: avoid;
+    page-break-after: avoid;
+    color: #000 !important;
+  }
+
+  .policy-print-article p {
+    color: #000 !important;
+    line-height: 1.45;
+    orphans: 3;
+    widows: 3;
+  }
+}
+
 @layer utilities {
   /* Hide ugly search cancel button in Chrome until we can style it properly */
   input[type='search']::-webkit-search-cancel-button {

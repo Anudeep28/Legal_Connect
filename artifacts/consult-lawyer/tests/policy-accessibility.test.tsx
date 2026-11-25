@@ -49,14 +49,13 @@ it.each(pageCases)('$title exposes a clear landmark and ordered headings', ({ pa
   const { container } = renderPolicy(path, title);
   const main = screen.getByRole('main');
   expect(within(main).getByRole('heading', { level: 1, name: title })).toBeTruthy();
-  expect(within(main).getByRole('article', { name: title })).toBeTruthy();
+  const article = within(main).getByRole('article', { name: title });
   expect(screen.getByRole('contentinfo')).toBeTruthy();
 
   const sections = getPolicySections(policies[key].split(/\n\s*\n/).slice(1));
-  const headings = Array.from(main.querySelectorAll('h1, h2, h3, h4, h5, h6'));
-  expect(headings[0]?.tagName).toBe('H1');
-  expect(headings.filter((heading) => heading.tagName === 'H2')).toHaveLength(sections.length);
-  expect(headings.some((heading) => heading.tagName !== 'H1' && heading.tagName !== 'H2')).toBe(false);
+  const articleHeadings = Array.from(article.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+  expect(articleHeadings.filter((heading) => heading.tagName === 'H2')).toHaveLength(sections.length);
+  expect(articleHeadings.every((heading) => heading.tagName === 'H2')).toBe(true);
   for (const section of sections) {
     expect(main.querySelector(`#${section.id}`)?.textContent).toBe(section.title);
   }
@@ -66,6 +65,19 @@ it.each(pageCases)('$title exposes a clear landmark and ordered headings', ({ pa
     expect(within(policyNav).getByRole('link', { name: label })).toBeTruthy();
   }
   expect(container.querySelector('main')).toBe(main);
+});
+
+it.each(pageCases)('$title keeps every policy block in the print layout', ({ path, title, key }) => {
+  renderPolicy(path, title);
+  const main = screen.getByRole('main');
+  const article = within(main).getByRole('article', { name: title });
+  const blocks = policies[key].split(/\n\s*\n/).slice(1).map((block) => block.trim());
+  const renderedBlocks = Array.from(article.children).map((element) => element.textContent?.trim() ?? '');
+
+  expect(renderedBlocks).toEqual(blocks);
+  expect(main.querySelectorAll('.policy-print-hide')).toHaveLength(2);
+  expect(main.querySelector('.policy-section-index')?.classList.contains('print:hidden')).toBe(true);
+  expect(article.classList.contains('policy-print-article')).toBe(true);
 });
 
 it('supports keyboard access and visible focus styling on navigation and section links', async () => {

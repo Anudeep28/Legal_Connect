@@ -444,10 +444,10 @@ export function Policy({ path }: { path: string }) {
   const sectionByBlock = new Map(sections.map((section) => [section.blockIndex, section]));
   return (
     <AppPage>
-      <div className="mx-auto max-w-3xl">
+      <div className="policy-print-page mx-auto max-w-3xl">
         <PageHeader eyebrow="Policies" title={p.title} />
-        <Notice icon={<Info />} className="mb-8">{p.context}</Notice>
-        <section className="mb-8 rounded-2xl border bg-card p-5" aria-label="Policy version and review status" data-testid="policy-revision-status">
+        <Notice icon={<Info />} className="policy-print-hide mb-8 print:hidden">{p.context}</Notice>
+        <section className="policy-print-hide mb-8 rounded-2xl border bg-card p-5 print:hidden" aria-label="Policy version and review status" data-testid="policy-revision-status">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-semibold">Revision {currentRevision?.revisionId ?? 'not recorded'}</h2>
@@ -488,7 +488,7 @@ export function Policy({ path }: { path: string }) {
           )}
         </section>
         <PolicySectionIndex sections={sections} />
-        <article aria-label={p.title} className="space-y-4 rounded-3xl border bg-card p-6 md:p-10">
+        <article aria-label={p.title} className="policy-print-article space-y-4 rounded-3xl border bg-card p-6 md:p-10">
           {blocks.slice(1).map((b, i) => {
             const t = b.trim();
             const section = sectionByBlock.get(i);
