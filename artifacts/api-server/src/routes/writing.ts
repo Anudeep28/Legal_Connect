@@ -9,10 +9,12 @@ import { legalTemplates } from "../data/templates";
 import { accessibleConsultation } from "../lib/legal";
 import { ensureCompatibleAudio } from "../lib/audio";
 import { buildWritingMessages } from "../lib/writing-prompts";
+import { validateWritingOutput } from "../lib/writing-output-validation";
 import { getAiUsage, getAiUsageHistory, recordAiProviderSuccessSafely, reserveAiAttempt } from "../lib/ai-usage";
 import {
   hasDeepSeekKey,
   ProviderConfigurationError,
+  ProviderRequestError,
   requestDeepSeek,
   transcribeWithElevenLabs,
 } from "../lib/ai-providers";
@@ -90,6 +92,14 @@ router.post("/writing/assist", async (req, res): Promise<void> => {
   try {
     await reserveUsage(req.account.id, "drafting");
     const completion = await completeWithAi(buildWritingMessages(input.action, input.language, input.text));
+    const outputValidation = validateWritingOutput(input.text, completion.text);
+    if (!outputValidation.valid) {
+      req.log.warn(
+        { action: input.action, reason: outputValidation.reason },
+        "AI writing output failed safety checks",
+      );
+      throw new ProviderRequestError();
+    }
     await recordProviderSuccess(req.account.id, "drafting", completion.usage);
     res.json(api.AssistWritingResponse.parse({ text: completion.text }));
   } catch (err) {
@@ -127,6 +137,17 @@ router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", asyn
     if (source.length > 100_000) throw new HttpError(413, "Shorten the edited transcript before generating this draft; no text was sent.");
     await reserveUsage(req.account.id, "drafting");
     const completion = await completeWithAi(buildWritingMessages("draft", input.language, source));
+    const outputValidation = validateWritingOutput(
+      `${record.topic}\n${session.editedTranscript}`,
+      completion.text,
+    );
+    if (!outputValidation.valid) {
+      req.log.warn(
+        { action: "draft", reason: outputValidation.reason },
+        "Call transcript draft failed output safety checks",
+      );
+      throw new ProviderRequestError();
+    }
     await recordProviderSuccess(req.account.id, "drafting", completion.usage);
     res.json(api.DraftFromCallTranscriptResponse.parse({
       title: `${record.topic} - ${template.name}`.slice(0, 200),

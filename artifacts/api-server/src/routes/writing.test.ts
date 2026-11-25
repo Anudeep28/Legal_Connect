@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import express from "express";
 import { test } from "node:test";
 import { ProviderRequestError } from "../lib/ai-providers";
+import { ADVOCATE_REVIEW_NOTE } from "../lib/writing-prompts";
+import { validateWritingOutput } from "../lib/writing-output-validation";
 import pinoHttp from "pino-http";
 import pino from "pino";
 
@@ -48,7 +50,7 @@ test("a failed drafting request releases the lawyer lock for a later request", a
       providerCalls += 1;
       assert.equal(messages[1]?.content, "Fictional facts for a route test.");
       if (providerCalls === 1) throw new ProviderRequestError();
-      return { text: "Draft for advocate review.", usage: null };
+      return { text: ADVOCATE_REVIEW_NOTE, usage: null };
     },
     recordAiProviderSuccess: async () => {},
   }));
@@ -86,12 +88,120 @@ test("a failed drafting request releases the lawyer lock for a later request", a
 
     const second = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body });
     assert.equal(second.status, 200);
-    assert.deepEqual(await second.json(), { text: "Draft for advocate review." });
+    assert.deepEqual(await second.json(), { text: ADVOCATE_REVIEW_NOTE });
     assert.equal(providerCalls, 2, "the second request must reach the provider mock");
   } finally {
     server.close();
     await new Promise<void>((resolve) => server.once("close", resolve));
   }
+});
+
+test("writing output requires the review note and preserves protected facts for every action", async () => {
+  process.env.DATABASE_URL = "postgres://smoke:smoke@127.0.0.1:1/writing_output_validation_test";
+  const [{ createWritingRouter }, { apiErrorHandler }] = await Promise.all([
+    import("./writing"),
+    import("../middlewares/access"),
+  ]);
+  const source = [
+    "Client: Mira Sen",
+    "Amount: INR 4,800",
+    "Date: 18/04/2025",
+    "Reference: [CASE_REF]",
+  ].join("\n");
+  const translatedSource = [
+    "ग्राहक: Mira Sen",
+    "रक्कम: INR ४,८००",
+    "तारीख: १८/०४/२०२५",
+    "संदर्भ: [CASE_REF]",
+  ].join("\n");
+  let providerText = "";
+  let providerCalls = 0;
+  let successfulProviderRecords = 0;
+  const app = express();
+  app.use(express.json());
+  app.use(pinoHttp({ quietReqLogger: true, logger: pino({ level: "silent" }) }));
+  app.use((req, _res, next) => {
+    req.account = { id: "synthetic-output-validation-lawyer", role: "lawyer" } as never;
+    next();
+  });
+  app.use(createWritingRouter({
+    authMiddlewares: [(_req, _res, next) => next()],
+    hasDeepSeekKey: () => true,
+    reserveAiAttempt: async () => ({ used: 1, limit: 30, resetsAt: new Date().toISOString() }),
+    requestDeepSeek: async () => {
+      providerCalls += 1;
+      return { text: providerText, usage: null };
+    },
+    recordAiProviderSuccess: async () => { successfulProviderRecords += 1; },
+  }));
+  app.use(apiErrorHandler);
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+
+  async function submit(action: "draft" | "translate" | "improve") {
+    return fetch(`http://127.0.0.1:${address.port}/writing/assist`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action,
+        text: source,
+        language: action === "translate" ? "Hindi" : "English",
+        dataUseAcknowledged: true,
+      }),
+    });
+  }
+
+  async function assertRejectedSafely(response: Response) {
+    assert.equal(response.status, 502);
+    const body = await response.json() as { error: string };
+    assert.deepEqual(body, {
+      error: "AI assistance is temporarily unavailable. Your document has not been changed.",
+    });
+    assert.doesNotMatch(JSON.stringify(body), /Mira Sen|4,800|CASE_REF/);
+  }
+
+  try {
+    for (const action of ["draft", "translate", "improve"] as const) {
+      const actionSource = action === "translate" ? translatedSource : source;
+      providerText = `${ADVOCATE_REVIEW_NOTE}\n${actionSource}`;
+      const valid = await submit(action);
+      assert.equal(valid.status, 200, `${action} should accept the required review note and protected facts.`);
+      assert.deepEqual(await valid.json(), { text: providerText });
+
+      providerText = `A response without the required review note.\n${source}`;
+      await assertRejectedSafely(await submit(action));
+
+      const changedAmount = actionSource.replace(action === "translate" ? "४,८००" : "4,800", action === "translate" ? "४,९००" : "4,900");
+      providerText = `${ADVOCATE_REVIEW_NOTE}\n${changedAmount}`;
+      await assertRejectedSafely(await submit(action));
+    }
+
+    providerText = `${ADVOCATE_REVIEW_NOTE}\n${source.replace("Mira Sen", "Mira Desai")}`;
+    await assertRejectedSafely(await submit("draft"));
+
+    assert.equal(providerCalls, 10, "each response should come from the provider mock only");
+    assert.equal(successfulProviderRecords, 3, "rejected responses must not be recorded as successful provider outputs");
+  } finally {
+    server.close();
+    await new Promise<void>((resolve) => server.once("close", resolve));
+  }
+});
+
+test("localized numbers remain protected and changed placeholders fail validation", () => {
+  const source = "Amount: INR 4,800\nDate: 18/04/2025\nReference: [CASE_REF]";
+  const translated = `${ADVOCATE_REVIEW_NOTE}\nरक्कम: INR ४,८००\nतारीख: १८/०४/२०२५\nसंदर्भ: [CASE_REF]`;
+  const changedPlaceholder = `${ADVOCATE_REVIEW_NOTE}\nAmount: INR 4,800\nDate: 18/04/2025\nReference: [OTHER_REF]`;
+
+  assert.deepEqual(validateWritingOutput(source, translated), { valid: true });
+  assert.deepEqual(validateWritingOutput(source, changedPlaceholder), {
+    valid: false,
+    reason: "protected_fact_missing",
+  });
 });
 
 test("a truly simultaneous drafting request for the same lawyer is rejected", async () => {
@@ -135,7 +245,7 @@ test("a truly simultaneous drafting request for the same lawyer is rejected", as
         signalProviderStarted();
         return firstProviderResult;
       }
-      return { text: "Draft for advocate review.", usage: null };
+      return { text: ADVOCATE_REVIEW_NOTE, usage: null };
     },
     recordAiProviderSuccess: async () => {},
   }));
@@ -172,14 +282,14 @@ test("a truly simultaneous drafting request for the same lawyer is rejected", as
     assert.equal(providerCalls, 1, "the overlapping request must not reach the provider");
     assert.equal(reservationCalls, 1, "the overlapping request must not reserve another AI attempt");
 
-    releaseFirstProviderCall({ text: "First draft for advocate review.", usage: null });
+    releaseFirstProviderCall({ text: `${ADVOCATE_REVIEW_NOTE}\nFirst draft.`, usage: null });
     const firstResponse = await firstRequest;
     assert.equal(firstResponse.status, 200);
-    assert.deepEqual(await firstResponse.json(), { text: "First draft for advocate review." });
+    assert.deepEqual(await firstResponse.json(), { text: `${ADVOCATE_REVIEW_NOTE}\nFirst draft.` });
 
     const retryResponse = await request();
     assert.equal(retryResponse.status, 200);
-    assert.deepEqual(await retryResponse.json(), { text: "Draft for advocate review." });
+    assert.deepEqual(await retryResponse.json(), { text: ADVOCATE_REVIEW_NOTE });
     assert.equal(providerCalls, 2, "a later request must reach the provider after the first finishes");
     assert.equal(reservationCalls, 2, "only the successful later retry reserves another AI attempt");
   } finally {
