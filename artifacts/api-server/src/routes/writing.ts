@@ -61,6 +61,7 @@ export function createWritingRouter(dependencies: {
   recordAiProviderSuccess?: typeof recordAiProviderSuccessSafely;
   accessibleConsultation?: typeof accessibleConsultation;
   acquireAiWritingLock?: typeof tryAcquireAiWritingLock;
+  ensureCompatibleAudio?: typeof ensureCompatibleAudio;
 } = {}): IRouter {
 const router: IRouter = Router();
 const active = new Set<string>();
@@ -73,6 +74,7 @@ const reserveUsage = dependencies.reserveAiAttempt ?? reserveAiAttempt;
 const recordProviderSuccess = dependencies.recordAiProviderSuccess ?? recordAiProviderSuccessSafely;
 const readAccessibleConsultation = dependencies.accessibleConsultation ?? accessibleConsultation;
 const acquireSharedAiLock = dependencies.acquireAiWritingLock ?? tryAcquireAiWritingLock;
+const convertAudio = dependencies.ensureCompatibleAudio ?? ensureCompatibleAudio;
 router.use("/writing", ...(dependencies.authMiddlewares ?? [requireAccount, requireLawyer]));
 router.get("/writing/usage", async (req, res) => {
   res.json(api.GetWritingUsageResponse.parse(await readUsage(req.account.id)));
@@ -214,7 +216,7 @@ router.post("/writing/transcribe", async (req, res): Promise<void> => {
   active.add(req.account.id);
   let requestLock: AiWritingLock | null = null;
   try {
-    const { buffer, format } = await ensureCompatibleAudio(bytes);
+    const { buffer, format } = await convertAudio(bytes);
     if (buffer.length > 24 * 1024 * 1024) throw new HttpError(400, "The recording is too long. Please record a shorter segment.");
     const language = supportedLanguages.find((l) => l.name === input.language || l.code === input.language)?.code;
     requestLock = await acquireAiRequestLock(req.account.id, req);

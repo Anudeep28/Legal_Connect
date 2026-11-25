@@ -683,6 +683,105 @@ test("a no-speech response releases the lawyer lock so dictation can be retried"
   }
 });
 
+test("a dictation conversion failure releases the lawyer lock for a later request", async () => {
+  process.env.DATABASE_URL = "postgres://smoke:smoke@127.0.0.1:1/writing_conversion_test";
+  const [{ createWritingRouter }, { apiErrorHandler }] = await Promise.all([
+    import("./writing"),
+    import("../middlewares/access"),
+  ]);
+  let conversionCalls = 0;
+  let lockAcquisitionCalls = 0;
+  let lockReleaseCalls = 0;
+  let providerCalls = 0;
+  let reservationCalls = 0;
+  const app = express();
+  app.use(express.json());
+  app.use(pinoHttp({ quietReqLogger: true, logger: pino({ level: "silent" }) }));
+  app.use((req, _res, next) => {
+    req.account = { id: "synthetic-conversion-lawyer", role: "lawyer" } as never;
+    next();
+  });
+  app.use(createWritingRouter({
+    authMiddlewares: [(_req, _res, next) => next()],
+    acquireAiWritingLock: async () => {
+      lockAcquisitionCalls += 1;
+      return { release: async () => { lockReleaseCalls += 1; } };
+    },
+    ensureCompatibleAudio: async (audio) => {
+      conversionCalls += 1;
+      assert.equal(audio.length, 44);
+      if (conversionCalls === 1) throw new Error("synthetic private converter detail");
+      return { buffer: audio, format: "wav" };
+    },
+    reserveAiAttempt: async () => {
+      reservationCalls += 1;
+      return { used: reservationCalls, limit: 30, resetsAt: new Date().toISOString() };
+    },
+    transcribeAudio: async (audio, format, language) => {
+      providerCalls += 1;
+      assert.equal(audio.length, 44);
+      assert.equal(format, "wav");
+      assert.equal(language, "en");
+      return "Synthetic transcript after conversion retry.";
+    },
+    recordAiProviderSuccess: async () => {},
+  }));
+  app.use(apiErrorHandler);
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  try {
+    const wav = Buffer.alloc(44);
+    wav.write("RIFF", 0, "ascii");
+    wav.writeUInt32LE(36, 4);
+    wav.write("WAVE", 8, "ascii");
+    const body = JSON.stringify({
+      audio: wav.toString("base64"),
+      mimeType: "audio/wav",
+      language: "English",
+      dataUseAcknowledged: true,
+    });
+    const url = `http://127.0.0.1:${address.port}/writing/transcribe`;
+    await assertDisclosureRequired(url, body, "ElevenLabs");
+    assert.equal(conversionCalls, 0);
+    assert.equal(providerCalls, 0);
+    assert.equal(reservationCalls, 0);
+    const request = () => fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+
+    const conversionFailure = await request();
+    assert.equal(conversionFailure.status, 502);
+    const error = String((await conversionFailure.json() as { error?: unknown }).error);
+    assert.equal(error, "AI assistance is temporarily unavailable. Your document has not been changed.");
+    assert.doesNotMatch(error, /synthetic private converter detail/i);
+    assert.equal(conversionCalls, 1);
+    assert.equal(providerCalls, 0, "transcription must not start when conversion fails");
+    assert.equal(reservationCalls, 0, "failed conversion must not reserve an AI attempt");
+    assert.equal(lockAcquisitionCalls, 0, "the shared provider lock is acquired after conversion");
+
+    const retry = await request();
+    assert.equal(retry.status, 200);
+    assert.deepEqual(await retry.json(), {
+      text: "Synthetic transcript after conversion retry.",
+    });
+    assert.equal(conversionCalls, 2);
+    assert.equal(lockAcquisitionCalls, 1, "the same lawyer can proceed after conversion failure");
+    assert.equal(lockReleaseCalls, 1);
+    assert.equal(providerCalls, 1);
+    assert.equal(reservationCalls, 1);
+  } finally {
+    server.close();
+    await new Promise<void>((resolve) => server.once("close", resolve));
+  }
+});
+
 test("usage history uses the authenticated lawyer and returns counts only", async () => {
   process.env.DATABASE_URL = "postgres://smoke:smoke@127.0.0.1:1/writing_route_test";
   const [{ createWritingRouter }, { apiErrorHandler }] = await Promise.all([
