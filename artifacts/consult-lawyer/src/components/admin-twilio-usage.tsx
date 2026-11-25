@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Info, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Download, Info, Loader2, RefreshCw } from 'lucide-react';
 import {
   getGetAdminTwilioUsageBudgetQueryKey,
   getGetAdminTwilioUsageHistoryQueryKey,
@@ -68,6 +68,57 @@ function lookupMessage(status: string) {
     case 'not_configured': return 'Twilio Account SID and Auth Token are not configured for usage lookups.';
     default: return 'No Twilio usage lookup has completed yet.';
   }
+}
+
+const usageHistoryCsvHeaders = [
+  'Provider period start (UTC)',
+  'Provider period end (UTC)',
+  'Month status',
+  'Posted charges',
+  'Charge status',
+  'Currency',
+  'Group Room participant minutes',
+  'Provider data as of (UTC)',
+  'Last checked (UTC)',
+];
+
+function csvCell(value: string | number | null) {
+  if (value === null) return '';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+export function buildTwilioUsageHistoryCsv(months: AdminTwilioUsageHistoryItem[]) {
+  const rows: (string | number | null)[][] = [
+    usageHistoryCsvHeaders,
+    ...months.map((month) => [
+      month.periodStart,
+      month.periodEnd ?? 'Not reported',
+      month.status === 'success' ? 'Complete' : month.status === 'partial' ? 'Partial' : 'Missing data',
+      month.spend,
+      month.spend === null ? 'Unavailable' : 'Posted',
+      month.currency ?? 'Not reported',
+      month.participantMinutes ?? 'Not available',
+      month.usageAsOf ?? 'Not reported',
+      month.checkedAt,
+    ]),
+  ];
+  return `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}\r\n`;
+}
+
+function downloadTwilioUsageHistory(months: AdminTwilioUsageHistoryItem[]) {
+  const csv = buildTwilioUsageHistoryCsv(months);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const revokeUrl = URL.revokeObjectURL.bind(URL);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `twilio-video-usage-history-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => revokeUrl(url), 1000);
 }
 
 export function AdminTwilioUsage() {
@@ -285,11 +336,24 @@ export function AdminTwilioUsage() {
       </section>
 
       <section aria-labelledby="twilio-usage-history-title" className="space-y-4 rounded-3xl border bg-card p-5 md:p-7">
-        <div>
-          <h2 id="twilio-usage-history-title" className="font-display text-2xl font-semibold">Monthly usage history</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Account-level posted Programmable Video charges and Group Room minutes from Twilio. Charges come from Twilio records; no rate-based estimates are added. After the first refresh, snapshots update hourly even when budget alerts are off.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 id="twilio-usage-history-title" className="font-display text-2xl font-semibold">Monthly usage history</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Account-level posted Programmable Video charges and Group Room minutes from Twilio. Charges come from Twilio records; no rate-based estimates are added. After the first refresh, snapshots update hourly even when budget alerts are off.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0"
+            onClick={() => downloadTwilioUsageHistory(historyQuery.data?.months ?? [])}
+            disabled={!historyQuery.data?.months.length}
+            data-testid="button-download-twilio-usage-history"
+          >
+            <Download aria-hidden="true" />
+            Download CSV
+          </Button>
         </div>
         {historyQuery.isLoading ? (
           <p role="status" className="text-sm text-muted-foreground">Loading monthly usage history…</p>
