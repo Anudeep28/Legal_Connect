@@ -52,6 +52,7 @@ export function createWritingRouter(dependencies: {
   getAiUsageHistory?: typeof getAiUsageHistory;
   reserveAiAttempt?: typeof reserveAiAttempt;
   recordAiProviderSuccess?: typeof recordAiProviderSuccessSafely;
+  accessibleConsultation?: typeof accessibleConsultation;
 } = {}): IRouter {
 const router: IRouter = Router();
 const active = new Set<string>();
@@ -62,6 +63,7 @@ const readUsage = dependencies.getAiUsage ?? getAiUsage;
 const readUsageHistory = dependencies.getAiUsageHistory ?? getAiUsageHistory;
 const reserveUsage = dependencies.reserveAiAttempt ?? reserveAiAttempt;
 const recordProviderSuccess = dependencies.recordAiProviderSuccess ?? recordAiProviderSuccessSafely;
+const readAccessibleConsultation = dependencies.accessibleConsultation ?? accessibleConsultation;
 router.use("/writing", ...(dependencies.authMiddlewares ?? [requireAccount, requireLawyer]));
 router.get("/writing/usage", async (req, res) => {
   res.json(api.GetWritingUsageResponse.parse(await readUsage(req.account.id)));
@@ -119,7 +121,7 @@ router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", asyn
   if (!aiKeyReady()) throw new HttpError(503, "DeepSeek drafting is not configured. No draft was created.");
   if (active.has(req.account.id)) throw new HttpError(429, "An AI request is already running. Please wait for it to finish.");
 
-  const record = await accessibleConsultation(req.account, id);
+  const record = await readAccessibleConsultation(req.account, id);
   if (record.lawyerOwnerId !== req.account.id)
     throw new HttpError(403, "Only the assigned lawyer can create a draft from this call.");
   const [session] = await db.select().from(callRecordingSessions).where(and(

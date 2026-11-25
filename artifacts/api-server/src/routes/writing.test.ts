@@ -204,6 +204,81 @@ test("localized numbers remain protected and changed placeholders fail validatio
   });
 });
 
+test("a different lawyer cannot draft from another lawyer's call transcript", async () => {
+  process.env.DATABASE_URL = "postgres://smoke:smoke@127.0.0.1:1/writing_foreign_transcript_test";
+  const [{ createWritingRouter }, { apiErrorHandler }] = await Promise.all([
+    import("./writing"),
+    import("../middlewares/access"),
+  ]);
+  const transcriptMarker = "PRIVATE-SYNTHETIC-TRANSCRIPT-CONTENT";
+  let reservationCalls = 0;
+  let providerCalls = 0;
+  let logs = "";
+  const app = express();
+  app.use(express.json());
+  app.use(pinoHttp({
+    quietReqLogger: true,
+    logger: pino({ level: "trace" }, { write: (line) => { logs += line; } }),
+  }));
+  app.use((req, _res, next) => {
+    req.account = { id: "synthetic-unassigned-lawyer", role: "lawyer" } as never;
+    next();
+  });
+  app.use(createWritingRouter({
+    authMiddlewares: [(_req, _res, next) => next()],
+    hasDeepSeekKey: () => true,
+    accessibleConsultation: async (account, consultationId) => {
+      assert.equal(account.id, "synthetic-unassigned-lawyer");
+      assert.equal(consultationId, "synthetic-consultation-id");
+      return {
+        lawyerOwnerId: "synthetic-assigned-lawyer",
+        topic: transcriptMarker,
+      } as never;
+    },
+    reserveAiAttempt: async () => {
+      reservationCalls += 1;
+      return { used: 1, limit: 30, resetsAt: new Date().toISOString() };
+    },
+    requestDeepSeek: async () => {
+      providerCalls += 1;
+      return { text: ADVOCATE_REVIEW_NOTE, usage: null };
+    },
+  }));
+  app.use(apiErrorHandler);
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/writing/consultations/synthetic-consultation-id/call-transcripts/synthetic-session-id/draft`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          templateId: "legal-notice",
+          language: "English",
+          dataUseAcknowledged: true,
+        }),
+      },
+    );
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), {
+      error: "Only the assigned lawyer can create a draft from this call.",
+    });
+    assert.equal(reservationCalls, 0, "a non-owner must not reserve AI usage");
+    assert.equal(providerCalls, 0, "a non-owner must not reach the AI provider");
+    assert.doesNotMatch(logs, new RegExp(transcriptMarker));
+  } finally {
+    server.close();
+    await new Promise<void>((resolve) => server.once("close", resolve));
+  }
+});
+
 test("a truly simultaneous drafting request for the same lawyer is rejected", async () => {
   process.env.DATABASE_URL = "postgres://smoke:smoke@127.0.0.1:1/writing_route_test";
   const [{ createWritingRouter }, { apiErrorHandler }] = await Promise.all([
