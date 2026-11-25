@@ -373,6 +373,119 @@ test("a truly simultaneous drafting request for the same lawyer is rejected", as
   }
 });
 
+test("separate lawyers can draft while both AI requests are pending", async () => {
+  process.env.DATABASE_URL = "postgres://smoke:smoke@127.0.0.1:1/writing_parallel_lawyers_test";
+  const [{ createWritingRouter }, { apiErrorHandler }] = await Promise.all([
+    import("./writing"),
+    import("../middlewares/access"),
+  ]);
+  const lawyerA = "synthetic-concurrent-lawyer-a";
+  const lawyerB = "synthetic-concurrent-lawyer-b";
+  const sourceA = "Fictional drafting facts for synthetic lawyer A.";
+  const sourceB = "Fictional drafting facts for synthetic lawyer B.";
+  const pendingProviders = new Map<string, (result: { text: string; usage: null }) => void>();
+  const reservedAccounts: string[] = [];
+  let providerCalls = 0;
+  let signalBothProvidersStarted!: () => void;
+  const bothProvidersStarted = new Promise<void>((resolve) => {
+    signalBothProvidersStarted = resolve;
+  });
+  const app = express();
+  app.use(express.json());
+  app.use(pinoHttp({ quietReqLogger: true, logger: pino({ level: "silent" }) }));
+  app.use((req, _res, next) => {
+    const accountId = req.get("x-test-lawyer-id");
+    if (accountId !== lawyerA && accountId !== lawyerB) {
+      next(new Error("Unknown synthetic lawyer."));
+      return;
+    }
+    req.account = { id: accountId, role: "lawyer" } as never;
+    next();
+  });
+  app.use(createWritingRouter({
+    authMiddlewares: [(_req, _res, next) => next()],
+    hasDeepSeekKey: () => true,
+    reserveAiAttempt: async (accountId) => {
+      reservedAccounts.push(accountId);
+      return { used: 1, limit: 30, resetsAt: new Date().toISOString() };
+    },
+    requestDeepSeek: async (messages) => {
+      const source = String(messages[1]?.content ?? "");
+      assert.ok(source === sourceA || source === sourceB, "only synthetic facts should reach the provider mock");
+      providerCalls += 1;
+      return new Promise((resolve) => {
+        pendingProviders.set(source, resolve);
+        if (pendingProviders.size === 2) signalBothProvidersStarted();
+      });
+    },
+    recordAiProviderSuccess: async () => {},
+  }));
+  app.use(apiErrorHandler);
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+
+  const url = `http://127.0.0.1:${address.port}/writing/assist`;
+  const sendDraft = (accountId: string, text: string) => fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-test-lawyer-id": accountId,
+    },
+    body: JSON.stringify({
+      action: "draft",
+      text,
+      language: "English",
+      dataUseAcknowledged: true,
+    }),
+  });
+  let firstRequest: Promise<Response> | undefined;
+  let secondRequest: Promise<Response> | undefined;
+  try {
+    firstRequest = sendDraft(lawyerA, sourceA);
+    secondRequest = sendDraft(lawyerB, sourceB);
+
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        bothProvidersStarted,
+        ...[firstRequest, secondRequest].map((request) => request.then((response) => {
+          throw new Error(`A draft request completed before both providers were pending: ${response.status}`);
+        })),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => reject(new Error("Both lawyer requests did not reach the provider mock concurrently.")), 5_000);
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+
+    assert.equal(providerCalls, 2, "each lawyer must reach the provider while the other call is still pending");
+    assert.deepEqual(reservedAccounts.sort(), [lawyerA, lawyerB].sort());
+    pendingProviders.get(sourceA)?.({ text: `${ADVOCATE_REVIEW_NOTE}\nDraft for synthetic lawyer A.`, usage: null });
+    pendingProviders.get(sourceB)?.({ text: `${ADVOCATE_REVIEW_NOTE}\nDraft for synthetic lawyer B.`, usage: null });
+
+    const [responseA, responseB] = await Promise.all([firstRequest, secondRequest]);
+    assert.equal(responseA.status, 200);
+    assert.equal(responseB.status, 200);
+    assert.deepEqual(await responseA.json(), {
+      text: `${ADVOCATE_REVIEW_NOTE}\nDraft for synthetic lawyer A.`,
+    });
+    assert.deepEqual(await responseB.json(), {
+      text: `${ADVOCATE_REVIEW_NOTE}\nDraft for synthetic lawyer B.`,
+    });
+  } finally {
+    pendingProviders.get(sourceA)?.({ text: ADVOCATE_REVIEW_NOTE, usage: null });
+    pendingProviders.get(sourceB)?.({ text: ADVOCATE_REVIEW_NOTE, usage: null });
+    server.close();
+    await new Promise<void>((resolve) => server.once("close", resolve));
+  }
+});
+
 test("a failed dictation request releases the lawyer lock for a later request", async () => {
   process.env.DATABASE_URL = "postgres://smoke:smoke@127.0.0.1:1/writing_route_test";
   const [{ createWritingRouter }, { apiErrorHandler }] = await Promise.all([
