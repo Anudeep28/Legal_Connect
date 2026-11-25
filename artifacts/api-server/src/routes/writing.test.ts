@@ -587,6 +587,102 @@ test("a failed dictation request releases the lawyer lock for a later request", 
   }
 });
 
+test("a no-speech response releases the lawyer lock so dictation can be retried", async () => {
+  process.env.DATABASE_URL = "postgres://smoke:smoke@127.0.0.1:1/writing_empty_dictation_test";
+  const [{ createWritingRouter }, { apiErrorHandler }] = await Promise.all([
+    import("./writing"),
+    import("../middlewares/access"),
+  ]);
+  let providerCalls = 0;
+  let reservationCalls = 0;
+  let lockReleaseCalls = 0;
+  const app = express();
+  app.use(express.json());
+  app.use(pinoHttp({ quietReqLogger: true, logger: pino({ level: "silent" }) }));
+  app.use((req, _res, next) => {
+    req.account = { id: "synthetic-empty-dictation-lawyer", role: "lawyer" } as never;
+    next();
+  });
+  app.use(createWritingRouter({
+    authMiddlewares: [(_req, _res, next) => next()],
+    acquireAiWritingLock: async () => ({
+      release: async () => { lockReleaseCalls += 1; },
+    }),
+    reserveAiAttempt: async () => {
+      reservationCalls += 1;
+      return { used: reservationCalls, limit: 30, resetsAt: new Date().toISOString() };
+    },
+    transcribeAudio: async (audio, format, language) => {
+      providerCalls += 1;
+      assert.equal(audio.length, 44);
+      assert.equal(format, "wav");
+      assert.equal(language, "en");
+      return providerCalls === 1 ? " \n\t " : "Synthetic dictation transcript after retry.";
+    },
+    recordAiProviderSuccess: async () => {},
+  }));
+  app.use(apiErrorHandler);
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  try {
+    const wav = Buffer.alloc(44);
+    wav.write("RIFF", 0, "ascii");
+    wav.writeUInt32LE(36, 4);
+    wav.write("WAVE", 8, "ascii");
+    wav.write("fmt ", 12, "ascii");
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(16_000, 24);
+    wav.writeUInt32LE(32_000, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write("data", 36, "ascii");
+    wav.writeUInt32LE(0, 40);
+    const body = JSON.stringify({
+      audio: wav.toString("base64"),
+      mimeType: "audio/wav",
+      language: "English",
+      dataUseAcknowledged: true,
+    });
+    const url = `http://127.0.0.1:${address.port}/writing/transcribe`;
+    await assertDisclosureRequired(url, body, "ElevenLabs");
+    assert.equal(providerCalls, 0, "unacknowledged audio must not reach ElevenLabs");
+    assert.equal(reservationCalls, 0);
+    const request = () => fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+
+    const noSpeech = await request();
+    assert.equal(noSpeech.status, 422);
+    assert.deepEqual(await noSpeech.json(), {
+      error: "No speech could be recognized. Please try again.",
+    });
+    assert.equal(providerCalls, 1);
+    assert.equal(reservationCalls, 1);
+    assert.equal(lockReleaseCalls, 1, "the 422 response must release its request lock");
+
+    const retry = await request();
+    assert.equal(retry.status, 200);
+    assert.deepEqual(await retry.json(), {
+      text: "Synthetic dictation transcript after retry.",
+    });
+    assert.equal(providerCalls, 2, "the no-speech response must not leave the lawyer lock held");
+    assert.equal(reservationCalls, 2);
+    assert.equal(lockReleaseCalls, 2);
+  } finally {
+    server.close();
+    await new Promise<void>((resolve) => server.once("close", resolve));
+  }
+});
+
 test("usage history uses the authenticated lawyer and returns counts only", async () => {
   process.env.DATABASE_URL = "postgres://smoke:smoke@127.0.0.1:1/writing_route_test";
   const [{ createWritingRouter }, { apiErrorHandler }] = await Promise.all([
