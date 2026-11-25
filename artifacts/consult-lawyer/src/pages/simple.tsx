@@ -439,9 +439,30 @@ export function Policy({ path }: { path: string }) {
     }
     return content;
   }, [p.key, platform.data?.policyContacts]);
-  const blocks = text.split(/\n\s*\n/);
-  const sections = getPolicySections(blocks.slice(1));
-  const sectionByBlock = new Map(sections.map((section) => [section.blockIndex, section]));
+  const blocks = useMemo(() => text.split(/\n\s*\n/), [text]);
+  const sections = useMemo(() => getPolicySections(blocks.slice(1)), [blocks]);
+  const sectionByBlock = useMemo(() => new Map(sections.map((section) => [section.blockIndex, section])), [sections]);
+  const [activeSection, setActiveSection] = useState<{ policyKey: string; id: string } | null>(null);
+  const activeSectionId = activeSection?.policyKey === p.key ? activeSection.id : null;
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
+    const headings = sections
+      .map((section) => document.getElementById(section.id))
+      .filter((heading): heading is HTMLElement => heading instanceof HTMLElement);
+    if (!headings.length) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      const current = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (current) setActiveSection({ policyKey: p.key, id: current.target.id });
+    }, { rootMargin: '-18% 0px -72% 0px', threshold: 0 });
+
+    headings.forEach((heading) => observer.observe(heading));
+    return () => observer.disconnect();
+  }, [p.key, sections]);
+
   return (
     <AppPage>
       <div className="policy-print-page mx-auto max-w-3xl">
@@ -487,7 +508,7 @@ export function Policy({ path }: { path: string }) {
             </div>
           )}
         </section>
-        <PolicySectionIndex sections={sections} />
+        <PolicySectionIndex sections={sections} activeSectionId={activeSectionId} />
         <article aria-label={p.title} className="policy-print-article space-y-4 rounded-3xl border bg-card p-6 md:p-10">
           {blocks.slice(1).map((b, i) => {
             const t = b.trim();

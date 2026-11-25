@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Router } from 'wouter';
 import { memoryLocation } from 'wouter/memory-location';
@@ -25,7 +25,10 @@ vi.mock('@workspace/api-client-react', async (importOriginal) => {
   };
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const pageCases = [
   { path: '/privacy', title: 'Privacy Policy', key: 'privacy' },
@@ -78,6 +81,44 @@ it.each(pageCases)('$title keeps every policy block in the print layout', ({ pat
   expect(main.querySelectorAll('.policy-print-hide')).toHaveLength(2);
   expect(main.querySelector('.policy-section-index')?.classList.contains('print:hidden')).toBe(true);
   expect(article.classList.contains('policy-print-article')).toBe(true);
+});
+
+it('marks the section in the reading area and labels it without color alone', () => {
+  let intersectionCallback: IntersectionObserverCallback | undefined;
+  const observed: Element[] = [];
+  class IntersectionObserverStub {
+    root = null;
+    rootMargin = '';
+    thresholds = [0];
+    constructor(callback: IntersectionObserverCallback) {
+      intersectionCallback = callback;
+    }
+    observe(target: Element) { observed.push(target); }
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return []; }
+  }
+  vi.stubGlobal('IntersectionObserver', IntersectionObserverStub);
+  const { container } = renderPolicy('/terms', 'Terms of Service');
+  const sections = getPolicySections(policies.terms.split(/\n\s*\n/).slice(1));
+  expect(observed).toHaveLength(sections.length);
+
+  const target = container.querySelector('#policy-section-2');
+  expect(target).toBeTruthy();
+  act(() => {
+    intersectionCallback?.([{
+      target: target!,
+      isIntersecting: true,
+      boundingClientRect: target!.getBoundingClientRect(),
+    } as IntersectionObserverEntry], {} as IntersectionObserver);
+  });
+
+  const active = screen.getByTestId('link-policy-section-2');
+  expect(active.getAttribute('aria-current')).toBe('location');
+  expect(within(active).getByText('Reading')).toBeTruthy();
+  expect(active.classList.contains('font-semibold')).toBe(true);
+  expect(screen.getByTestId('policy-active-section').textContent).toContain('Currently reading: 2.');
+  expect(screen.getByTestId('link-policy-section-1').getAttribute('aria-current')).toBeNull();
 });
 
 it('supports keyboard access and visible focus styling on navigation and section links', async () => {
