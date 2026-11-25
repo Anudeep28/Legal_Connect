@@ -6,7 +6,7 @@ import express from "express";
 import { and, eq, inArray } from "drizzle-orm";
 
 process.env.DATABASE_URL ??= "postgres://grievance-test:grievance-test@127.0.0.1:1/grievance_test";
-const { accounts, auditLogs, db, grievances, pool } = await import("@workspace/db");
+const { accounts, auditLogs, db, grievances, notifications, pool } = await import("@workspace/db");
 const { requireAdmin, apiErrorHandler } = await import("../middlewares/access");
 const { createGrievancesRouter } = await import("./grievances");
 const { createAdminGrievancesRouter } = await import("./admin-grievances");
@@ -64,6 +64,7 @@ async function call(path: string, accountId: string, init: RequestInit = {}) {
 after(async () => {
   if (server) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   if (accountIds.length) {
+    await db.delete(notifications).where(inArray(notifications.userId, accountIds));
     await db.delete(grievances).where(inArray(grievances.clientId, accountIds));
     await db.delete(auditLogs).where(and(
       inArray(auditLogs.actorId, accountIds),
@@ -117,13 +118,36 @@ test("only the owner-designated grievance reviewer can read and resolve submissi
   assert.equal(visible.response.status, 200);
   assert.ok((visible.body as Record<string, any>[]).some((row) => row.id === id && row.clientEmail === `${clientId}@example.invalid`));
 
-  const resolved = await call(`/admin/grievances/${id}`, ownerId, {
+  const statusUpdate = await call(`/admin/grievances/${id}`, ownerId, {
     method: "PATCH",
-    body: JSON.stringify({ status: "resolved", response: "We reviewed this request and have completed the update." }),
+    body: JSON.stringify({ status: "under_review" }),
   });
-  assert.equal(resolved.response.status, 200);
-  assert.equal(resolved.body.status, "resolved");
-  assert.equal(resolved.body.officerResponse, "We reviewed this request and have completed the update.");
+  assert.equal(statusUpdate.response.status, 200);
+  assert.equal(statusUpdate.body.status, "under_review");
+
+  const responseUpdate = await call(`/admin/grievances/${id}`, ownerId, {
+    method: "PATCH",
+    body: JSON.stringify({ response: "We reviewed this request and have completed the update." }),
+  });
+  assert.equal(responseUpdate.response.status, 200);
+  assert.equal(responseUpdate.body.officerResponse, "We reviewed this request and have completed the update.");
+
+  const statusUpdateAgain = await call(`/admin/grievances/${id}`, ownerId, {
+    method: "PATCH",
+    body: JSON.stringify({ status: "resolved" }),
+  });
+  assert.equal(statusUpdateAgain.response.status, 200);
+  assert.equal(statusUpdateAgain.body.status, "resolved");
+
+  const notices = await db.select().from(notifications)
+    .where(inArray(notifications.userId, accountIds));
+  assert.equal(notices.length, 3, "status and response changes each create one in-app notice");
+  assert.ok(notices.every((notice) => notice.userId === clientId), "only the submitting client is notified");
+  assert.ok(notices.every((notice) => notice.title === "Grievance updated"));
+  assert.ok(notices.every((notice) => notice.body === "An update is available for your grievance. Open Grievances to review it."));
+  assert.ok(notices.every((notice) => notice.link === "/grievances"));
+  assert.ok(notices.every((notice) => !notice.body.includes("Please help with my privacy request.") &&
+    !notice.body.includes("We reviewed this request")));
 
   const clientView = await call("/grievances", clientId);
   const visibleToClient = (clientView.body as Record<string, any>[]).find((row) => row.id === id);
@@ -135,4 +159,7 @@ test("only the owner-designated grievance reviewer can read and resolve submissi
     body: JSON.stringify({ status: "under_review" }),
   });
   assert.equal(reopened.response.status, 409);
+  const noticesAfterRejectedUpdate = await db.select().from(notifications)
+    .where(inArray(notifications.userId, accountIds));
+  assert.equal(noticesAfterRejectedUpdate.length, 3, "rejected changes do not notify the client");
 });

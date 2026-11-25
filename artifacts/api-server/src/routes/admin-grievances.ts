@@ -1,7 +1,7 @@
 import { Router, type IRouter, type RequestHandler } from "express";
 import { desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { accounts, auditLogs, db, grievances } from "@workspace/db";
+import { accounts, auditLogs, db, grievances, notifications } from "@workspace/db";
 import * as api from "@workspace/api-zod";
 import {
   HttpError,
@@ -51,6 +51,7 @@ export function createAdminGrievancesRouter(dependencies: { authMiddlewares?: Re
       }
       if (nextStatus === "resolved" && !(responseText ?? current.officerResponse).trim())
         throw new HttpError(400, "Record an officer response before resolving this grievance.");
+      const statusChanged = nextStatus !== current.status;
       const responseChanged = input.response !== undefined;
       const [record] = await tx.update(grievances).set({
         status: nextStatus,
@@ -68,6 +69,15 @@ export function createAdminGrievancesRouter(dependencies: { authMiddlewares?: Re
         action: responseChanged ? "grievance:officer-response-recorded" : "grievance:status-updated",
         reason: `Grievance status ${current.status} → ${record!.status}${responseChanged ? "; officer response recorded" : ""}.`,
       });
+      if (statusChanged || responseChanged) {
+        await tx.insert(notifications).values({
+          id: randomUUID(),
+          userId: current.clientId,
+          title: "Grievance updated",
+          body: "An update is available for your grievance. Open Grievances to review it.",
+          link: "/grievances",
+        });
+      }
       return record!;
     });
 
