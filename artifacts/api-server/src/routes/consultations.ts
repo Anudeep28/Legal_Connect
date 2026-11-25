@@ -7,6 +7,7 @@ import * as api from "@workspace/api-zod";
 import { requireAccount, HttpError } from "../middlewares/access";
 import { accessibleConsultation, consultationRows, availableSlots, notify } from "../lib/legal";
 import { lockAccount } from "../lib/payments";
+import { consultationRequestPausedError, lockConsultationCheckoutControl } from "../lib/consultation-checkout";
 
 export function createConsultationsRouter(dependencies: { authMiddlewares?: RequestHandler[] } = {}) {
 const router: IRouter = Router();
@@ -30,6 +31,10 @@ router.post("/consultations", async (req, res): Promise<void> => {
   if (!slots.includes(start.toISOString())) throw new HttpError(409, "The selected time is not available. Please choose another slot.");
   const id = randomUUID();
   await db.transaction(async (tx) => {
+    if (!lawyer.demo) {
+      const checkoutControl = await lockConsultationCheckoutControl(tx);
+      if (checkoutControl.paused) throw new HttpError(503, consultationRequestPausedError());
+    }
     await tx.insert(consultations).values({
       id, userId: req.account.id, lawyerId: lawyer.id,
       topic: input.topic.trim(), notes: input.notes?.trim() ?? "",

@@ -2316,7 +2316,7 @@ return customFetch<Consultation>(getCreateConsultationUrl(),
 
 export const getCreateConsultationMutationKey = () => ['createConsultation'] as const;
 
-export const getCreateConsultationMutationOptions = <TError = ErrorType<unknown>,
+export const getCreateConsultationMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createConsultation>>, TError,CreateConsultationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createConsultation>>, TError,CreateConsultationMutationVariables, TContext> => {
 
@@ -2345,10 +2345,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateConsultationMutationResult = NonNullable<Awaited<ReturnType<typeof createConsultation>>>
     export type CreateConsultationMutationBody = BodyType<ConsultationInput>
-    export type CreateConsultationMutationError = ErrorType<unknown>
+    export type CreateConsultationMutationError = ErrorType<void>
     export type CreateConsultationMutationVariables = {data: BodyType<ConsultationInput>}
 
-    export const useCreateConsultation = <TError = ErrorType<unknown>,
+    export const useCreateConsultation = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createConsultation>>, TError,CreateConsultationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createConsultation>>,

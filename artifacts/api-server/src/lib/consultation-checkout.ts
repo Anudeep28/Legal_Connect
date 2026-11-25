@@ -61,3 +61,7 @@ export async function setConsultationCheckoutPaused(
 export function consultationCheckoutPausedError(): string {
   return "Paid consultation checkout is temporarily paused. No payment was taken.";
 }
+
+export function consultationRequestPausedError(): string {
+  return "Paid consultation requests are temporarily unavailable while checkout is paused. No request or payment was created.";
+}

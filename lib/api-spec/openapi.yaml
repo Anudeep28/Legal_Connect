@@ -322,6 +322,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Consultation" }
+        "503":
+          description: Paid consultation requests are temporarily unavailable while checkout is paused, or calling is not configured.
   /consultations/{id}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
