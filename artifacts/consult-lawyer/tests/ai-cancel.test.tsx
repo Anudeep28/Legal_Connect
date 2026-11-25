@@ -116,6 +116,39 @@ it('cancel a private call transcript draft without sending the transcript or tem
   await cancel(user, 'call-draft-session', 'DeepSeek');
   expect((screen.getByTestId('input-call-transcript-session') as HTMLTextAreaElement).value).toBe(text);
 });
+for (const surface of ['document', 'transcript'] as const) {
+  for (const dismissal of ['Escape', 'close button'] as const) {
+    it(`dismisses the ${surface} AI consent with ${dismissal} and restores focus without sending`, async () => {
+      const user = mount(surface === 'document' ? 'documents' : 'consultations');
+      const prefix = surface === 'document' ? 'document-writing' : 'call-draft-session';
+      const triggerTestId = surface === 'document' ? 'button-ai-menu' : 'button-generate-call-draft-session';
+      const contentTestId = surface === 'document' ? 'input-doc-content' : 'input-call-transcript-session';
+
+      if (surface === 'document') {
+        await user.click(await screen.findByTestId('button-ai-menu'));
+        await user.click(await screen.findByText('Draft a formal document from notes', { exact: true }));
+      } else {
+        await user.click(await screen.findByTestId('button-generate-call-draft-session'));
+      }
+
+      const dialog = await screen.findByTestId(`${prefix}-ai-consent-dialog`);
+      expect(unexpected).toEqual([]);
+      if (dismissal === 'Escape') {
+        await user.keyboard('{Escape}');
+      } else {
+        await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+      }
+
+      await waitFor(() => expect(dialog.isConnected).toBe(false));
+      const trigger = screen.getByTestId(triggerTestId) as HTMLButtonElement;
+      await waitFor(() => expect(document.activeElement).toBe(trigger));
+      expect(trigger.isConnected).toBe(true);
+      expect(trigger.disabled).toBe(false);
+      expect((screen.getByTestId(contentTestId) as HTMLTextAreaElement).value).toBe(text);
+      expect(unexpected).toEqual([]);
+    });
+  }
+}
 it('cancel a deliverable draft without sending consultation notes', async () => {
   const user = mount('consultations');
   await user.click(await screen.findByTestId('button-new-deliverable'));

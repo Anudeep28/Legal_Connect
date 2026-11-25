@@ -168,6 +168,7 @@ function CallTranscriptCard({
   const [templateId, setTemplateId] = useState('');
   const [language, setLanguage] = useState('English');
   const [draftConsentOpen, setDraftConsentOpen] = useState(false);
+  const draftTriggerRef = useRef<HTMLButtonElement>(null);
   const dirty = text !== session.editedTranscript;
 
   useEffect(() => {
@@ -260,7 +261,7 @@ function CallTranscriptCard({
           <Notice icon={<Info />} className="mt-3">
             Generating a draft sends this lawyer-edited transcript and the selected template to DeepSeek. The result is only a preview; it is not saved or sent to the client automatically.
           </Notice>
-          <Button className="mt-3" onClick={openDraftConsent} disabled={!templateId || dirty || generate.isPending} data-testid={`button-generate-call-draft-${session.id}`}>
+          <Button ref={draftTriggerRef} className="mt-3" onClick={openDraftConsent} disabled={!templateId || dirty || generate.isPending} data-testid={`button-generate-call-draft-${session.id}`}>
             {generate.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Generate document draft
           </Button>
           {dirty && <p className="mt-2 text-xs text-muted-foreground">Save your transcript corrections before generating this draft.</p>}
@@ -269,6 +270,7 @@ function CallTranscriptCard({
             provider="DeepSeek"
             description="Your reviewed transcript and selected legal template will be sent to DeepSeek for a draft preview. The draft is not saved or delivered automatically."
             testIdPrefix={`call-draft-${session.id}`}
+            returnFocusRef={draftTriggerRef}
             onCancel={() => setDraftConsentOpen(false)}
             onContinue={draftFromTranscript}
           />

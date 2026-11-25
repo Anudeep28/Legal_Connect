@@ -1,4 +1,5 @@
 import { Link } from 'wouter';
+import type { RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,6 +16,7 @@ type AiRequestConsentDialogProps = {
   description: string;
   testIdPrefix: string;
   continueLabel?: string;
+  returnFocusRef?: RefObject<HTMLElement | null>;
   onCancel: () => void;
   onContinue: () => void;
 };
@@ -25,12 +27,22 @@ export function AiRequestConsentDialog({
   description,
   testIdPrefix,
   continueLabel = 'Continue and send',
+  returnFocusRef,
   onCancel,
   onContinue,
 }: AiRequestConsentDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onCancel()}>
-      <DialogContent data-testid={`${testIdPrefix}-ai-consent-dialog`}>
+      <DialogContent
+        data-testid={`${testIdPrefix}-ai-consent-dialog`}
+        onCloseAutoFocus={(event) => {
+          const target = returnFocusRef?.current;
+          if (target?.isConnected) {
+            event.preventDefault();
+            target.focus();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Before sending content to {provider}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

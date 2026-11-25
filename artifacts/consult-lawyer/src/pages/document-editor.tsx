@@ -95,6 +95,7 @@ function Editor({ doc }: { doc: Document }) {
   const recRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+  const aiMenuTriggerRef = useRef<HTMLButtonElement>(null);
 
   const dirty = title !== saved.title || content !== saved.content || language !== saved.language;
   const template = platform.data?.templates.find((t) => t.id === doc.templateId);
@@ -359,7 +360,7 @@ function Editor({ doc }: { doc: Document }) {
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="rounded-full" disabled={ai.isPending || !draftingEnabled} data-testid="button-ai-menu">
+              <Button ref={aiMenuTriggerRef} variant="outline" size="sm" className="rounded-full" disabled={ai.isPending || !draftingEnabled} data-testid="button-ai-menu">
                 {ai.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} AI assist
               </Button>
             </DropdownMenuTrigger>
@@ -439,6 +440,7 @@ function Editor({ doc }: { doc: Document }) {
               : 'The selected document text will be sent to DeepSeek to create a formal draft.'
         }
         testIdPrefix="document-writing"
+        returnFocusRef={aiMenuTriggerRef}
         onCancel={() => setPendingAiRequest(null)}
         onContinue={confirmAiRequest}
       />
