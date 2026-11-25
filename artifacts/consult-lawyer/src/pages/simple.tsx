@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CommunicationSettings } from '@/components/communication-settings';
 import { Link, useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Loader2, Bell, CheckCheck, Info, Scale, FileText, MessagesSquare, CalendarDays, Mic, ArrowRight } from 'lucide-react';
+import { Check, Loader2, Bell, CheckCheck, Info, Scale, FileText, MessagesSquare, CalendarDays, Mic, ArrowRight, Printer } from 'lucide-react';
 import {
   useGetPlatform, useUpdateMe, getGetMeQueryKey,
   useListNotifications, getListNotificationsQueryKey, useReadNotification,
@@ -466,7 +466,22 @@ export function Policy({ path }: { path: string }) {
   return (
     <AppPage>
       <div className="policy-print-page mx-auto max-w-3xl">
-        <PageHeader eyebrow="Policies" title={p.title} />
+        <PageHeader
+          eyebrow="Policies"
+          title={p.title}
+          actions={
+            <Button
+              type="button"
+              variant="outline"
+              className="policy-print-hide print:hidden"
+              onClick={() => window.print()}
+              data-testid="button-print-policy"
+            >
+              <Printer aria-hidden="true" />
+              Print / Save as PDF
+            </Button>
+          }
+        />
         <Notice icon={<Info />} className="policy-print-hide mb-8 print:hidden">{p.context}</Notice>
         <section className="policy-print-hide mb-8 rounded-2xl border bg-card p-5 print:hidden" aria-label="Policy version and review status" data-testid="policy-revision-status">
           <div className="flex flex-wrap items-center justify-between gap-3">

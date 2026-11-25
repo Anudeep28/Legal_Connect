@@ -78,9 +78,26 @@ it.each(pageCases)('$title keeps every policy block in the print layout', ({ pat
   const renderedBlocks = Array.from(article.children).map((element) => element.textContent?.trim() ?? '');
 
   expect(renderedBlocks).toEqual(blocks);
-  expect(main.querySelectorAll('.policy-print-hide')).toHaveLength(2);
+  expect(main.querySelectorAll('.policy-print-hide')).toHaveLength(3);
   expect(main.querySelector('.policy-section-index')?.classList.contains('print:hidden')).toBe(true);
   expect(article.classList.contains('policy-print-article')).toBe(true);
+});
+
+it.each(pageCases)('$title opens browser print without changing policy content', async ({ path, title, key }) => {
+  const print = vi.fn();
+  vi.stubGlobal('print', print);
+  const user = userEvent.setup();
+  renderPolicy(path, title);
+
+  const button = screen.getByRole('button', { name: 'Print / Save as PDF' });
+  expect(button.className).toContain('policy-print-hide');
+  expect(button.className).toContain('print:hidden');
+  await user.click(button);
+  expect(print).toHaveBeenCalledOnce();
+
+  const article = screen.getByRole('article', { name: title });
+  const expectedBlocks = policies[key].split(/\n\s*\n/).slice(1).map((block) => block.trim());
+  expect(Array.from(article.children).map((element) => element.textContent?.trim() ?? '')).toEqual(expectedBlocks);
 });
 
 it('marks the section in the reading area and labels it without color alone', () => {
