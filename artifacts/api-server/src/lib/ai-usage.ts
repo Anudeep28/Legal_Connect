@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gte, lte, lt, sql } from "drizzle-orm";
-import { db, accounts, aiUsage, aiUsageDaily, lawyers } from "@workspace/db";
+import { db, accounts, aiRequestLocks, aiUsage, aiUsageDaily, lawyers } from "@workspace/db";
 import { HttpError } from "../middlewares/access";
 import { logger } from "./logger";
 import { getAdminAiUsageBudgetState, notifyAiUsageBudgetAlertsSafely } from "./ai-usage-budget";
@@ -12,6 +13,40 @@ export type { AiPlan } from "./ai-usage-limits";
 export { aiDailyLimit } from "./ai-usage-limits";
 export const AI_USAGE_RETENTION_DAYS = 90;
 export const AI_USAGE_HISTORY_MAX_DAYS = 90;
+// Provider calls time out after two minutes; this lease adds recovery room after an instance crash.
+export const AI_WRITING_LOCK_LEASE_SECONDS = 180;
+
+export type AiWritingLock = {
+  release(): Promise<void>;
+};
+
+export async function tryAcquireAiWritingLock(accountId: string): Promise<AiWritingLock | null> {
+  const token = randomUUID();
+  const expiresAt = sql`now() + (${AI_WRITING_LOCK_LEASE_SECONDS} * interval '1 second')`;
+  const [acquired] = await db.insert(aiRequestLocks).values({
+    accountId,
+    token,
+    expiresAt,
+  }).onConflictDoUpdate({
+    target: aiRequestLocks.accountId,
+    set: { token, expiresAt },
+    setWhere: sql`${aiRequestLocks.expiresAt} <= now()`,
+  }).returning({ token: aiRequestLocks.token });
+
+  if (!acquired) return null;
+
+  let released = false;
+  return {
+    async release() {
+      if (released) return;
+      released = true;
+      await db.delete(aiRequestLocks).where(and(
+        eq(aiRequestLocks.accountId, accountId),
+        eq(aiRequestLocks.token, token),
+      ));
+    },
+  };
+}
 
 function providerForKind(kind: Kind): "deepseek" | "elevenlabs" {
   return kind === "drafting" ? "deepseek" : "elevenlabs";

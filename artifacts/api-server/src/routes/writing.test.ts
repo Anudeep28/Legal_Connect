@@ -7,6 +7,8 @@ import { validateWritingOutput } from "../lib/writing-output-validation";
 import pinoHttp from "pino-http";
 import pino from "pino";
 
+const acquireNoopAiRequestLock = async (_accountId: string) => ({ release: async () => {} });
+
 async function assertDisclosureRequired(url: string, acknowledgedBody: string, provider: string) {
   const fields = JSON.parse(acknowledgedBody);
   for (const value of [undefined, false, "true", 1, null]) {
@@ -38,6 +40,7 @@ test("a failed drafting request releases the lawyer lock for a later request", a
   });
   app.use(createWritingRouter({
     authMiddlewares: [(_req, _res, next) => next()],
+    acquireAiWritingLock: acquireNoopAiRequestLock,
     hasDeepSeekKey: () => true,
     getAiUsage: async () => ({
       plan: "single",
@@ -126,6 +129,7 @@ test("writing output requires the review note and preserves protected facts for 
   });
   app.use(createWritingRouter({
     authMiddlewares: [(_req, _res, next) => next()],
+    acquireAiWritingLock: acquireNoopAiRequestLock,
     hasDeepSeekKey: () => true,
     reserveAiAttempt: async () => ({ used: 1, limit: 30, resetsAt: new Date().toISOString() }),
     requestDeepSeek: async () => {
@@ -226,6 +230,7 @@ test("a different lawyer cannot draft from another lawyer's call transcript", as
   });
   app.use(createWritingRouter({
     authMiddlewares: [(_req, _res, next) => next()],
+    acquireAiWritingLock: acquireNoopAiRequestLock,
     hasDeepSeekKey: () => true,
     accessibleConsultation: async (account, consultationId) => {
       assert.equal(account.id, "synthetic-unassigned-lawyer");
@@ -302,6 +307,7 @@ test("a truly simultaneous drafting request for the same lawyer is rejected", as
   });
   app.use(createWritingRouter({
     authMiddlewares: [(_req, _res, next) => next()],
+    acquireAiWritingLock: acquireNoopAiRequestLock,
     hasDeepSeekKey: () => true,
     getAiUsage: async () => ({
       plan: "single",
@@ -404,6 +410,7 @@ test("separate lawyers can draft while both AI requests are pending", async () =
   });
   app.use(createWritingRouter({
     authMiddlewares: [(_req, _res, next) => next()],
+    acquireAiWritingLock: acquireNoopAiRequestLock,
     hasDeepSeekKey: () => true,
     reserveAiAttempt: async (accountId) => {
       reservedAccounts.push(accountId);
@@ -503,6 +510,7 @@ test("a failed dictation request releases the lawyer lock for a later request", 
   });
   app.use(createWritingRouter({
     authMiddlewares: [(_req, _res, next) => next()],
+    acquireAiWritingLock: acquireNoopAiRequestLock,
     getAiUsage: async () => ({
       plan: "single",
       drafting: { limit: 15, used: 2, remaining: 13 },

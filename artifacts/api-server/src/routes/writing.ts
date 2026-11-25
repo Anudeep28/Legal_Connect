@@ -1,4 +1,4 @@
-import { Router, type IRouter, type RequestHandler } from "express";
+import { Router, type IRouter, type Request, type RequestHandler } from "express";
 import { rateLimit } from "express-rate-limit";
 import * as api from "@workspace/api-zod";
 import { and, eq } from "drizzle-orm";
@@ -10,7 +10,14 @@ import { accessibleConsultation } from "../lib/legal";
 import { ensureCompatibleAudio } from "../lib/audio";
 import { buildWritingMessages } from "../lib/writing-prompts";
 import { validateWritingOutput } from "../lib/writing-output-validation";
-import { getAiUsage, getAiUsageHistory, recordAiProviderSuccessSafely, reserveAiAttempt } from "../lib/ai-usage";
+import {
+  getAiUsage,
+  getAiUsageHistory,
+  recordAiProviderSuccessSafely,
+  reserveAiAttempt,
+  tryAcquireAiWritingLock,
+  type AiWritingLock,
+} from "../lib/ai-usage";
 import {
   hasDeepSeekKey,
   ProviderConfigurationError,
@@ -53,6 +60,7 @@ export function createWritingRouter(dependencies: {
   reserveAiAttempt?: typeof reserveAiAttempt;
   recordAiProviderSuccess?: typeof recordAiProviderSuccessSafely;
   accessibleConsultation?: typeof accessibleConsultation;
+  acquireAiWritingLock?: typeof tryAcquireAiWritingLock;
 } = {}): IRouter {
 const router: IRouter = Router();
 const active = new Set<string>();
@@ -64,6 +72,7 @@ const readUsageHistory = dependencies.getAiUsageHistory ?? getAiUsageHistory;
 const reserveUsage = dependencies.reserveAiAttempt ?? reserveAiAttempt;
 const recordProviderSuccess = dependencies.recordAiProviderSuccess ?? recordAiProviderSuccessSafely;
 const readAccessibleConsultation = dependencies.accessibleConsultation ?? accessibleConsultation;
+const acquireSharedAiLock = dependencies.acquireAiWritingLock ?? tryAcquireAiWritingLock;
 router.use("/writing", ...(dependencies.authMiddlewares ?? [requireAccount, requireLawyer]));
 router.get("/writing/usage", async (req, res) => {
   res.json(api.GetWritingUsageResponse.parse(await readUsage(req.account.id)));
@@ -82,6 +91,27 @@ function providerError(err: unknown): never {
   throw new HttpError(502, "AI assistance is temporarily unavailable. Your document has not been changed.");
 }
 
+async function acquireAiRequestLock(accountId: string, req: Pick<Request, "log">): Promise<AiWritingLock> {
+  try {
+    const lock = await acquireSharedAiLock(accountId);
+    if (!lock) throw new HttpError(429, "An AI request is already running. Please wait for it to finish.");
+    return lock;
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    req.log.warn({ name: err instanceof Error ? err.name : "UnknownError" }, "Shared AI request lock could not be acquired");
+    throw new HttpError(503, "AI assistance is temporarily unavailable. Please retry.");
+  }
+}
+
+async function releaseAiRequestLock(lock: AiWritingLock | null, req: Pick<Request, "log">): Promise<void> {
+  if (!lock) return;
+  try {
+    await lock.release();
+  } catch (err) {
+    req.log.warn({ name: err instanceof Error ? err.name : "UnknownError" }, "Shared AI request lock release failed; the lease will expire");
+  }
+}
+
 router.post("/writing/assist", async (req, res): Promise<void> => {
   if (req.body?.dataUseAcknowledged !== true)
     throw new HttpError(400, "Review the DeepSeek disclosure and continue before sending text.");
@@ -91,7 +121,9 @@ router.post("/writing/assist", async (req, res): Promise<void> => {
   if (!aiKeyReady()) throw new HttpError(503, "DeepSeek drafting is not configured. Your document has not been changed.");
   if (active.has(req.account.id)) throw new HttpError(429, "An AI request is already running. Please wait for it to finish.");
   active.add(req.account.id);
+  let requestLock: AiWritingLock | null = null;
   try {
+    requestLock = await acquireAiRequestLock(req.account.id, req);
     await reserveUsage(req.account.id, "drafting");
     const completion = await completeWithAi(buildWritingMessages(input.action, input.language, input.text));
     const outputValidation = validateWritingOutput(input.text, completion.text);
@@ -108,7 +140,10 @@ router.post("/writing/assist", async (req, res): Promise<void> => {
     if (err instanceof HttpError) throw err;
     req.log.warn({ name: (err as Error).name }, "DeepSeek writing request failed");
     providerError(err);
-  } finally { active.delete(req.account.id); }
+  } finally {
+    await releaseAiRequestLock(requestLock, req);
+    active.delete(req.account.id);
+  }
 });
 
 router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", async (req, res): Promise<void> => {
@@ -134,9 +169,11 @@ router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", asyn
   if (!template) throw new HttpError(400, "Select an available legal template.");
 
   active.add(req.account.id);
+  let requestLock: AiWritingLock | null = null;
   try {
     const source = buildCallTranscriptSource(template, record.topic, session.editedTranscript);
     if (source.length > 100_000) throw new HttpError(413, "Shorten the edited transcript before generating this draft; no text was sent.");
+    requestLock = await acquireAiRequestLock(req.account.id, req);
     await reserveUsage(req.account.id, "drafting");
     const completion = await completeWithAi(buildWritingMessages("draft", input.language, source));
     const outputValidation = validateWritingOutput(
@@ -160,6 +197,7 @@ router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", asyn
     req.log.warn({ name: (err as Error).name }, "Call transcript drafting request failed");
     providerError(err);
   } finally {
+    await releaseAiRequestLock(requestLock, req);
     active.delete(req.account.id);
   }
 });
@@ -174,10 +212,12 @@ router.post("/writing/transcribe", async (req, res): Promise<void> => {
   if (bytes.length < 32 || bytes.length > 10 * 1024 * 1024) throw new HttpError(400, "Record a segment smaller than 10 MB.");
   if (active.has(req.account.id)) throw new HttpError(429, "An AI request is already running. Please wait.");
   active.add(req.account.id);
+  let requestLock: AiWritingLock | null = null;
   try {
     const { buffer, format } = await ensureCompatibleAudio(bytes);
     if (buffer.length > 24 * 1024 * 1024) throw new HttpError(400, "The recording is too long. Please record a shorter segment.");
     const language = supportedLanguages.find((l) => l.name === input.language || l.code === input.language)?.code;
+    requestLock = await acquireAiRequestLock(req.account.id, req);
     await reserveUsage(req.account.id, "transcription");
     const text = await transcribeAudio(buffer, format, language);
     await recordProviderSuccess(req.account.id, "transcription");
@@ -187,7 +227,10 @@ router.post("/writing/transcribe", async (req, res): Promise<void> => {
     if (err instanceof HttpError) throw err;
     req.log.warn({ name: (err as Error).name }, "ElevenLabs transcription failed");
     providerError(err);
-  } finally { active.delete(req.account.id); }
+  } finally {
+    await releaseAiRequestLock(requestLock, req);
+    active.delete(req.account.id);
+  }
 });
 return router;
 }
