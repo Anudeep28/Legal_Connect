@@ -81,6 +81,35 @@ it('cancel dictation without uploading audio', async () => {
   expect(stopTrack).toHaveBeenCalledOnce();
   expect((screen.getByTestId('input-doc-content') as HTMLTextAreaElement).value).toBe(text);
 });
+it('discards an active recording when leaving, including delayed final chunks', async () => {
+  const stopTrack = vi.fn();
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop: stopTrack }] }) } });
+  let recorder: InstanceType<typeof SyntheticRecorder> | undefined;
+  class SyntheticRecorder {
+    static isTypeSupported() { return true; }
+    state = 'inactive';
+    ondataavailable!: (e: { data: Blob }) => void;
+    onstop!: () => void;
+    stop = vi.fn(() => { this.state = 'inactive'; });
+    constructor() { recorder = this; }
+    start() { this.state = 'recording'; }
+  }
+  vi.stubGlobal('MediaRecorder', SyntheticRecorder);
+  const user = mount('documents');
+  await user.click(await screen.findByTestId('button-record'));
+  await waitFor(() => expect(recorder?.state).toBe('recording'));
+
+  await user.click(screen.getByTestId('button-back-documents'));
+  await waitFor(() => expect(screen.queryByTestId('input-doc-content')).toBeNull());
+  expect(recorder?.stop).toHaveBeenCalledOnce();
+  expect(stopTrack).toHaveBeenCalledOnce();
+
+  // Some browsers emit final data and stop asynchronously after stop() returns.
+  recorder?.ondataavailable({ data: new Blob([new Uint8Array(64)]) });
+  recorder?.onstop();
+  expect(stopTrack).toHaveBeenCalledOnce();
+  expect(unexpected).toEqual([]);
+});
 it('cancel a private call transcript draft without sending the transcript or template', async () => {
   const user = mount('consultations');
   await user.click(await screen.findByTestId('button-generate-call-draft-session'));

@@ -118,17 +118,21 @@ function Editor({ doc }: { doc: Document }) {
   const rtl = isRtl(language);
 
   // On navigation/unmount: discard any in-flight recording, stop the stream and clear timers.
-  useEffect(() => () => {
-    discardRef.current = true;
-    if (timerRef.current) window.clearInterval(timerRef.current);
-    timerRef.current = null;
-    const rec = recRef.current;
-    recRef.current = null;
-    if (rec && rec.state !== 'inactive') {
-      try { rec.stop(); } catch { /* already stopped */ }
-    }
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
+  useEffect(() => {
+    discardRef.current = false;
+    return () => {
+      discardRef.current = true;
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      timerRef.current = null;
+      const rec = recRef.current;
+      recRef.current = null;
+      if (rec && rec.state !== 'inactive') {
+        try { rec.stop(); } catch { /* already stopped */ }
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      chunksRef.current = [];
+    };
   }, []);
 
   const startTimer = () => {
@@ -202,13 +206,22 @@ function Editor({ doc }: { doc: Document }) {
       const mime = MIME_CANDIDATES.find((m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) ?? 'audio/webm';
       const rec = new MediaRecorder(stream, { mimeType: mime });
       chunksRef.current = [];
-      rec.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
+      rec.ondataavailable = (e) => {
+        if (discardRef.current) {
+          chunksRef.current = [];
+          return;
+        }
+        if (e.data.size) chunksRef.current.push(e.data);
+      };
       rec.onstop = () => {
         if (recRef.current === rec) recRef.current = null;
-        setFinalizingRecording(false);
+        if (discardRef.current) {
+          chunksRef.current = [];
+          return;
+        }
         stream.getTracks().forEach((t) => t.stop());
         if (streamRef.current === stream) streamRef.current = null;
-        if (discardRef.current) return;
+        setFinalizingRecording(false);
         const blob = new Blob(chunksRef.current, { type: mime });
         if (blob.size < 32) {
           toast({ title: 'No audio captured', description: 'Record a short segment and try again.' });
