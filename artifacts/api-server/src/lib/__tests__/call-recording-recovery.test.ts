@@ -299,6 +299,56 @@ test("participant lookup failure returns a retryable error and the callback succ
   await db.update(callRecordingTracks).set({ status: "failed" }).where(eq(callRecordingTracks.id, tracks[0].id));
 });
 
+test("completed recordings without a local session are deleted and retried without creating tracks", async () => {
+  const roomSid = testSid("RM");
+  const recordingSid = testSid("RT");
+  const callback = {
+    AccountSid: twilioSid,
+    RoomSid: roomSid,
+    RecordingSid: recordingSid,
+    ParticipantIdentity: clientId,
+    SourceSid: testSid("MT"),
+    TrackKind: "audio",
+    Container: "mka",
+    StatusCallbackEvent: "recording-completed",
+  };
+
+  const temporaryFailure = nock("https://video.twilio.com")
+    .delete(`/v1/Recordings/${recordingSid}`)
+    .reply(503, { message: "synthetic temporary deletion outage" });
+  assert.equal(await sendTwilioCallback(callback), 500, "Twilio should retry after deletion fails");
+  assert.ok(temporaryFailure.isDone());
+
+  const [tracksAfterFailure, sessionsAfterFailure] = await Promise.all([
+    db.select().from(callRecordingTracks).where(eq(callRecordingTracks.recordingSid, recordingSid)),
+    db.select().from(callRecordingSessions).where(eq(callRecordingSessions.roomSid, roomSid)),
+  ]);
+  assert.equal(tracksAfterFailure.length, 0, "sessionless recordings must not get a fabricated track");
+  assert.equal(sessionsAfterFailure.length, 0, "the callback must not create a fabricated session");
+
+  const retryDeletion = nock("https://video.twilio.com")
+    .delete(`/v1/Recordings/${recordingSid}`)
+    .reply(204);
+  assert.equal(await sendTwilioCallback(callback), 204, "a retry succeeds after Twilio deletion recovers");
+  assert.ok(retryDeletion.isDone());
+
+  const duplicateDeletion = nock("https://video.twilio.com")
+    .delete(`/v1/Recordings/${recordingSid}`)
+    .reply(404, { code: 20404, message: "Recording already deleted" });
+  assert.equal(await sendTwilioCallback(callback), 204, "a duplicate callback is safe after deletion");
+  assert.ok(duplicateDeletion.isDone());
+
+  const [tracksAfterDuplicates, sessionsAfterDuplicates] = await Promise.all([
+    db.select().from(callRecordingTracks).where(eq(callRecordingTracks.recordingSid, recordingSid)),
+    db.select().from(callRecordingSessions).where(eq(callRecordingSessions.roomSid, roomSid)),
+  ]);
+  assert.equal(tracksAfterDuplicates.length, 0);
+  assert.equal(sessionsAfterDuplicates.length, 0);
+  assert.equal(tracksAfterDuplicates.some((track) => track.transcribedAt !== null), false,
+    "without a track association, sessionless recordings cannot enter transcription");
+  assert.equal(nock.pendingMocks().length, 0, "all external Twilio requests were mocked");
+});
+
 test("late recording callbacks after withdrawal create deletion-only work and stay deduplicated", async () => {
   const consultation = await createConsultation();
   await grantMutualConsent(consultation.id);
