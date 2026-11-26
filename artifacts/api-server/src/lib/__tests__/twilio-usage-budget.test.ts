@@ -35,6 +35,7 @@ const noDataConfigId = `${prefix}-no-data`;
 const historyZeroConfigId = `${prefix}-history-zero`;
 const historyPartialConfigId = `${prefix}-history-partial`;
 const historyNoDataConfigId = `${prefix}-history-no-data`;
+const lateHistoryConfigIds = Array.from({ length: 4 }, (_, index) => `${prefix}-late-${index}`);
 const emailAlertConfigId = `${prefix}-email-alert`;
 const pushAlertConfigId = `${prefix}-push-alert`;
 const disabledAlertConfigId = `${prefix}-disabled-alert`;
@@ -140,9 +141,14 @@ after(async () => {
     alertConfigId, mismatchConfigId, partialConfigId, noDataConfigId,
     historyZeroConfigId, historyPartialConfigId, historyNoDataConfigId,
     emailAlertConfigId, pushAlertConfigId, disabledAlertConfigId,
+    ...lateHistoryConfigIds,
   ]));
   await db.delete(twilioUsageHistory).where(inArray(twilioUsageHistory.periodStart, [
     monthStart, noDataStart, historyZeroStart, historyPartialStart, historyNoDataStart,
+    ...lateHistoryConfigIds.map((_, index) => {
+      const month = new Date(Date.UTC(fixtureYear, 9 + index, 1));
+      return month.toISOString().slice(0, 10);
+    }),
   ]));
   await db.delete(auditLogs).where(inArray(auditLogs.actorId, [
     ownerId, emailOnlyOwnerId, pushOnlyOwnerId, disabledOwnerId,
@@ -205,6 +211,32 @@ test("Twilio usage reader totals posted Video charges and Group Room minutes", a
   assert.equal(usage.participantMinutes, "41.5000");
   assert.equal(usage.periodStart, monthStart);
   assert.equal(usage.asOf, now.toISOString());
+  assert.equal(interceptor.isDone(), true);
+});
+
+test("Twilio usage reader can fetch the previous month's posted records", async () => {
+  const interceptor = nock("https://api.twilio.com")
+    .get(`/2010-04-01/Accounts/${accountSid}/Usage/Records/LastMonth.json`)
+    .query((params) => params.IncludeSubaccounts === "false")
+    .reply(200, {
+      usage_records: [{
+        account_sid: accountSid,
+        category: "pv",
+        description: "Programmable Video",
+        start_date: `${fixtureYear}-10-01`,
+        end_date: `${fixtureYear}-10-31`,
+        as_of: now.toISOString(),
+        price: "4.750000",
+        price_unit: "USD",
+        usage: "1",
+        usage_unit: "unit",
+      }],
+    });
+
+  const usage = await getTwilioVideoUsage("lastMonth");
+  assert.equal(usage.status, "success");
+  assert.equal(usage.spend, "4.750000");
+  assert.equal(usage.periodStart, `${fixtureYear}-10-01`);
   assert.equal(interceptor.isDone(), true);
 });
 
@@ -433,6 +465,136 @@ test("monthly history keeps posted zero, partial and missing data distinct and u
   assert.equal(missing?.participantMinutes, null);
   assert.equal(missing?.periodEnd, `${fixtureYear + 1}-03-31`);
   assert.equal(missing?.usageAsOf, null);
+});
+
+test("late-posted monthly usage refreshes existing rows once within the reconciliation window", async () => {
+  const cases = [
+    { status: "success" as const, oldSpend: "1.000000", lateSpend: "6.250000" },
+    { status: "success" as const, oldSpend: "0.000000", lateSpend: "0.000000" },
+    { status: "partial" as const, oldSpend: "2.000000", lateSpend: null },
+    { status: "no_data" as const, oldSpend: "3.000000", lateSpend: null },
+  ];
+
+  for (const [index, scenario] of cases.entries()) {
+    const targetMonth = new Date(Date.UTC(fixtureYear, 9 + index, 1));
+    const targetStart = targetMonth.toISOString().slice(0, 10);
+    const targetEnd = new Date(Date.UTC(targetMonth.getUTCFullYear(), targetMonth.getUTCMonth() + 1, 0))
+      .toISOString().slice(0, 10);
+    const followingMonth = new Date(Date.UTC(targetMonth.getUTCFullYear(), targetMonth.getUTCMonth() + 1, 1));
+    const reconciliationNow = new Date(Date.UTC(
+      followingMonth.getUTCFullYear(),
+      followingMonth.getUTCMonth(),
+      2,
+      0,
+      30,
+    ));
+    const activeStart = followingMonth.toISOString().slice(0, 10);
+    const activeEnd = new Date(Date.UTC(followingMonth.getUTCFullYear(), followingMonth.getUTCMonth() + 1, 0))
+      .toISOString().slice(0, 10);
+    const configId = lateHistoryConfigIds[index]!;
+    const oldSnapshot: TwilioVideoUsageSnapshot = {
+      status: "success",
+      spend: scenario.oldSpend,
+      currency: "USD",
+      participantMinutes: "10.0000",
+      periodStart: targetStart,
+      periodEnd: targetEnd,
+      asOf: new Date(targetMonth.getTime() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    const updatedSnapshot: TwilioVideoUsageSnapshot = scenario.status === "no_data"
+      ? {
+        status: "no_data",
+        spend: null,
+        currency: null,
+        participantMinutes: null,
+        periodStart: null,
+        periodEnd: null,
+        asOf: null,
+      }
+      : scenario.status === "partial"
+        ? {
+          status: "partial",
+          spend: null,
+          currency: null,
+          participantMinutes: "99.0000",
+          periodStart: targetStart,
+          periodEnd: targetEnd,
+          asOf: reconciliationNow.toISOString(),
+        }
+        : {
+          ...oldSnapshot,
+          spend: scenario.lateSpend!,
+          asOf: reconciliationNow.toISOString(),
+        };
+    const activeSnapshot: TwilioVideoUsageSnapshot = {
+      status: "success",
+      spend: "0.250000",
+      currency: "USD",
+      participantMinutes: "2.0000",
+      periodStart: activeStart,
+      periodEnd: activeEnd,
+      asOf: reconciliationNow.toISOString(),
+    };
+
+    await saveTwilioUsageBudgetConfig({
+      enabled: false,
+      budgetAmount: 10,
+      budgetCurrency: "USD",
+      warningPercent: 80,
+    }, ownerId, reconciliationNow, configId);
+    await refreshTwilioUsageBudget({
+      force: true,
+      configId,
+      now: new Date(targetMonth.getTime() + 15 * 24 * 60 * 60 * 1000),
+      fetchUsage: async () => oldSnapshot,
+    });
+
+    let historicalFetches = 0;
+    await refreshTwilioUsageBudget({
+      force: true,
+      configId,
+      now: reconciliationNow,
+      fetchUsage: async () => activeSnapshot,
+      fetchLastMonthUsage: async () => {
+        historicalFetches += 1;
+        return updatedSnapshot;
+      },
+    });
+    assert.equal(historicalFetches, 1, "the completed month is reconciled after Twilio's 24-hour posting lag");
+
+    const history = await getTwilioUsageHistory();
+    const refreshed = history.months.filter((month) => month.periodStart === targetStart);
+    assert.equal(refreshed.length, 1, "late-posted totals update the existing month row");
+    assert.equal(refreshed[0]?.status, scenario.status);
+    assert.equal(refreshed[0]?.spend, scenario.lateSpend === null ? null : Number(scenario.lateSpend));
+    if (scenario.status === "success") assert.equal(refreshed[0]?.currency, "USD");
+    if (scenario.status === "partial") assert.equal(refreshed[0]?.participantMinutes, 99);
+    if (scenario.status === "no_data") assert.equal(refreshed[0]?.periodEnd, targetEnd);
+
+    await refreshTwilioUsageBudget({
+      force: true,
+      configId,
+      now: new Date(reconciliationNow.getTime() + 60 * 60 * 1000),
+      fetchUsage: async () => activeSnapshot,
+      fetchLastMonthUsage: async () => {
+        historicalFetches += 1;
+        return updatedSnapshot;
+      },
+    });
+    assert.equal(historicalFetches, 1, "successful reconciliation does not repeatedly fetch an older month");
+
+    await refreshTwilioUsageBudget({
+      force: true,
+      configId,
+      now: new Date(reconciliationNow.getTime() + 48 * 60 * 60 * 1000),
+      fetchUsage: async () => activeSnapshot,
+      fetchLastMonthUsage: async () => {
+        historicalFetches += 1;
+        return updatedSnapshot;
+      },
+    });
+    assert.equal(historicalFetches, 1, "the historical fetch stops after its bounded window");
+  }
 });
 
 test("Twilio warnings queue and retry only the owner's enabled email and push channels", async () => {

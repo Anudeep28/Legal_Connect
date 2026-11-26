@@ -10,7 +10,7 @@ import {
   type TwilioUsageBudget,
 } from "@workspace/db";
 import { twilioUsageLookupConfigured } from "./communication-config";
-import { getTwilioVideoUsage } from "./consultation-calls";
+import { getTwilioVideoUsage, type TwilioVideoUsagePeriod, type TwilioVideoUsageSnapshot } from "./consultation-calls";
 import { logger } from "./logger";
 
 const CONFIG_ID = "platform";
@@ -19,13 +19,16 @@ const RETRY_INTERVAL_MS = 15 * 60 * 1000;
 const UNCONFIGURED_RETRY_MS = 15 * 60 * 1000;
 const LOOKUP_LOCK_MS = 10 * 60 * 1000;
 const USAGE_DELAY_WARNING_MS = 24 * 60 * 60 * 1000;
+const LATE_USAGE_MIN_WAIT_MS = 24 * 60 * 60 * 1000;
+const LATE_USAGE_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 type RefreshOptions = {
   force?: boolean;
   ownerId?: string;
   configId?: string;
   now?: Date;
-  fetchUsage?: typeof getTwilioVideoUsage;
+  fetchUsage?: (period?: TwilioVideoUsagePeriod) => Promise<TwilioVideoUsageSnapshot>;
+  fetchLastMonthUsage?: () => Promise<TwilioVideoUsageSnapshot>;
 };
 
 function currentMonthStart(now: Date) {
@@ -36,6 +39,15 @@ function currentMonthRange(now: Date) {
   return {
     start: currentMonthStart(now),
     end: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).toISOString().slice(0, 10),
+  };
+}
+
+function completedMonthRange(now: Date) {
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
   };
 }
 
@@ -192,6 +204,75 @@ async function ownerCanReceiveAlert(tx: Parameters<Parameters<typeof db.transact
   return Boolean(grant);
 }
 
+type UsageTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function upsertUsageHistory(
+  tx: UsageTransaction,
+  snapshot: TwilioVideoUsageSnapshot,
+  now: Date,
+  fallbackPeriod: { start: string; end: string },
+) {
+  const historyValues = {
+    periodStart: snapshot.periodStart ?? fallbackPeriod.start,
+    periodEnd: snapshot.periodEnd ?? (snapshot.periodStart ? null : fallbackPeriod.end),
+    status: snapshot.status,
+    spend: snapshot.spend,
+    currency: snapshot.currency,
+    participantMinutes: snapshot.participantMinutes,
+    usageAsOf: snapshot.asOf,
+    checkedAt: now.toISOString(),
+  };
+  await tx.insert(twilioUsageHistory).values(historyValues).onConflictDoUpdate({
+    target: twilioUsageHistory.periodStart,
+    set: {
+      periodEnd: historyValues.periodEnd,
+      status: historyValues.status,
+      spend: historyValues.spend,
+      currency: historyValues.currency,
+      participantMinutes: historyValues.participantMinutes,
+      usageAsOf: historyValues.usageAsOf,
+      checkedAt: historyValues.checkedAt,
+    },
+  });
+}
+
+async function refreshCompletedMonthHistory(
+  options: RefreshOptions,
+  now: Date,
+  configId: string,
+) {
+  const monthStart = currentMonthStart(now);
+  const reconciliationStart = new Date(`${monthStart}T00:00:00.000Z`).getTime() + LATE_USAGE_MIN_WAIT_MS;
+  const reconciliationEnd = new Date(`${monthStart}T00:00:00.000Z`).getTime() + LATE_USAGE_WINDOW_MS;
+  if (now.getTime() < reconciliationStart || now.getTime() >= reconciliationEnd) return;
+
+  const expectedPeriod = completedMonthRange(now);
+  try {
+    const [savedPeriod] = await db.select({ checkedAt: twilioUsageHistory.checkedAt })
+      .from(twilioUsageHistory)
+      .where(eq(twilioUsageHistory.periodStart, expectedPeriod.start))
+      .limit(1);
+    if (savedPeriod && new Date(savedPeriod.checkedAt).getTime() >= reconciliationStart) return;
+
+    const snapshot = await (options.fetchLastMonthUsage ?? (() => getTwilioVideoUsage("lastMonth")))();
+    if (snapshot.periodStart && snapshot.periodStart !== expectedPeriod.start)
+      throw new Error("twilio_usage_period_mismatch");
+    await db.transaction(async (tx) => {
+      const [row] = await tx.select({ id: twilioUsageBudget.id })
+        .from(twilioUsageBudget)
+        .where(eq(twilioUsageBudget.id, configId))
+        .for("update");
+      if (!row) return;
+      await upsertUsageHistory(tx, snapshot, now, expectedPeriod);
+    });
+  } catch (error) {
+    const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "number"
+      ? error.code
+      : undefined;
+    logger.warn({ code }, "Twilio prior-month usage reconciliation failed; it will be retried during the late-posting window");
+  }
+}
+
 async function saveUsageAndNotify(
   snapshot: Awaited<ReturnType<typeof getTwilioVideoUsage>>,
   now: Date,
@@ -208,27 +289,9 @@ async function saveUsageAndNotify(
     const fallbackPeriod = currentMonthRange(now);
     const historyPeriodStart = periodStart ?? (snapshot.status === "success" ? null : fallbackPeriod.start);
     if (historyPeriodStart) {
-      const historyValues = {
-        periodStart: historyPeriodStart,
-        periodEnd: periodEnd ?? (periodStart ? null : fallbackPeriod.end),
-        status: snapshot.status,
-        spend: snapshot.spend,
-        currency: snapshot.currency,
-        participantMinutes: snapshot.participantMinutes,
-        usageAsOf: snapshot.asOf,
-        checkedAt: now.toISOString(),
-      };
-      await tx.insert(twilioUsageHistory).values(historyValues).onConflictDoUpdate({
-        target: twilioUsageHistory.periodStart,
-        set: {
-          periodEnd: historyValues.periodEnd,
-          status: historyValues.status,
-          spend: historyValues.spend,
-          currency: historyValues.currency,
-          participantMinutes: historyValues.participantMinutes,
-          usageAsOf: historyValues.usageAsOf,
-          checkedAt: historyValues.checkedAt,
-        },
+      await upsertUsageHistory(tx, snapshot, now, {
+        start: historyPeriodStart,
+        end: fallbackPeriod.end,
       });
     }
     await tx.update(twilioUsageBudget).set({
@@ -296,6 +359,7 @@ export async function refreshTwilioUsageBudget(options: RefreshOptions = {}) {
   try {
     const snapshot = await (options.fetchUsage ?? getTwilioVideoUsage)();
     await saveUsageAndNotify(snapshot, now, configId);
+    await refreshCompletedMonthHistory(options, now, configId);
   } catch (error) {
     const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "number"
       ? error.code

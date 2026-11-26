@@ -24,6 +24,8 @@ export type TwilioVideoUsageSnapshot = {
   asOf: string | null;
 };
 
+export type TwilioVideoUsagePeriod = "thisMonth" | "lastMonth";
+
 function usageDate(value: Date | string | null | undefined): string | null {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -41,13 +43,25 @@ function usageTimestamp(value: string | null | undefined): string | null {
  * Group Room participant-minute record. The total is provider-priced, not an
  * estimate derived from room duration or the published per-minute rate.
  */
-export async function getTwilioVideoUsage(): Promise<TwilioVideoUsageSnapshot> {
+export async function getTwilioVideoUsage(period: TwilioVideoUsagePeriod = "thisMonth"): Promise<TwilioVideoUsageSnapshot> {
   if (!twilioUsageLookupConfigured()) throw new Error("twilio_usage_not_configured");
-  const records = await twilioClient().usage.records.thisMonth.list({
+  const usageRecords = twilioClient().usage.records;
+  const options = {
     includeSubaccounts: false,
     pageSize: 1000,
     limit: 1000,
-  });
+  };
+  const records: Array<{
+    category: string;
+    startDate: Date;
+    endDate: Date;
+    asOf: string;
+    usage: string;
+    priceUnit: string;
+    price: number;
+  }> = period === "lastMonth"
+    ? await usageRecords.lastMonth.list(options)
+    : await usageRecords.thisMonth.list(options);
   const videoTotals = records.filter((record) => record.category === "pv");
   const participantRecords = records.filter((record) => record.category === "group-rooms-participant-minutes");
   const datedRecords = videoTotals.length ? videoTotals : participantRecords;
