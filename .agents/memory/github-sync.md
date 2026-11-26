@@ -13,6 +13,12 @@ The target repository is `Anudeep28/Legal_Connect`; do not use `Anudeep28/law_co
 
 **How to apply:** Sync future completed changes directly to `Legal_Connect`'s `main` branch without creating branches. Do not force-push or discard concurrent remote work.
 
+The user chose MIT for `Legal_Connect` when syncing this version.
+
+**Why:** The user selected MIT after being shown that the current repository declares Apache-2.0 while the Replit snapshot declares MIT.
+
+**How to apply:** Keep the repository metadata and root `LICENSE` consistently MIT; confirm the copyright-holder line with the user before publishing the license.
+
 The original app remains a separate product and its live data must not be reused without renewed approval.
 
 **Why:** The user chose a separate version rather than sharing existing live data.
