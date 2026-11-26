@@ -7,10 +7,14 @@ The user instructed: "after that always sync the changes to main. do not create 
 
 **Why:** The user asked after reviewing the separate backup branch.
 
-**How to apply:** Sync future completed changes directly to the chosen repository's main branch without creating branches. Do not force-push or discard concurrent remote work.
+The target repository is `Anudeep28/Legal_Connect`; do not use `Anudeep28/law_consultation` for this successor.
 
-The linked original-app repository and this separate successor have unrelated Git histories. Connecting a remote did not make them versions of the same source tree.
+**Why:** The user corrected the repository URL after an initial comparison against the wrong repository.
 
-**Why:** The original app must remain untouched under the user's separate-version decision; a normal merge does not safely combine these applications.
+**How to apply:** Sync future completed changes directly to `Legal_Connect`'s `main` branch without creating branches. Do not force-push or discard concurrent remote work.
 
-**How to apply:** Obtain explicit approval before replacing the original repository's main tree or moving the old app. Do not treat the request to sync as approval to replace a separate application.
+The original app remains a separate product and its live data must not be reused without renewed approval.
+
+**Why:** The user chose a separate version rather than sharing existing live data.
+
+**How to apply:** Keep `law_consultation` untouched unless the user explicitly asks for work there.
