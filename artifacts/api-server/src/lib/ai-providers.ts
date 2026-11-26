@@ -22,10 +22,24 @@ export function hasDeepSeekKey(key: string | undefined = process.env.DEEPSEEK_AP
 type ChatMessage = { role: "system" | "user"; content: string };
 type Fetcher = typeof fetch;
 
+export type DeepSeekUsage = {
+  inputTokens: number;
+  outputTokens: number;
+};
+
+export type DeepSeekCompletion = {
+  text: string;
+  usage: DeepSeekUsage | null;
+};
+
+function validTokenCount(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
 export async function requestDeepSeek(
   messages: ChatMessage[],
   options: { apiKey?: string; fetcher?: Fetcher } = {},
-): Promise<string> {
+): Promise<DeepSeekCompletion> {
   const apiKey = options.apiKey ?? process.env.DEEPSEEK_API_KEY;
   if (!hasDeepSeekKey(apiKey)) throw new ProviderConfigurationError("DeepSeek drafting is not configured.");
   const fetcher = options.fetcher ?? fetch;
@@ -57,10 +71,18 @@ export async function requestDeepSeek(
   } catch {
     throw new ProviderRequestError();
   }
-  const text = (payload as { choices?: Array<{ message?: { content?: unknown } }> } | null)
-    ?.choices?.[0]?.message?.content;
+  const responseData = payload as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
+  } | null;
+  const text = responseData?.choices?.[0]?.message?.content;
   if (typeof text !== "string" || !text.trim()) throw new ProviderRequestError();
-  return text.trim();
+  const inputTokens = validTokenCount(responseData?.usage?.prompt_tokens);
+  const outputTokens = validTokenCount(responseData?.usage?.completion_tokens);
+  return {
+    text: text.trim(),
+    usage: inputTokens !== null && outputTokens !== null ? { inputTokens, outputTokens } : null,
+  };
 }
 
 export type ConnectorClient = Pick<ReplitConnectors, "listConnections" | "proxy">;
@@ -177,4 +199,91 @@ export async function transcribeWithElevenLabs(
   const text = (payload as { text?: unknown } | null)?.text;
   if (typeof text !== "string" || !text.trim()) throw new ProviderRequestError();
   return text.trim();
+}
+
+export type CallTrackTranscription = {
+  text: string;
+  languageCode: string | null;
+  words: Array<{ text: string; startSeconds: number; endSeconds: number; languageCode?: string }>;
+};
+
+export async function transcribeCallTrackWithElevenLabs(
+  audioBuffer: Buffer,
+  format: "wav" | "mp3",
+  options: { languageCode?: string; secondaryLanguageCodes?: string[]; client?: ConnectorClient } = {},
+): Promise<CallTrackTranscription> {
+  let connection: Connection | undefined;
+  let currentClient: ConnectorClient;
+  try {
+    currentClient = options.client ?? getConnectors();
+    connection = (await currentClient.listConnections({
+      connector_names: "elevenlabs",
+      refresh_policy: "none",
+    })).find(isElevenLabsConnectionReady);
+  } catch {
+    throw new ProviderConfigurationError("ElevenLabs call transcription is not available.");
+  }
+  if (!connection) throw new ProviderConfigurationError("ElevenLabs call transcription is not configured.");
+
+  const form = new FormData();
+  form.set("model_id", "scribe_v3");
+  form.set("timestamps_granularity", "word");
+  form.set("diarize", "false");
+  form.set("tag_audio_events", "false");
+  if (options.languageCode && options.languageCode !== "auto" && /^[a-z]{2,3}$/i.test(options.languageCode)) {
+    form.set("language_code", options.languageCode);
+  }
+  for (const code of [...new Set(options.secondaryLanguageCodes ?? [])]) {
+    if (/^[a-z]{2,3}$/i.test(code) && code !== options.languageCode) {
+      form.append("secondary_language_codes", code);
+    }
+  }
+  form.set(
+    "file",
+    new Blob([new Uint8Array(audioBuffer)], { type: format === "mp3" ? "audio/mpeg" : "audio/wav" }),
+    `call-track.${format}`,
+  );
+
+  let response: Response;
+  try {
+    response = await currentClient.proxy("elevenlabs", "/v1/speech-to-text", {
+      connectionId: connection.id,
+      method: "POST",
+      body: form,
+      signal: AbortSignal.timeout(120_000),
+    });
+  } catch {
+    throw new ProviderRequestError();
+  }
+  if (!response.ok) throw new ProviderRequestError();
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new ProviderRequestError();
+  }
+  const result = payload as {
+    text?: unknown;
+    language_code?: unknown;
+    words?: Array<{ text?: unknown; start?: unknown; end?: unknown; language_code?: unknown }>;
+  } | null;
+  if (typeof result?.text !== "string" || !result.text.trim()) throw new ProviderRequestError();
+  const words = Array.isArray(result.words) ? result.words.flatMap((word) => {
+    if (typeof word.text !== "string" || !word.text.trim()) return [];
+    const startSeconds = Number(word.start);
+    const endSeconds = Number(word.end);
+    if (!Number.isFinite(startSeconds) || !Number.isFinite(endSeconds) || endSeconds < startSeconds) return [];
+    return [{
+      text: word.text,
+      startSeconds,
+      endSeconds,
+      ...(typeof word.language_code === "string" ? { languageCode: word.language_code } : {}),
+    }];
+  }) : [];
+  return {
+    text: result.text.trim(),
+    languageCode: typeof result.language_code === "string" ? result.language_code : null,
+    words,
+  };
 }

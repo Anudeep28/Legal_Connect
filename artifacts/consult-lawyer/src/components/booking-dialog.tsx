@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { MessageSquareText, Phone, FileSignature, Info, Loader2, CalendarX2 } from 'lucide-react';
@@ -8,6 +8,8 @@ import {
   useCreateConsultation,
   getListConsultationsQueryKey,
   getListNotificationsQueryKey,
+  getGetPlatformQueryKey,
+  useGetPlatform,
   type Lawyer,
   type ConsultationInputPackage,
 } from '@workspace/api-client-react';
@@ -29,21 +31,53 @@ export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { la
   const qc = useQueryClient();
   const { toast } = useToast();
   const days = useMemo(() => Array.from({ length: 14 }, (_, i) => istDateKey(i)), []);
+  const checkoutStatus = useGetPlatform({ query: { enabled: open && !lawyer.demo, refetchOnWindowFocus: true } });
   const [date, setDate] = useState(() => days.find((d) => lawyer.availability.includes(weekdayOfKey(d))) ?? days[0]);
   const [slot, setSlot] = useState<string | null>(null);
   const [topic, setTopic] = useState('');
   const [notes, setNotes] = useState('');
   const [pkg, setPkg] = useState<ConsultationInputPackage>('consultation_only');
   const [mode, setMode] = useState<'chat' | 'call'>('chat');
+  const [checkingCheckout, setCheckingCheckout] = useState(false);
   const slots = useGetLawyerSlots(lawyer.id, date, { query: { enabled: open && signedIn, queryKey: getGetLawyerSlotsQueryKey(lawyer.id, date) } });
   const create = useCreateConsultation();
 
+  useEffect(() => {
+    if (open && !lawyer.demo) void checkoutStatus.refetch();
+  }, [open, lawyer.demo]);
+
   const docFee = Math.round((lawyer.fee * lawyer.documentFeePercent) / 100);
   const total = pkg === 'consultation_document' ? lawyer.fee + docFee : lawyer.fee;
-  const canSubmit = !!slot && topic.trim().length >= 3 && !create.isPending && (mode === 'chat' || (callsEnabled && !lawyer.demo));
+  const checkoutPaused = !lawyer.demo && checkoutStatus.data?.consultationCheckoutPaused === true;
+  const checkoutStatusReady = lawyer.demo || (!!checkoutStatus.data && !checkoutStatus.isFetching && !checkoutStatus.isError);
+  const canSubmit = !!slot && topic.trim().length >= 3 && !create.isPending && !checkingCheckout
+    && checkoutStatusReady && !checkoutPaused && (mode === 'chat' || (callsEnabled && !lawyer.demo));
 
-  const submit = () => {
+  const submit = async () => {
     if (!slot || !canSubmit) return;
+    if (!lawyer.demo) {
+      setCheckingCheckout(true);
+      try {
+        const latest = await checkoutStatus.refetch();
+        if (latest.isError || !latest.data) {
+          toast({ title: 'Could not confirm consultation availability', description: errMsg(latest.error), variant: 'destructive' });
+          return;
+        }
+        if (latest.data.consultationCheckoutPaused) {
+          toast({
+            title: 'Consultation requests are paused',
+            description: 'Paid consultation requests are temporarily unavailable while checkout is paused. No request or payment was created.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      } catch (error) {
+        toast({ title: 'Could not confirm consultation availability', description: errMsg(error), variant: 'destructive' });
+        return;
+      } finally {
+        setCheckingCheckout(false);
+      }
+    }
     create.mutate(
       { data: { lawyerId: lawyer.id, startsAt: slot, topic: topic.trim(), notes: notes.trim() || undefined, mode, package: pkg } },
       {
@@ -55,7 +89,10 @@ export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { la
           onOpenChange(false);
           setLocation(`/consultations/${c.id}`);
         },
-        onError: (e) => toast({ title: 'Could not save request', description: errMsg(e), variant: 'destructive' }),
+        onError: (e) => {
+          qc.invalidateQueries({ queryKey: getGetPlatformQueryKey() });
+          toast({ title: 'Could not save request', description: errMsg(e), variant: 'destructive' });
+        },
       },
     );
   };
@@ -85,6 +122,24 @@ export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { la
             {lawyer.demo && (
               <Notice icon={<Info />} tone="ink">
                 This is an <strong>illustrative example profile</strong>, not a real advocate. Your request is saved as a labelled demo and no legal advice will be given.
+              </Notice>
+            )}
+            {!lawyer.demo && checkoutStatus.isLoading && !checkoutStatus.data && (
+              <Notice icon={<Info />}>Checking whether paid consultation requests are available…</Notice>
+            )}
+            {!lawyer.demo && checkoutPaused && (
+              <Notice icon={<Info />}>
+                Paid consultation requests are temporarily unavailable while checkout is paused. Please try again after the owner resumes checkout. No request or payment will be created.
+              </Notice>
+            )}
+            {!lawyer.demo && checkoutStatus.isError && (
+              <Notice icon={<Info />}>
+                Consultation availability could not be confirmed. Refresh the status before sending a request.
+                <div className="mt-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => checkoutStatus.refetch()} disabled={checkoutStatus.isFetching}>
+                    Check again
+                  </Button>
+                </div>
               </Notice>
             )}
             <section>
@@ -182,13 +237,13 @@ export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { la
               </div>
             </section>
             <Notice icon={<Info />}>
-              This saves an <strong>unpaid consultation request</strong>, not a confirmed appointment. For real lawyers, verified payment is required before acceptance. Checkout remains disabled until Razorpay verification. Fee {inr(total)}. Client cancellation does not qualify for a refund; lawyer cancellation does, subject to applicable law.
+              This saves an <strong>unpaid consultation request</strong>, not a confirmed appointment. Sending it does not charge you. If paid checkout is enabled, you pay from the consultation page before the advocate can accept; payment alone does not confirm the appointment. Fee {inr(total)}. Client cancellation is generally not refundable; if the advocate declines or cancels, you may request an eligible refund, subject to applicable law.
             </Notice>
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button disabled={!canSubmit} onClick={submit} className="min-w-[200px]" data-testid="button-submit-request">
-                {create.isPending ? <Loader2 className="animate-spin" /> : null}
-                {lawyer.demo ? 'Save demo request' : 'Send request'}
+              <Button disabled={!canSubmit} onClick={() => void submit()} className="min-w-[200px]" data-testid="button-submit-request">
+                {create.isPending || checkingCheckout ? <Loader2 className="animate-spin" /> : null}
+                {checkoutPaused ? 'Requests temporarily paused' : checkingCheckout ? 'Checking availability…' : lawyer.demo ? 'Save demo request' : 'Send request'}
               </Button>
             </div>
           </div>

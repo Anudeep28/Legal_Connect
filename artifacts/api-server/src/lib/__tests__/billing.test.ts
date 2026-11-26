@@ -4,13 +4,14 @@ import { randomUUID, createHmac } from "node:crypto";
 import express from "express";
 import type { Server } from "node:http";
 import { and, eq, inArray } from "drizzle-orm";
-import { db, pool, accounts, consultations, lawyers, documents, paymentOrders, paymentEvents, notifications } from "@workspace/db";
+import { db, pool, accounts, consultations, lawyers, documents, paymentOrders, paymentEvents, notifications, platformCompliance, consultationCheckoutControl, auditLogs } from "@workspace/db";
 import { validSignature, DAY, hasDocumentTrial, hasMonthlyAccess, unusedDocumentRefund } from "../payment-rules";
 import { createOrder, applyCaptured, ownOrder, requestRefund, applyRefund, paymentView } from "../payments";
 import { paymentsEnabled, requireCheckout, type ProviderPayment, type ProviderRefund } from "../razorpay";
 import { insertDocumentWithAccess } from "../../routes/documents";
 import { razorpayWebhook } from "../../routes/billing";
-import { apiErrorHandler } from "../../middlewares/access";
+import { apiErrorHandler, isOwnerDesignatedAdmin } from "../../middlewares/access";
+import { getConsultationCheckoutState, setConsultationCheckoutPaused } from "../consultation-checkout";
 
 // Explicit, isolated synthetic credentials. This suite never sends traffic to
 // Razorpay and never persists activation flags. Run against the pilot DEV DB only.
@@ -20,6 +21,8 @@ const userIds: string[] = [];
 const eventIds: string[] = [];
 const providerPayments = new Map<string, ProviderPayment>();
 const providerRefunds: ProviderRefund[] = [];
+let originalCompliance: typeof platformCompliance.$inferSelect | null = null;
+let originalCheckoutControl: typeof consultationCheckoutControl.$inferSelect | null = null;
 let orderCounter = 0;
 let refundCalls = 0;
 let refundTimeout = false;
@@ -28,6 +31,11 @@ let url: string;
 const originalFetch = globalThis.fetch;
 
 before(async () => {
+  const [priorCompliance] = await db.select().from(platformCompliance).where(eq(platformCompliance.id, "platform")).limit(1);
+  originalCompliance = priorCompliance ?? null;
+  const [priorCheckoutControl] = await db.select().from(consultationCheckoutControl)
+    .where(eq(consultationCheckoutControl.id, "platform")).limit(1);
+  originalCheckoutControl = priorCheckoutControl ?? null;
   globalThis.fetch = async (input, init) => {
     const target = new URL(String(input));
     assert.equal(target.origin, "https://api.razorpay.com", "No real network requests are permitted in billing tests");
@@ -78,12 +86,27 @@ after(async () => {
   if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
   // Only remove this run's generated fixture IDs, never shared pilot data.
   if (userIds.length) {
+    await db.delete(auditLogs).where(inArray(auditLogs.actorId, userIds));
+    await db.delete(platformCompliance).where(eq(platformCompliance.id, "platform"));
+    if (originalCompliance) {
+      await db.insert(platformCompliance).values(originalCompliance).onConflictDoUpdate({
+        target: platformCompliance.id,
+        set: originalCompliance,
+      });
+    }
     await db.delete(notifications).where(inArray(notifications.userId, userIds));
     await db.delete(documents).where(inArray(documents.userId, userIds));
     await db.delete(paymentOrders).where(inArray(paymentOrders.userId, userIds));
     await db.delete(consultations).where(inArray(consultations.userId, userIds));
     await db.delete(lawyers).where(inArray(lawyers.ownerId, userIds));
+    await db.delete(consultationCheckoutControl).where(eq(consultationCheckoutControl.id, "platform"));
     await db.delete(accounts).where(inArray(accounts.id, userIds));
+  }
+  if (originalCheckoutControl) {
+    await db.insert(consultationCheckoutControl).values(originalCheckoutControl).onConflictDoUpdate({
+      target: consultationCheckoutControl.id,
+      set: originalCheckoutControl,
+    });
   }
   if (eventIds.length) await db.delete(paymentEvents).where(inArray(paymentEvents.id, eventIds));
   await pool.end();
@@ -144,6 +167,18 @@ test("credentials alone do not enable checkout; the verification mode must match
   assert.equal(paymentsEnabled(), false);
   process.env.RAZORPAY_CHECKOUT_VERIFIED_MODE = "test";
   assert.equal(paymentsEnabled(), true);
+});
+
+test("only the owner-designated administrator can record counsel approval", async () => {
+  const owner = await user("admin");
+  assert.equal(await isOwnerDesignatedAdmin(owner.id), false);
+  await db.insert(auditLogs).values({
+    id: randomUUID(), actorId: owner.id, targetId: owner.id,
+    action: "admin:owner-designated", reason: "Synthetic authorization fixture",
+  });
+  assert.equal(await isOwnerDesignatedAdmin(owner.id), true);
+  const otherAdmin = await user("admin");
+  assert.equal(await isOwnerDesignatedAdmin(otherAdmin.id), false);
 });
 
 test("server creates fixed-price orders and reuses a dismissed/pending order", async () => {
@@ -286,6 +321,16 @@ test("refunded payment delivered before capture cannot grant document access", a
 test("consultations use snapshot fee, block demo payments and follow lawyer cancellation policy", async () => {
   const owner = await user();
   const client = await user("client");
+  const checkoutAdmin = await user("admin");
+  await db.insert(auditLogs).values({
+    id: randomUUID(),
+    actorId: checkoutAdmin.id,
+    targetId: checkoutAdmin.id,
+    action: "admin:owner-designated",
+    reason: "Synthetic test owner designation",
+  });
+  await setConsultationCheckoutPaused(checkoutAdmin.id, false, "Automated test baseline");
+  await db.delete(platformCompliance).where(eq(platformCompliance.id, "platform"));
   const lawyerId = randomUUID();
   await db.insert(lawyers).values({
     id: lawyerId, ownerId: owner.id, name: "Fixture", title: "Fixture", bio: "Fixture",
@@ -297,8 +342,61 @@ test("consultations use snapshot fee, block demo payments and follow lawyer canc
     id, userId: client.id, lawyerId, topic: "Fixture", mode: "chat", package: "consultation_document",
     fee: 1800, startsAt: new Date(Date.now() + DAY).toISOString(), endsAt: new Date(Date.now() + DAY + 1800000).toISOString(),
   });
+  await assert.rejects(createOrder(client, { plan: "consultation", consultationId: id }), /qualified counsel approves/);
+  await db.insert(platformCompliance).values({
+    id: "platform",
+    counselName: "Synthetic Counsel",
+    barCouncil: "Fixture Bar Council",
+    enrollmentNumber: "FIXTURE-001",
+    counselEmail: "counsel@example.invalid",
+    supportContactEmail: "support@example.invalid",
+    privacyContactEmail: "privacy@example.invalid",
+    privacyContactAddress: "Synthetic address for automated tests",
+    grievanceOfficerName: "Synthetic Grievance Officer",
+    grievanceOfficerEmail: "grievance@example.invalid",
+    approvedBy: owner.id,
+  });
+  await setConsultationCheckoutPaused(checkoutAdmin.id, true, "Synthetic staffing interruption");
+  const pausedState = await getConsultationCheckoutState();
+  assert.equal(pausedState.paused, true);
+  assert.equal(pausedState.reason, "Synthetic staffing interruption");
+  const [approvalStillPresent] = await db.select().from(platformCompliance).where(eq(platformCompliance.id, "platform"));
+  assert.equal(approvalStillPresent?.counselName, "Synthetic Counsel", "the separate pause must not replace counsel approval");
+  const [pauseAudit] = await db.select().from(auditLogs).where(and(
+    eq(auditLogs.actorId, checkoutAdmin.id),
+    eq(auditLogs.action, "billing:consultation-checkout-paused"),
+  ));
+  assert.ok(pauseAudit, "pausing checkout must be audited");
+  const orderCountBeforePauseAttempt = orderCounter;
+  await assert.rejects(
+    createOrder(client, { plan: "consultation", consultationId: id }),
+    /temporarily paused/,
+  );
+  assert.equal(orderCounter, orderCountBeforePauseAttempt, "a paused checkout must not create a Razorpay order");
+  await setConsultationCheckoutPaused(checkoutAdmin.id, false, "Synthetic staffing restored");
+  const [resumeAudit] = await db.select().from(auditLogs).where(and(
+    eq(auditLogs.actorId, checkoutAdmin.id),
+    eq(auditLogs.action, "billing:consultation-checkout-resumed"),
+  ));
+  assert.ok(resumeAudit, "resuming checkout must be audited");
   const o = await createOrder(client, { plan: "consultation", consultationId: id });
   assert.equal(o.amount, 180000);
+  const retry = await createOrder(client, { plan: "consultation", consultationId: id });
+  assert.equal(retry.providerOrderId, o.providerOrderId);
+  const secondId = randomUUID();
+  await db.insert(consultations).values({
+    id: secondId, userId: client.id, lawyerId, topic: "Second appointment", mode: "chat", package: "consultation_only",
+    fee: 999, startsAt: new Date(Date.now() + 2 * DAY).toISOString(), endsAt: new Date(Date.now() + 2 * DAY + 1800000).toISOString(),
+  });
+  const second = await createOrder(client, { plan: "consultation", consultationId: secondId });
+  assert.notEqual(second.providerOrderId, o.providerOrderId);
+  assert.equal(second.amount, 99900);
+  // Provider capture succeeded but neither browser verification nor webhook arrived.
+  payment(second);
+  await assert.rejects(createOrder(client, { plan: "consultation", consultationId: secondId }), /already captured or refunded/);
+  assert.equal((await ownOrder(client.id, second.id)).status, "paid");
+  const [secondConsultation] = await db.select().from(consultations).where(eq(consultations.id, secondId));
+  assert.equal(secondConsultation.paymentStatus, "paid");
   const [pending] = await db.select().from(consultations).where(eq(consultations.id, id));
   assert.equal(pending.paymentStatus, "pending");
   await applyCaptured(payment(o));

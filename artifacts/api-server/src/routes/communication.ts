@@ -2,13 +2,16 @@ import { Router, type IRouter } from "express";
 import { rateLimit } from "express-rate-limit";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { db, accounts, phoneChallenges, pushSubscriptions, communicationDeliveries } from "@workspace/db";
+import { db, accounts, consultations, phoneChallenges, pushSubscriptions, communicationDeliveries } from "@workspace/db";
 import * as api from "@workspace/api-zod";
 import { requireAccount, HttpError } from "../middlewares/access";
 import { phoneVerificationEnabled, pushEnabled, callsEnabled } from "../lib/communication-config";
 import { callEligibility, isParticipant, validPushEndpoint, phoneApproved, HOUR, MINUTE } from "../lib/communication-policy";
-import { twilioClient, issueCallAccess } from "../lib/consultation-calls";
+import {
+  twilioClient, issueCallAccess, getCallRecordingConsentState, saveCallRecordingConsent, saveCallRecordingLanguage,
+} from "../lib/consultation-calls";
 import { accessibleConsultation } from "../lib/legal";
+import { supportedLanguages } from "../data/languages";
 
 const router: IRouter = Router();
 router.use(["/me/phone", "/me/push-subscriptions", "/me/deliveries", "/consultations/:id/call"], requireAccount);
@@ -19,15 +22,43 @@ router.get("/consultations/:id/call", async (req, res) => {
   const { id } = api.GetConsultationParams.parse(req.params);
   const c = await accessibleConsultation(req.account, id);
   if (!isParticipant(req.account, c)) throw new HttpError(403, "Only consultation participants can access calls.");
-  res.set("Cache-Control", "no-store").json(api.GetConsultationCallResponse.parse(callEligibility(c, callsEnabled())));
+  const recording = await getCallRecordingConsentState(req.account, id);
+  const [rawConsultation] = await db.select({ callRoomSid: consultations.callRoomSid })
+    .from(consultations).where(eq(consultations.id, id));
+  res.set("Cache-Control", "no-store").json(api.GetConsultationCallResponse.parse({
+    ...callEligibility(c, callsEnabled()),
+    recordingEnabled: recording.enabled && recording.mode === "recorded",
+    recordingConsentEnabled: recording.enabled,
+    recordingMode: recording.mode,
+    myRecordingConsent: recording.myConsent,
+    otherRecordingConsent: recording.otherConsent,
+    recordingLanguageCode: c.callRecordingLanguageCode || "auto",
+    recordingLanguageEditable: recording.enabled && recording.mode === "pending" &&
+      !rawConsultation?.callRoomSid && c.lawyerOwnerId === req.account.id,
+    recordingLanguageOptions: supportedLanguages.map(({ code, name, nativeName }) => ({ code, name, nativeName })),
+  }));
+});
+router.post("/consultations/:id/call/recording-consent", callLimit, async (req, res): Promise<void> => {
+  const { id } = api.GetConsultationParams.parse(req.params);
+  const c = await accessibleConsultation(req.account, id);
+  if (!isParticipant(req.account, c)) throw new HttpError(403, "Only consultation participants can choose call recording.");
+  const input = api.SetCallRecordingConsentBody.parse(req.body);
+  const state = await saveCallRecordingConsent(req.account, id, input.consent, input.stopCall);
+  res.set("Cache-Control", "no-store").json(api.SetCallRecordingConsentResponse.parse(state));
+});
+router.patch("/consultations/:id/call/recording-language", callLimit, async (req, res): Promise<void> => {
+  const { id } = api.GetConsultationParams.parse(req.params);
+  const input = api.UpdateCallRecordingLanguageBody.parse(req.body);
+  const result = await saveCallRecordingLanguage(req.account, id, input.languageCode);
+  res.set("Cache-Control", "no-store").json(api.UpdateCallRecordingLanguageResponse.parse(result));
 });
 router.post("/consultations/:id/call", callLimit, async (req, res) => {
   const { id } = api.GetConsultationParams.parse(req.params);
   const c = await accessibleConsultation(req.account, id);
   if (!isParticipant(req.account, c)) throw new HttpError(403, "Only consultation participants can access calls.");
   const consent = api.JoinConsultationCallBody.parse(req.body);
-  if (!consent.microphoneConsent || !consent.recordingDisabledAcknowledged)
-    throw new HttpError(400, "Explicit microphone consent and acknowledgement that recording is disabled are required.");
+  if (!consent.microphoneConsent || !consent.recordingDisclosureAcknowledged)
+    throw new HttpError(400, "Explicit microphone consent and acknowledgement of the call-recording choice are required.");
   res.set("Cache-Control", "no-store").json(api.JoinConsultationCallResponse.parse(await issueCallAccess(req.account, id)));
 });
 

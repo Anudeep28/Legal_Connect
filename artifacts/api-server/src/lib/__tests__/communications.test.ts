@@ -4,11 +4,14 @@ import { randomUUID, randomBytes } from "node:crypto";
 import nock from "nock";
 import webPush from "web-push";
 import { eq, inArray } from "drizzle-orm";
-import { db, pool, accounts, lawyers, consultations, notifications, communicationDeliveries, callConsents, pushSubscriptions } from "@workspace/db";
+import { db, pool, accounts, lawyers, consultations, notifications, communicationDeliveries, callConsents, callRecordingConsents, pushSubscriptions, aiUsage, aiUsageDaily } from "@workspace/db";
 import { callEligibility, isParticipant, reminderDue, retryAllowed, retryDelay, validPushEndpoint, phoneApproved, HOUR, MINUTE } from "../communication-policy";
-import { callsEnabled, emailEnabled, phoneVerificationEnabled, pushEnabled } from "../communication-config";
+import { callsEnabled, callRecordingEnabled, emailEnabled, phoneVerificationEnabled, pushEnabled } from "../communication-config";
 import { scheduleReminders, queueOutbound, claimDelivery, deliver } from "../communication-worker";
-import { issueCallAccess } from "../consultation-calls";
+import { issueCallAccess, saveCallRecordingConsent } from "../consultation-calls";
+import { getAiUsage, reserveAiAttempt } from "../ai-usage";
+import { callRecordingSessions, callRecordingTracks } from "@workspace/db";
+import { reconcileCallRecordingSessions, processCallRecordingQueue, CALL_AUDIO_RETENTION_MS } from "../call-recordings";
 
 // Synthetic fixtures only. No real provider traffic or application flags are changed.
 assert.equal(process.env.NODE_ENV, "test");
@@ -23,6 +26,7 @@ const originalFetch = globalThis.fetch;
 
 before(async () => {
   process.env.TWILIO_CALLS_ENABLED = "false";
+  process.env.TWILIO_CALL_RECORDING_ENABLED = "false";
   process.env.TWILIO_VERIFY_ENABLED = "false";
   process.env.EMAIL_DELIVERY_ENABLED = "false";
   process.env.PUSH_DELIVERY_ENABLED = "false";
@@ -86,6 +90,7 @@ async function refreshed(id: string) {
 test("service flags stay disabled without explicit activation", () => {
   assert.equal(callsEnabled(), false); assert.equal(emailEnabled(), false);
   assert.equal(phoneVerificationEnabled(), false); assert.equal(pushEnabled(), false);
+  assert.equal(callRecordingEnabled(), false);
 });
 test("participant checks exclude non-participants, including administrators", () => {
   const c = { userId: clientId, lawyerOwnerId };
@@ -192,7 +197,7 @@ test("Twilio room tokens are restricted to participants and record explicit cons
       assert.equal(String(body.RecordParticipantsOnConnect), "false"); assert.equal(String(body.MaxParticipants), "2"); return true;
     })
     .reply(201, { sid: roomSid, unique_name: "synthetic-room", status: "in-progress", record_participants_on_connect: false });
-  const access = await issueCallAccess(await account(clientId), c.id);
+  const access = await issueCallAccess(await account(clientId), c.id, { hasTranscriptionConnection: async () => true });
   assert.equal(access.room, roomSid); assert.equal(access.recordingEnabled, false);
   const payload = JSON.parse(Buffer.from(access.token.split(".")[1], "base64url").toString());
   assert.equal(payload.grants.identity, clientId); assert.equal(payload.grants.video.room, roomSid);
@@ -200,6 +205,170 @@ test("Twilio room tokens are restricted to participants and record explicit cons
   const consents = await db.select().from(callConsents).where(eq(callConsents.consultationId, c.id));
   assert.equal(consents.length, 1); assert.equal(consents[0].userId, clientId);
   assert.ok(provider.isDone());
+});
+
+test("record-enabled rooms require both per-consultation choices; withdrawal closes the room", async () => {
+  process.env.TWILIO_CALLS_ENABLED = "true";
+  process.env.TWILIO_CALL_RECORDING_ENABLED = "true";
+  const c = await consultation(5 * MINUTE);
+  await assert.rejects(saveCallRecordingConsent(await account(outsiderId), c.id, true), { status: 403 });
+
+  const clientChoice = await saveCallRecordingConsent(await account(clientId), c.id, true);
+  assert.equal(clientChoice.mode, "pending");
+  assert.equal(clientChoice.myConsent, true);
+  assert.equal(clientChoice.otherConsent, null);
+  await assert.rejects(issueCallAccess(await account(clientId), c.id), { status: 409 });
+
+  const lawyerChoice = await saveCallRecordingConsent(await account(lawyerOwnerId), c.id, true);
+  assert.equal(lawyerChoice.mode, "pending");
+  assert.equal(lawyerChoice.myConsent, true);
+  assert.equal(lawyerChoice.otherConsent, true);
+
+  const roomSid = `RM${"4".repeat(32)}`;
+  const createRoom = nock("https://video.twilio.com")
+    .post("/v1/Rooms", (body) => String(body.RecordParticipantsOnConnect) === "true")
+    .reply(201, { sid: roomSid, unique_name: "recording-room", status: "in-progress", record_participants_on_connect: true });
+  const access = await issueCallAccess(await account(clientId), c.id, { hasTranscriptionConnection: async () => true });
+  assert.equal(access.recordingEnabled, true);
+  assert.ok(createRoom.isDone());
+
+  const closeRoom = nock("https://video.twilio.com")
+    .post(`/v1/Rooms/${roomSid}`, (body) => String(body.Status) === "completed")
+    .reply(200, { sid: roomSid, status: "completed" });
+  const withdrawn = await saveCallRecordingConsent(await account(clientId), c.id, false);
+  assert.equal(withdrawn.mode, "unrecorded");
+  assert.equal(withdrawn.myConsent, false);
+  assert.equal(withdrawn.otherConsent, true);
+  assert.ok(closeRoom.isDone());
+  const [closed] = await db.select().from(consultations).where(eq(consultations.id, c.id));
+  assert.equal(closed.callRoomSid, null);
+  assert.equal(closed.callRecordingStopPending, false);
+  assert.equal(closed.callRecordingMode, "unrecorded");
+  assert.equal((await db.select().from(callRecordingConsents).where(eq(callRecordingConsents.consultationId, c.id))).length, 2);
+});
+
+test("recording rooms are not created when the transcription provider is unavailable", async () => {
+  process.env.TWILIO_CALLS_ENABLED = "true";
+  process.env.TWILIO_CALL_RECORDING_ENABLED = "true";
+  const c = await consultation(5 * MINUTE);
+  await saveCallRecordingConsent(await account(clientId), c.id, true);
+  await saveCallRecordingConsent(await account(lawyerOwnerId), c.id, true);
+  await assert.rejects(
+    issueCallAccess(await account(clientId), c.id, { hasTranscriptionConnection: async () => false }),
+    { status: 503 },
+  );
+  const [unchanged] = await db.select().from(consultations).where(eq(consultations.id, c.id));
+  assert.equal(unchanged.callRoomSid, null);
+  assert.equal(unchanged.callRecordingMode, "pending");
+});
+
+test("Twilio RT inventory discovers audio, transcribes it, and confirms deletion", async () => {
+  const c = await consultation(5 * MINUTE, { callRecordingMode: "recorded" });
+  for (const userId of [clientId, lawyerOwnerId]) {
+    await db.insert(callRecordingConsents).values({ id: randomUUID(), consultationId: c.id, userId, consent: true });
+  }
+  const roomSid = `RM${"a".repeat(32)}`;
+  const recordingSid = `RT${"b".repeat(32)}`;
+  const participantSid = `PA${"c".repeat(32)}`;
+  const old = new Date(Date.now() - 2 * MINUTE).toISOString();
+  const [session] = await db.insert(callRecordingSessions).values({
+    id: randomUUID(), consultationId: c.id, roomSid, updatedAt: old,
+  }).returning();
+  const recording = {
+    sid: recordingSid, status: "completed", type: "audio", container_format: "mka",
+    grouping_sids: { room_sid: roomSid, participant_sid: participantSid },
+    source_sid: `MT${"d".repeat(32)}`, offset: 10000, duration: 2,
+  };
+  const provider = nock("https://video.twilio.com")
+    .get(`/v1/Rooms/${roomSid}`).reply(200, { sid: roomSid, status: "completed" })
+    .get("/v1/Recordings").query(true).reply(200, { recordings: [recording], meta: { next_page_url: null } })
+    .get(`/v1/Rooms/${roomSid}/Participants/${participantSid}`).reply(200, { sid: participantSid, identity: clientId })
+    .get(`/v1/Recordings/${recordingSid}`).reply(200, recording)
+    .delete(`/v1/Recordings/${recordingSid}`).reply(async () => {
+      const [saved] = await db.select().from(callRecordingTracks).where(eq(callRecordingTracks.recordingSid, recordingSid));
+      assert.equal(saved.status, "transcribed_delete_pending");
+      assert.ok(saved.transcribedAt);
+      return [204];
+    });
+  await reconcileCallRecordingSessions();
+  const [discovered] = await db.select().from(callRecordingTracks).where(eq(callRecordingTracks.recordingSid, recordingSid));
+  assert.ok(discovered, "inventory must discover RT audio without a pre-inserted track");
+  assert.equal(discovered.status, "queued");
+  assert.equal(discovered.speaker, "client");
+  const wav = Buffer.alloc(46);
+  wav.write("RIFF", 0); wav.writeUInt32LE(38, 4); wav.write("WAVEfmt ", 8);
+  wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(16000, 24); wav.writeUInt32LE(32000, 28); wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34); wav.write("data", 36); wav.writeUInt32LE(2, 40);
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    assert.equal(String(input), `https://video.twilio.com/v1/Recordings/${recordingSid}/Media`);
+    const response = new Response(wav);
+    Object.defineProperty(response, "url", { value: String(input) });
+    return response;
+  };
+  try {
+    await processCallRecordingQueue(1, { transcribe: async (audio, format) => {
+      assert.deepEqual(audio, wav); assert.equal(format, "wav");
+      return { text: "मराठी hello", languageCode: "mr", words: [
+        { text: "मराठी", startSeconds: 0, endSeconds: 0.5, languageCode: "mr" },
+        { text: "hello", startSeconds: 1, endSeconds: 1.5, languageCode: "en" },
+      ] };
+    } });
+  } finally { globalThis.fetch = previousFetch; }
+  assert.ok(provider.isDone());
+  const [track] = await db.select().from(callRecordingTracks).where(eq(callRecordingTracks.recordingSid, recordingSid));
+  assert.equal(track.status, "transcribed"); assert.ok(track.deletedAt);
+  const [ready] = await db.select().from(callRecordingSessions).where(eq(callRecordingSessions.id, session.id));
+  assert.equal(ready.status, "ready");
+  assert.match(ready.generatedTranscript, /Client.*मराठी/);
+  assert.match(ready.generatedTranscript, /hello/);
+  assert.equal(ready.editedTranscript, ready.generatedTranscript);
+});
+
+test("missed callbacks are reconciled and expired raw audio is deleted", async () => {
+  const c = await consultation(5 * MINUTE, { callRecordingMode: "recorded" });
+  const roomSid = `RM${"6".repeat(32)}`;
+  const recordingSid = `RT${"7".repeat(32)}`;
+  const old = new Date(Date.now() - CALL_AUDIO_RETENTION_MS - MINUTE).toISOString();
+  const [session] = await db.insert(callRecordingSessions).values({
+    id: randomUUID(), consultationId: c.id, roomSid, createdAt: old, updatedAt: old,
+  }).returning();
+  const [track] = await db.insert(callRecordingTracks).values({
+    id: randomUUID(), sessionId: session.id, recordingSid, participantId: clientId, speaker: "client",
+  }).returning();
+  const provider = nock("https://video.twilio.com")
+    .get(`/v1/Rooms/${roomSid}`).reply(200, { sid: roomSid, status: "completed" })
+    .get("/v1/Recordings").query(true).reply(200, {
+      recordings: [{ sid: recordingSid, status: "completed", type: "audio" }],
+      meta: { next_page_url: null },
+    })
+    .delete(`/v1/Recordings/${recordingSid}`).reply(204);
+  await reconcileCallRecordingSessions();
+  assert.ok(provider.isDone());
+  const [updated] = await db.select().from(callRecordingTracks).where(eq(callRecordingTracks.id, track.id));
+  assert.equal(updated.status, "failed");
+  assert.ok(updated.deletedAt);
+  const [finished] = await db.select().from(callRecordingSessions).where(eq(callRecordingSessions.id, session.id));
+  assert.equal(finished.inventoryComplete, true);
+  assert.equal(finished.status, "failed");
+});
+
+test("a decline locks the consultation to an unrecorded room", async () => {
+  process.env.TWILIO_CALLS_ENABLED = "true";
+  process.env.TWILIO_CALL_RECORDING_ENABLED = "true";
+  const c = await consultation(5 * MINUTE);
+  const declined = await saveCallRecordingConsent(await account(clientId), c.id, false);
+  assert.equal(declined.mode, "unrecorded");
+  await assert.rejects(saveCallRecordingConsent(await account(lawyerOwnerId), c.id, true), { status: 409 });
+
+  const roomSid = `RM${"5".repeat(32)}`;
+  const createRoom = nock("https://video.twilio.com")
+    .post("/v1/Rooms", (body) => String(body.RecordParticipantsOnConnect) === "false")
+    .reply(201, { sid: roomSid, unique_name: "unrecorded-room", status: "in-progress", record_participants_on_connect: false });
+  const access = await issueCallAccess(await account(lawyerOwnerId), c.id);
+  assert.equal(access.recordingEnabled, false);
+  assert.ok(createRoom.isDone());
 });
 
 test("competing workers claim distinct jobs and reclaim expired leases", async () => {
@@ -211,6 +380,62 @@ test("competing workers claim distinct jobs and reclaim expired leases", async (
   const recovered = await claimDelivery(Date.now(), [clientId]);
   assert.equal(recovered?.id, claimed[0].id);
   assert.notEqual(recovered?.lockToken, claimed[0].lockToken);
+});
+
+test("AI request allowances reserve atomically per lawyer and reset at UTC midnight", async () => {
+  const lawyer = await account(lawyerOwnerId);
+  const previousLimits = {
+    legacy: process.env.AI_DRAFTING_DAILY_LIMIT,
+    trial: process.env.AI_DRAFTING_DAILY_LIMIT_TRIAL,
+    single: process.env.AI_DRAFTING_DAILY_LIMIT_SINGLE,
+    monthly: process.env.AI_DRAFTING_DAILY_LIMIT_MONTHLY,
+  };
+  delete process.env.AI_DRAFTING_DAILY_LIMIT;
+  process.env.AI_DRAFTING_DAILY_LIMIT_TRIAL = "4";
+  process.env.AI_DRAFTING_DAILY_LIMIT_SINGLE = "7";
+  process.env.AI_DRAFTING_DAILY_LIMIT_MONTHLY = "12";
+  const transcriptionBefore = (await getAiUsage(lawyer.id)).transcription.used;
+  const attempts = await Promise.all(Array.from({ length: 4 }, () =>
+    reserveAiAttempt(lawyer.id, "drafting")));
+  assert.deepEqual(attempts.map(x => x.used).sort(), [1, 2, 3, 4]);
+  await assert.rejects(reserveAiAttempt(lawyer.id, "drafting"), { status: 429 });
+  const usage = await getAiUsage(lawyer.id);
+  assert.equal(usage.plan, "trial");
+  assert.equal(usage.drafting.used, 4);
+  assert.equal(usage.drafting.limit, 4);
+  assert.equal(usage.drafting.remaining, 0);
+  assert.equal(usage.transcription.used, transcriptionBefore);
+  assert.equal(new Date(usage.resetsAt).getUTCHours(), 0);
+  await db.delete(aiUsage).where(eq(aiUsage.accountId, lawyer.id));
+  await db.delete(aiUsageDaily).where(eq(aiUsageDaily.accountId, lawyer.id));
+
+  await db.update(accounts).set({ documentCredits: 1 }).where(eq(accounts.id, lawyer.id));
+  const singlePlan = await getAiUsage(lawyer.id);
+  assert.equal(singlePlan.plan, "single");
+  assert.equal(singlePlan.drafting.limit, 7);
+  await db.update(accounts).set({
+    documentCredits: 0,
+    subscriptionPlan: "monthly",
+    subscriptionExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  }).where(eq(accounts.id, lawyer.id));
+  const monthlyPlan = await getAiUsage(lawyer.id);
+  assert.equal(monthlyPlan.plan, "monthly");
+  assert.equal(monthlyPlan.drafting.limit, 12);
+
+  await db.update(accounts).set({
+    subscriptionPlan: "monthly",
+    subscriptionExpiresAt: new Date(Date.now() - 1).toISOString(),
+  }).where(eq(accounts.id, lawyer.id));
+  assert.equal((await getAiUsage(lawyer.id)).plan, "trial");
+  for (const [key, value] of Object.entries({
+    AI_DRAFTING_DAILY_LIMIT: previousLimits.legacy,
+    AI_DRAFTING_DAILY_LIMIT_TRIAL: previousLimits.trial,
+    AI_DRAFTING_DAILY_LIMIT_SINGLE: previousLimits.single,
+    AI_DRAFTING_DAILY_LIMIT_MONTHLY: previousLimits.monthly,
+  })) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 });
 
 test("push delivery tracks each browser separately and removes expired subscriptions", async () => {

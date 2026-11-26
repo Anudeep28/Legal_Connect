@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { LawyerApprovalStatus } from './lawyerApprovalStatus';
+import type { LawyerPresenceStatus } from './lawyerPresenceStatus';
 
 export interface Lawyer {
   id: string;
@@ -24,7 +25,8 @@ export interface Lawyer {
   reviewCount: number;
   verified: boolean;
   approvalStatus: LawyerApprovalStatus;
-  online: boolean;
+  presenceStatus: LawyerPresenceStatus;
+  presenceChangedAt: Date;
   city: string;
   avatarUrl: string;
   demo: boolean;

@@ -8,6 +8,8 @@
 import type { WritingInputAction } from './writingInputAction';
 
 export interface WritingInput {
+  /** The lawyer continued after the DeepSeek disclosure for this request. */
+  dataUseAcknowledged: true;
   action: WritingInputAction;
   /**
      * @minLength 1

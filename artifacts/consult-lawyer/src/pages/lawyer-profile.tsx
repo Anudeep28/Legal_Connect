@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Guard } from '@/components/guard';
 import { AppPage } from '@/components/shell';
@@ -39,7 +39,7 @@ function Inner({ me }: { me: Account }) {
 }
 
 const empty: LawyerInput = {
-  name: '', title: '', bio: '', practiceAreas: [], languages: [], experienceYears: 0, barCouncil: '', enrollmentNumber: '', fee: 999, city: '', availability: [1, 2, 3, 4, 5], online: false,
+  name: '', title: '', bio: '', practiceAreas: [], languages: [], experienceYears: 0, barCouncil: '', enrollmentNumber: '', fee: 999, city: '', availability: [1, 2, 3, 4, 5], presenceStatus: 'offline',
 };
 
 function ProfileForm({ me, existing }: { me: Account; existing?: Lawyer }) {
@@ -56,7 +56,7 @@ function ProfileForm({ me, existing }: { me: Account; existing?: Lawyer }) {
       setF({
         name: existing.name, title: existing.title, bio: existing.bio, practiceAreas: existing.practiceAreas, languages: existing.languages,
         experienceYears: existing.experienceYears, barCouncil: existing.barCouncil, enrollmentNumber: existing.enrollmentNumber, fee: existing.fee,
-        city: existing.city, availability: existing.availability, online: existing.online,
+        city: existing.city, availability: existing.availability, presenceStatus: existing.presenceStatus,
       });
     }
   }, [existing]);
@@ -141,8 +141,34 @@ function ProfileForm({ me, existing }: { me: Account; existing?: Lawyer }) {
           </Section>
           <Section title="Fee and availability">
             <Field label="Fee for a 30-minute consultation (INR)" err={errors.fee}><Input type="number" min={1} max={100000} value={f.fee} onChange={(e) => set('fee', Number(e.target.value))} data-testid="input-fee" /></Field>
-            <Field label="Available now">
-              <label className="flex h-10 items-center gap-3 text-sm"><Switch checked={f.online} onCheckedChange={(c) => set('online', c)} data-testid="switch-online" /> Show me as available</label>
+            <Field label="Your current status" full>
+              <RadioGroup
+                value={f.presenceStatus}
+                onValueChange={(value) => set('presenceStatus', value as LawyerInput['presenceStatus'])}
+                className="grid gap-3 sm:grid-cols-3"
+                data-testid="radio-presence-status"
+              >
+                {[
+                  { value: 'online', label: 'Online', help: 'Clients see you as online.' },
+                  { value: 'offline', label: 'Offline', help: 'Clients see how long you have been away.' },
+                  { value: 'in_court', label: 'In court', help: 'Set manually; no location is detected.' },
+                ].map((option) => (
+                  <label
+                    key={option.value}
+                    htmlFor={`presence-${option.value}`}
+                    className={cn(
+                      'flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition-colors',
+                      f.presenceStatus === option.value ? 'border-primary bg-primary/5' : 'bg-background hover:border-primary/40',
+                    )}
+                  >
+                    <RadioGroupItem value={option.value} id={`presence-${option.value}`} className="mt-0.5" />
+                    <span>
+                      <span className="block font-medium">{option.label}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">{option.help}</span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
             </Field>
             <Field label="Weekly days (IST)" err={errors.availability} full>
               <div className="flex gap-1.5">

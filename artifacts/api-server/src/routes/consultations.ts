@@ -1,15 +1,17 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import { and, eq, asc } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { callsEnabled } from "../lib/communication-config";
-import { db, lawyers, consultations, messages, deliverables, reviews, notifications } from "@workspace/db";
+import { db, lawyers, consultations, messages, deliverables, reviews, notifications, callRecordingSessions } from "@workspace/db";
 import * as api from "@workspace/api-zod";
 import { requireAccount, HttpError } from "../middlewares/access";
 import { accessibleConsultation, consultationRows, availableSlots, notify } from "../lib/legal";
 import { lockAccount } from "../lib/payments";
+import { consultationRequestPausedError, lockConsultationCheckoutControl } from "../lib/consultation-checkout";
 
+export function createConsultationsRouter(dependencies: { authMiddlewares?: RequestHandler[] } = {}) {
 const router: IRouter = Router();
-router.use(["/consultations", "/deliverables"], requireAccount);
+router.use(["/consultations", "/deliverables"], ...(dependencies.authMiddlewares ?? [requireAccount]));
 
 router.get("/consultations", async (req, res): Promise<void> => {
   res.json(api.ListConsultationsResponse.parse(await consultationRows(req.account)));
@@ -29,6 +31,10 @@ router.post("/consultations", async (req, res): Promise<void> => {
   if (!slots.includes(start.toISOString())) throw new HttpError(409, "The selected time is not available. Please choose another slot.");
   const id = randomUUID();
   await db.transaction(async (tx) => {
+    if (!lawyer.demo) {
+      const checkoutControl = await lockConsultationCheckoutControl(tx);
+      if (checkoutControl.paused) throw new HttpError(503, consultationRequestPausedError());
+    }
     await tx.insert(consultations).values({
       id, userId: req.account.id, lawyerId: lawyer.id,
       topic: input.topic.trim(), notes: input.notes?.trim() ?? "",
@@ -117,6 +123,53 @@ router.post("/consultations/:id/messages", async (req, res): Promise<void> => {
   res.status(201).json(api.SendMessageResponse.parse(message));
 });
 
+router.get("/consultations/:id/call-transcripts", async (req, res): Promise<void> => {
+  const { id } = api.ListCallTranscriptsParams.parse(req.params);
+  const record = await accessibleConsultation(req.account, id);
+  if (record.lawyerOwnerId !== req.account.id)
+    throw new HttpError(403, "Call transcripts are private to the assigned lawyer.");
+  const rows = await db.select().from(callRecordingSessions)
+    .where(eq(callRecordingSessions.consultationId, id))
+    .orderBy(asc(callRecordingSessions.createdAt));
+  res.set("Cache-Control", "no-store").json(api.ListCallTranscriptsResponse.parse(rows.map((row) => ({
+    id: row.id,
+    consultationId: row.consultationId,
+    status: row.status,
+    generatedTranscript: row.generatedTranscript,
+    editedTranscript: row.editedTranscript,
+    detectedLanguages: row.detectedLanguages,
+    createdAt: row.createdAt,
+    completedAt: row.roomEndedAt,
+  }))));
+});
+
+router.patch("/consultations/:id/call-transcripts/:sessionId", async (req, res): Promise<void> => {
+  const { id, sessionId } = api.UpdateCallTranscriptParams.parse(req.params);
+  const input = api.UpdateCallTranscriptBody.parse(req.body);
+  const record = await accessibleConsultation(req.account, id);
+  if (record.lawyerOwnerId !== req.account.id)
+    throw new HttpError(403, "Only the assigned lawyer can edit this call transcript.");
+  const [session] = await db.select().from(callRecordingSessions).where(and(
+    eq(callRecordingSessions.id, sessionId), eq(callRecordingSessions.consultationId, id),
+  ));
+  if (!session) throw new HttpError(404, "Call transcript not found.");
+  if (session.status !== "ready") throw new HttpError(409, "This transcript is not ready to edit.");
+  const [updated] = await db.update(callRecordingSessions).set({
+    editedTranscript: input.editedTranscript.trim(),
+    updatedAt: new Date().toISOString(),
+  }).where(eq(callRecordingSessions.id, sessionId)).returning();
+  res.set("Cache-Control", "no-store").json(api.UpdateCallTranscriptResponse.parse({
+    id: updated.id,
+    consultationId: updated.consultationId,
+    status: updated.status,
+    generatedTranscript: updated.generatedTranscript,
+    editedTranscript: updated.editedTranscript,
+    detectedLanguages: updated.detectedLanguages,
+    createdAt: updated.createdAt,
+    completedAt: updated.roomEndedAt,
+  }));
+});
+
 router.get("/consultations/:id/deliverables", async (req, res): Promise<void> => {
   const { id } = api.ListDeliverablesParams.parse(req.params);
   const record = await accessibleConsultation(req.account, id);
@@ -133,7 +186,13 @@ router.post("/consultations/:id/deliverables", async (req, res): Promise<void> =
   if (record.lawyerOwnerId !== req.account.id) throw new HttpError(403, "Only the assigned lawyer can prepare documents.");
   if (!["booked", "completed"].includes(record.status)) throw new HttpError(409, "Accept this consultation before preparing a document.");
   if (!input.title.trim() || (input.status === "delivered" && !input.content.trim())) throw new HttpError(400, "A title and non-empty content are required for delivery.");
-  const [document] = await db.insert(deliverables).values({ ...input, title: input.title.trim(), id: randomUUID(), consultationId: id }).returning();
+  if (input.status === "delivered" && !input.reviewConfirmed)
+    throw new HttpError(409, "Confirm that you reviewed the document before publishing it to the client.");
+  const { reviewConfirmed, ...data } = input;
+  const [document] = await db.insert(deliverables).values({
+    ...data, title: input.title.trim(), id: randomUUID(), consultationId: id,
+    lawyerReviewedAt: reviewConfirmed && input.status === "delivered" ? new Date().toISOString() : null,
+  }).returning();
   if (input.status === "delivered") await notify(record.userId, "Your document is ready", "Your lawyer has delivered a document. Open the consultation to read it.", `/consultations/${id}`);
   res.status(201).json(api.CreateDeliverableResponse.parse(document));
 });
@@ -148,7 +207,14 @@ router.patch("/deliverables/:id", async (req, res): Promise<void> => {
   if (record.status === "cancelled") throw new HttpError(409, "The consultation was cancelled.");
   if (!input.title.trim() || (input.status === "delivered" && !input.content.trim())) throw new HttpError(400, "A title and non-empty content are required for delivery.");
   if (document.status === "delivered" && input.status === "draft") throw new HttpError(409, "A delivered document cannot be hidden from the client.");
-  const [updated] = await db.update(deliverables).set({ ...input, title: input.title.trim() }).where(eq(deliverables.id, id)).returning();
+  if (input.status === "delivered" && !input.reviewConfirmed)
+    throw new HttpError(409, "Confirm that you reviewed the document before publishing it to the client.");
+  const { reviewConfirmed, ...data } = input;
+  const [updated] = await db.update(deliverables).set({
+    ...data,
+    title: input.title.trim(),
+    lawyerReviewedAt: reviewConfirmed && input.status === "delivered" ? new Date().toISOString() : document.lawyerReviewedAt,
+  }).where(eq(deliverables.id, id)).returning();
   if (input.status === "delivered") await notify(record.userId, "Document updated", "Your lawyer has delivered or updated a document.", `/consultations/${record.id}`);
   res.json(api.UpdateDeliverableResponse.parse(updated));
 });
@@ -166,4 +232,8 @@ router.post("/consultations/:id/review", async (req, res): Promise<void> => {
   res.status(201).json(api.CreateReviewResponse.parse(review));
 });
 
+return router;
+}
+
+const router = createConsultationsRouter();
 export default router;

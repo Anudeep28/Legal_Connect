@@ -1,11 +1,9 @@
 packages:
-  - artifacts/consult-lawyer
-  - artifacts/api-server
-  - lib/api-spec
-  - lib/api-client-react
-  - lib/api-zod
-  - lib/db
-  - lib/integrations-openai-ai-server
+  - artifacts/*
+  - lib/*
+  - lib/integrations/*
+  - scripts
+
 autoInstallPeers: false
 
 catalog:

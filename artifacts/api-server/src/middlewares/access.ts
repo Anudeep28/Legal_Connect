@@ -1,10 +1,11 @@
-import type { RequestHandler, ErrorRequestHandler } from "express";
+import type { Request, RequestHandler, ErrorRequestHandler } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
-import { db, accounts } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, accounts, auditLogs, pool } from "@workspace/db";
+import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { notifications } from "@workspace/db";
 import { getClerkProxyHost } from "./clerkProxyMiddleware";
+import { getLegalReviewApproval } from "../lib/legal-review";
 
 export type Account = typeof accounts.$inferSelect;
 declare global {
@@ -71,6 +72,135 @@ export const requireLawyer: RequestHandler = (req, res, next) => {
 };
 export const requireAdmin: RequestHandler = (req, res, next) => {
   if (req.account.role !== "admin") { res.status(403).json({ error: "Administrator access is required." }); return; }
+  next();
+};
+
+const ownerStatusVerifiedIds = new Set<string>();
+const OWNER_STATUS_AUTH_QUERY_TIMEOUT_MS = 1_000;
+
+async function verifyOwnerStatusFromDatabase(userId: string): Promise<boolean> {
+  type OwnerStatusRow = {
+    role: string;
+    status: string;
+    owner_designated: boolean;
+  };
+  const queryConfig = {
+    text: `SELECT account.role, account.status,
+      EXISTS (
+        SELECT 1 FROM audit_logs AS owner_grant
+        WHERE owner_grant.actor_id = account.id
+          AND owner_grant.target_id = account.id
+          AND owner_grant.action = $2
+      ) AS owner_designated
+      FROM accounts AS account
+      WHERE account.id = $1`,
+    values: [userId, "admin:owner-designated"],
+    query_timeout: OWNER_STATUS_AUTH_QUERY_TIMEOUT_MS,
+  };
+  const result = await pool.query<OwnerStatusRow>(queryConfig);
+  const owner = result.rows[0];
+  return owner?.role === "admin" && owner.status === "active" && owner.owner_designated;
+}
+
+async function verifyConfiguredOwnerIdentity(userId: string): Promise<boolean> {
+  const configuredEmail = process.env.OWNER_ADMIN_BOOTSTRAP_EMAIL?.trim().toLowerCase();
+  if (!configuredEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(configuredEmail)) return false;
+  const user = await clerkClient.users.getUser(userId);
+  const primary = user.emailAddresses.find((entry) =>
+    entry.id === user.primaryEmailAddressId &&
+    entry.emailAddress.trim().toLowerCase() === configuredEmail &&
+    entry.verification?.status === "verified");
+  return Boolean(primary);
+}
+
+export function createOwnerSystemStatusGuard(options: {
+  ownerCache?: Set<string>;
+  getUserId?: (request: Request) => string | null | undefined;
+  verifyDatabaseOwner?: (userId: string) => Promise<boolean>;
+  verifyConfiguredOwner?: (userId: string) => Promise<boolean>;
+} = {}): RequestHandler {
+  const ownerCache = options.ownerCache ?? ownerStatusVerifiedIds;
+  const getUserId = options.getUserId ?? ((request) => {
+    const auth = getAuth(request);
+    return "userId" in auth ? auth.userId : undefined;
+  });
+  const verifyDatabaseOwner = options.verifyDatabaseOwner ?? verifyOwnerStatusFromDatabase;
+  const verifyConfiguredOwner = options.verifyConfiguredOwner ?? verifyConfiguredOwnerIdentity;
+  return async (req, res, next) => {
+    const userId = getUserId(req);
+    if (!userId) {
+      res.status(401).json({ error: "Please sign in to continue." });
+      return;
+    }
+
+    try {
+      if (await verifyDatabaseOwner(userId)) {
+        ownerCache.add(userId);
+        next();
+        return;
+      }
+      ownerCache.delete(userId);
+      res.status(403).json({ error: "Only the owner-designated administrator can view system status." });
+      return;
+    } catch (error) {
+      // This read-only endpoint can use a previously verified owner identity while
+      // the database is unavailable; no other administrator action uses this cache.
+      if (ownerCache.has(userId)) {
+        next();
+        return;
+      }
+      try {
+        if (await verifyConfiguredOwner(userId)) {
+          ownerCache.add(userId);
+          next();
+          return;
+        }
+      } catch {
+        // Clerk or database details must not be returned to the status viewer.
+      }
+      req.log?.warn(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Owner system status access could not be verified",
+      );
+      res.status(503).json({ error: "System status is unavailable until owner access can be verified." });
+    }
+  };
+}
+
+export const requireOwnerSystemStatus = createOwnerSystemStatusGuard();
+
+export async function isOwnerDesignatedAdmin(accountId: string): Promise<boolean> {
+  const [grant] = await db.select({ id: auditLogs.id }).from(auditLogs).where(and(
+    eq(auditLogs.actorId, accountId),
+    eq(auditLogs.targetId, accountId),
+    eq(auditLogs.action, "admin:owner-designated"),
+  )).limit(1);
+  const designated = Boolean(grant);
+  if (designated) ownerStatusVerifiedIds.add(accountId);
+  else ownerStatusVerifiedIds.delete(accountId);
+  return designated;
+}
+export async function canManageGrievances(accountId: string): Promise<boolean> {
+  const [account] = await db.select({ role: accounts.role, email: accounts.email })
+    .from(accounts).where(eq(accounts.id, accountId)).limit(1);
+  if (!account || account.role !== "admin") return false;
+  if (await isOwnerDesignatedAdmin(accountId)) return true;
+  const approval = await getLegalReviewApproval();
+  return Boolean(approval?.grievanceOfficerEmail &&
+    approval.grievanceOfficerEmail.trim().toLowerCase() === account.email.trim().toLowerCase());
+}
+export const requireGrievanceOfficer: RequestHandler = async (req, res, next) => {
+  if (!(await canManageGrievances(req.account.id))) {
+    res.status(403).json({ error: "Only the approved Grievance Officer or owner-designated administrator may review grievances." });
+    return;
+  }
+  next();
+};
+export const requireOwnerAdmin: RequestHandler = async (req, res, next) => {
+  if (req.account.role !== "admin" || !(await isOwnerDesignatedAdmin(req.account.id))) {
+    res.status(403).json({ error: "Only the owner-designated administrator has access to this setting." });
+    return;
+  }
   next();
 };
 

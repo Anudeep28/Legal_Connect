@@ -1,16 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useClerk } from '@clerk/react';
 import { CommunicationSettings } from '@/components/communication-settings';
 import { Link, useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Loader2, Bell, CheckCheck, Info, Scale, FileText, MessagesSquare, CalendarDays, Mic, ArrowRight } from 'lucide-react';
+import { Check, Loader2, Bell, CheckCheck, Info, Scale, FileText, MessagesSquare, CalendarDays, Mic, ArrowRight, Printer } from 'lucide-react';
 import {
   useGetPlatform, useUpdateMe, getGetMeQueryKey,
   useListNotifications, getListNotificationsQueryKey, useReadNotification,
+  useListMyGrievances, getListMyGrievancesQueryKey, useSubmitGrievance,
+  type GrievanceInputCategory,
   type Account, type CheckoutInputPlan,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Guard } from '@/components/guard';
@@ -20,9 +24,12 @@ import { useToast } from '@/hooks/use-toast';
 import { useAccount } from '@/lib/account';
 import { cn } from '@/lib/utils';
 import { errMsg, fmtDate, inr, relTime } from '@/lib/format';
-import { policies } from '@/data/policies';
+import { getCurrentPolicyRevision, getPolicyReviewStatus, policyRevisionHistory, policies } from '@/data/policies';
 import { usePaymentCheckout } from '@/hooks/use-payment-checkout';
 import { PaymentHistory } from '@/components/payment-history';
+import { PolicySectionIndex } from '@/components/policy-section-index';
+import { getPolicySections } from '@/lib/policy-sections';
+import { useNotificationPrivacy } from '@/hooks/use-notification-privacy';
 
 const base = import.meta.env.BASE_URL;
 
@@ -125,6 +132,8 @@ function SettingsForm({ me }: { me: Account }) {
   const platform = useGetPlatform();
   const [name, setName] = useState(me.name);
   const [emails, setEmails] = useState(me.emailNotifications);
+  const [hideNotificationPreviews, setHideNotificationPreviews] = useNotificationPrivacy();
+  const { signOut } = useClerk();
   const upd = useUpdateMe();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -158,6 +167,32 @@ function SettingsForm({ me }: { me: Account }) {
           <span><span className="block font-medium">Email notifications preference</span><span className="text-sm text-muted-foreground">{platform.data?.emailEnabled ? 'Resend is configured. Opt in to outbound updates and appointment reminders. Delivery status is shown below.' : 'Resend is not configured. You can save your preference, but no email can be sent. Updates remain available in in-app Notifications.'}</span></span>
           <Switch checked={emails} onCheckedChange={setEmails} data-testid="switch-email" />
         </label>
+        <section className="space-y-4 rounded-2xl border p-4" aria-labelledby="shared-device-title">
+          <div>
+            <h2 id="shared-device-title" className="font-semibold">Shared-device privacy</h2>
+            <p className="mt-1 text-sm text-muted-foreground">These controls apply on this browser only. Push and email updates already use generic wording without case details.</p>
+          </div>
+          <label className="flex items-start justify-between gap-6 rounded-xl bg-muted/40 p-4">
+            <span>
+              <span className="block font-medium">Hide in-app notification previews</span>
+              <span className="text-sm text-muted-foreground">Replaces notification titles and message previews with a generic update in the dashboard and Notifications page.</span>
+            </span>
+            <Switch
+              checked={hideNotificationPreviews}
+              onCheckedChange={setHideNotificationPreviews}
+              data-testid="switch-hide-notification-previews"
+            />
+          </label>
+          <p className="text-xs text-muted-foreground">This does not lock your account or hide consultation pages and documents. Sign out when you finish on a shared phone.</p>
+          <Button
+            variant="outline"
+            className="rounded-full"
+            onClick={() => signOut({ redirectUrl: base || '/' })}
+            data-testid="button-quick-signout"
+          >
+            Sign out on this device
+          </Button>
+        </section>
         <Button onClick={save} disabled={!dirty || name.trim().length < 1 || upd.isPending} className="rounded-full" data-testid="button-save-settings">{upd.isPending && <Loader2 className="animate-spin" />} Save changes</Button>
       </div>
       <aside className="space-y-3 rounded-3xl border bg-secondary/50 p-6 text-sm">
@@ -192,6 +227,7 @@ function NotificationsInner() {
   const read = useReadNotification();
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
+  const [hideNotificationPreviews] = useNotificationPrivacy();
   const items = q.data ?? [];
   const unread = items.filter((n) => !n.read);
   const markRead = (id: string, then?: () => void) =>
@@ -212,8 +248,8 @@ function NotificationsInner() {
             <li key={n.id} className={cn('flex items-start gap-4 border-b p-5 last:border-0', !n.read && 'bg-haldi/10')} data-testid={`row-notification-${n.id}`}>
               <span className={cn('mt-2 h-2.5 w-2.5 shrink-0 rounded-full', n.read ? 'bg-border' : 'bg-haldi')} />
               <button className="min-w-0 flex-1 text-left" onClick={() => (n.link ? (n.read ? setLocation(toInternal(n.link)) : markRead(n.id, () => setLocation(toInternal(n.link)))) : undefined)}>
-                <div className="font-medium">{n.title}</div>
-                <p className="mt-0.5 text-sm text-muted-foreground">{n.body}</p>
+                <div className="font-medium">{hideNotificationPreviews ? 'Private update' : n.title}</div>
+                {!hideNotificationPreviews && <p className="mt-0.5 text-sm text-muted-foreground">{n.body}</p>}
                 <span className="mt-1 block font-mono text-[11px] text-muted-foreground">{relTime(n.createdAt)}</span>
               </button>
               {!n.read && <Button size="sm" variant="ghost" onClick={() => markRead(n.id)} data-testid={`button-read-${n.id}`}><Check /> Read</Button>}
@@ -221,6 +257,130 @@ function NotificationsInner() {
           ))}
         </ul>
       )}
+    </>
+  );
+}
+
+const grievanceCategories: { value: GrievanceInputCategory; label: string }[] = [
+  { value: 'account', label: 'Account or access' },
+  { value: 'consultation', label: 'Consultation service' },
+  { value: 'payment', label: 'Payment' },
+  { value: 'privacy', label: 'Privacy or data' },
+  { value: 'other', label: 'Other' },
+];
+const grievanceStatusLabel = {
+  submitted: 'Submitted',
+  under_review: 'Under review',
+  resolved: 'Resolved',
+} as const;
+
+export function Grievances() {
+  return (
+    <AppPage>
+      <Guard roles={['client']}>{() => <GrievancesInner />}</Guard>
+    </AppPage>
+  );
+}
+
+function GrievancesInner() {
+  const q = useListMyGrievances({ query: { queryKey: getListMyGrievancesQueryKey(), refetchInterval: 30_000 } });
+  const platform = useGetPlatform();
+  const submit = useSubmitGrievance();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [category, setCategory] = useState<GrievanceInputCategory>('other');
+  const [description, setDescription] = useState('');
+  const contacts = platform.data?.policyContacts;
+  return (
+    <>
+      <PageHeader eyebrow="Help and accountability" title="Grievances" sub="Submit a service concern and follow its status here." />
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
+        <form className="space-y-4 rounded-3xl border bg-card p-5 md:p-7" onSubmit={(event) => {
+          event.preventDefault();
+          submit.mutate({ data: { category, description: description.trim() } }, {
+            onSuccess: () => {
+              setDescription('');
+              setCategory('other');
+              qc.invalidateQueries({ queryKey: getListMyGrievancesQueryKey() });
+              toast({ title: 'Grievance submitted', description: 'Your reference and status are now available below.' });
+            },
+            onError: (error) => toast({ title: 'Could not submit grievance', description: errMsg(error), variant: 'destructive' }),
+          });
+        }}>
+          <div>
+            <h2 className="font-display text-2xl font-semibold">Submit a grievance</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Your account is linked automatically. Share only the service issue needed to understand your concern.</p>
+          </div>
+          <div>
+            <Label htmlFor="grievance-category">Issue type</Label>
+            <select
+              id="grievance-category"
+              className="mt-1.5 h-11 w-full rounded-xl border bg-background px-3 text-sm"
+              value={category}
+              onChange={(event) => setCategory(event.target.value as GrievanceInputCategory)}
+              data-testid="select-grievance-category"
+            >
+              {grievanceCategories.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="grievance-description">What happened?</Label>
+            <Textarea
+              id="grievance-description"
+              className="mt-1.5 min-h-32"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              minLength={10}
+              maxLength={1200}
+              required
+              placeholder="Describe the platform or service issue, not the details of your legal matter."
+              data-testid="input-grievance-description"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">Do not include case facts, identity documents, passwords, card details, or other sensitive matter information.</p>
+          </div>
+          <Button type="submit" disabled={description.trim().length < 10 || submit.isPending} className="rounded-full" data-testid="button-submit-grievance">
+            {submit.isPending && <Loader2 className="animate-spin" />} Submit grievance
+          </Button>
+        </form>
+        <aside className="space-y-4">
+          <Notice icon={<Info />}>
+            The Privacy Policy states that grievances will be acknowledged within 48 hours and resolved within 30 days. <Link href="/privacy" className="underline">Read the Privacy Policy</Link>.
+          </Notice>
+          <div className="rounded-3xl border bg-secondary/50 p-5">
+            <h2 className="font-display text-xl font-semibold">Grievance contact</h2>
+            {contacts ? (
+              <div className="mt-3 space-y-1 text-sm">
+                <p>{contacts.grievanceOfficerName}</p>
+                <a className="text-primary underline" href={`mailto:${contacts.grievanceOfficerEmail}`}>{contacts.grievanceOfficerEmail}</a>
+                <p className="pt-2 text-muted-foreground">Support: <a className="underline" href={`mailto:${contacts.supportContactEmail}`}>{contacts.supportContactEmail}</a></p>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">Counsel-approved contact details are not yet on file. You can still submit and track a grievance here.</p>
+            )}
+          </div>
+        </aside>
+      </div>
+      <section className="mt-10">
+        <PageHeader eyebrow="Private to your account" title="Your submissions" sub="Only you and the authorized grievance reviewer can see these records." />
+        {q.isLoading ? <ListSkeleton /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data?.length ? (
+          <EmptyState icon={<Info />} title="No grievances submitted" body="If you need help with a platform or service issue, use the form above." />
+        ) : (
+          <div className="space-y-3">
+            {q.data.map((item) => (
+              <article key={item.id} className="rounded-2xl border bg-card p-5" data-testid={`row-grievance-${item.id}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold">{grievanceCategories.find((option) => option.value === item.category)?.label ?? 'Other'}</h3>
+                  <span className="rounded-full bg-secondary px-2.5 py-1 text-xs">{grievanceStatusLabel[item.status]}</span>
+                  <span className="ml-auto font-mono text-[10px] text-muted-foreground">Ref {item.id.slice(0, 8).toUpperCase()}</span>
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-sm">{item.description}</p>
+                <p className="mt-2 text-xs text-muted-foreground">Submitted {fmtDate(item.submittedAt)} · Updated {fmtDate(item.updatedAt)}</p>
+                {item.officerResponse && <div className="mt-4 rounded-xl bg-secondary/60 p-4"><h4 className="text-sm font-semibold">Officer response</h4><p className="mt-1 whitespace-pre-wrap text-sm">{item.officerResponse}</p>{item.respondedAt && <p className="mt-2 text-xs text-muted-foreground">Response recorded {fmtDate(item.respondedAt)}</p>}</div>}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </>
   );
 }
@@ -283,26 +443,124 @@ export function ForLawyers() {
 
 /* ---------------- POLICY ---------------- */
 const policyMap: Record<string, { key: string; title: string; context: string }> = {
-  '/privacy': { key: 'privacy', title: 'Privacy Policy', context: 'Consultation messages are visible to the client, the chosen advocate and administrators where needed. Dictation audio is sent to the transcription service for your request; this Platform does not intentionally keep it as an account recording. AI services receive only the text or audio you submit for that request.' },
+  '/privacy': { key: 'privacy', title: 'Privacy Policy', context: 'Consultation messages are visible to the client, the chosen advocate and administrators where needed. Dictation audio is separate from call audio and is processed for your transcription request. Call recording is disabled by default; if enabled, it requires separate consent from both the client and lawyer for each call. If either declines, the call may proceed unrecorded. Call audio is sent to ElevenLabs for transcription only when both participants have opted in, and the transcript remains private to the assigned lawyer unless included in a document the lawyer explicitly publishes.' },
   '/disclaimer': { key: 'disclaimer', title: 'Disclaimer', context: 'AI assistance and transcription are available only when the relevant provider is configured. Review AI-generated text and transcripts before relying on them.' },
-  '/terms': { key: 'terms', title: 'Terms of Service', context: 'This is a separate pilot. Checkout stays disabled until Razorpay is verified. Illustrative demo profiles cannot take payments. Clients retain rights to their legal content.' },
-  '/refund-policy': { key: 'refunds', title: 'Refund & Cancellation Policy', context: 'Owner-selected rules: consultation refunds for lawyer cancellation only; unused document purchases refundable within seven days, subject to mandatory applicable law. Checkout remains disabled pending provider verification.' },
+  '/terms': { key: 'terms', title: 'Terms of Service', context: 'This is a separate pilot. Paid consultation checkout stays disabled until both Razorpay verification and qualified-counsel approval are recorded. Illustrative demo profiles cannot take payments. Clients retain rights to their legal content.' },
+  '/refund-policy': { key: 'refunds', title: 'Refund & Cancellation Policy', context: 'Owner-selected rules: consultation refunds for lawyer cancellation only; unused document purchases refundable within seven days, subject to mandatory applicable law. Paid consultation checkout remains closed until Razorpay verification and counsel approval are complete.' },
 };
 export function Policy({ path }: { path: string }) {
   const p = policyMap[path];
-  const text = policies[p.key] ?? '';
-  const blocks = text.split(/\n\s*\n/);
+  const platform = useGetPlatform();
+  const revisions = policyRevisionHistory[p.key] ?? [];
+  const currentRevision = getCurrentPolicyRevision(p.key);
+  const reviewStatus = getPolicyReviewStatus(currentRevision, Boolean(platform.data?.legalReviewComplete));
+  const text = useMemo(() => {
+    let content = policies[p.key] ?? '';
+    const contacts = platform.data?.policyContacts;
+    if (contacts) {
+      content = content
+        .replace(
+          'Name: Bhagyashree Patil\nEmail: privacy@consultwithlawyer.in',
+          `Name: ${contacts.grievanceOfficerName}\nEmail: ${contacts.grievanceOfficerEmail}`,
+        )
+        .replaceAll('support@consultwithlawyer.in', contacts.supportContactEmail)
+        .replaceAll('privacy@consultwithlawyer.in', contacts.privacyContactEmail)
+        .replaceAll('Amanora Park Town, Amanora Gold Tower, Tower 42, Flat 1012, Hadapsar, Pune 411028', contacts.privacyContactAddress)
+        .replaceAll('Bhagyashree Patil', contacts.grievanceOfficerName);
+    }
+    return content;
+  }, [p.key, platform.data?.policyContacts]);
+  const blocks = useMemo(() => text.split(/\n\s*\n/), [text]);
+  const sections = useMemo(() => getPolicySections(blocks.slice(1)), [blocks]);
+  const sectionByBlock = useMemo(() => new Map(sections.map((section) => [section.blockIndex, section])), [sections]);
+  const [activeSection, setActiveSection] = useState<{ policyKey: string; id: string } | null>(null);
+  const activeSectionId = activeSection?.policyKey === p.key ? activeSection.id : null;
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
+    const headings = sections
+      .map((section) => document.getElementById(section.id))
+      .filter((heading): heading is HTMLElement => heading instanceof HTMLElement);
+    if (!headings.length) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      const current = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (current) setActiveSection({ policyKey: p.key, id: current.target.id });
+    }, { rootMargin: '-18% 0px -72% 0px', threshold: 0 });
+
+    headings.forEach((heading) => observer.observe(heading));
+    return () => observer.disconnect();
+  }, [p.key, sections]);
+
   return (
     <AppPage>
-      <div className="mx-auto max-w-3xl">
-        <PageHeader eyebrow="Policies" title={p.title} />
-        <Notice icon={<Info />} className="mb-8">{p.context}</Notice>
-        <Notice icon={<Info />} className="mb-8">Pre-launch requirement: qualified legal counsel must review these policies before paid legal engagements are accepted. Confirm that review is complete and replace the registered-address and grievance-officer placeholders with owner-approved details before launch.</Notice>
-        <article className="space-y-4 rounded-3xl border bg-card p-6 md:p-10">
+      <div className="policy-print-page mx-auto max-w-3xl">
+        <PageHeader
+          eyebrow="Policies"
+          title={p.title}
+          actions={
+            <Button
+              type="button"
+              variant="outline"
+              className="policy-print-hide print:hidden"
+              onClick={() => window.print()}
+              data-testid="button-print-policy"
+            >
+              <Printer aria-hidden="true" />
+              Print / Save as PDF
+            </Button>
+          }
+        />
+        <Notice icon={<Info />} className="policy-print-hide mb-8 print:hidden">{p.context}</Notice>
+        <section className="policy-print-hide mb-8 rounded-2xl border bg-card p-5 print:hidden" aria-label="Policy version and review status" data-testid="policy-revision-status">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Revision {currentRevision?.revisionId ?? 'not recorded'}</h2>
+              {currentRevision && <p className="mt-1 text-sm text-muted-foreground">Effective <time dateTime={currentRevision.effectiveDate}>{fmtDate(currentRevision.effectiveDate)}</time></p>}
+            </div>
+            <span
+              role="status"
+              className={cn(
+                'rounded-full px-3 py-1 text-sm font-medium',
+                reviewStatus === 'approved'
+                  ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
+                  : 'bg-amber-100 text-amber-950 dark:bg-amber-950 dark:text-amber-200',
+              )}
+              data-testid="policy-review-status"
+            >
+              {reviewStatus === 'approved' ? 'Counsel review recorded' : 'Pending counsel review'}
+            </span>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {reviewStatus === 'approved'
+              ? 'This revision is covered by the recorded counsel review.'
+              : 'This revision is not marked as counsel-approved. A previous approval does not carry forward to changed wording.'}
+          </p>
+          {revisions.length > 1 && (
+            <div className="mt-5 border-t pt-4">
+              <h3 className="font-medium">Previous revisions</h3>
+              <div className="mt-3 space-y-3">
+                {revisions.slice(0, -1).reverse().map((revision) => (
+                  <details key={revision.revisionId} className="rounded-xl border p-4">
+                    <summary className="cursor-pointer font-medium">
+                      {revision.revisionId} · effective {fmtDate(revision.effectiveDate)} · {revision.reviewStatus === 'approved' ? 'Counsel review recorded' : 'Pending counsel review'}
+                    </summary>
+                    <pre className="mt-4 max-h-[32rem] overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/85">{revision.content}</pre>
+                  </details>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+        <PolicySectionIndex sections={sections} activeSectionId={activeSectionId} />
+        <article aria-label={p.title} className="policy-print-article space-y-4 rounded-3xl border bg-card p-6 md:p-10">
           {blocks.slice(1).map((b, i) => {
             const t = b.trim();
-            if (/^\d+\.\s+[A-Z][A-Z\s&,'()-]+$/.test(t)) return <h2 key={i} className="pt-4 text-xl font-semibold">{t}</h2>;
-            return <p key={i} className="whitespace-pre-line text-[14.5px] leading-relaxed text-foreground/85">{t}</p>;
+            const section = sectionByBlock.get(i);
+            if (section) return <h2 key={i} id={section.id} tabIndex={-1} className="scroll-mt-24 break-words pt-4 text-xl font-semibold">{t}</h2>;
+            return <p key={i} className="break-words whitespace-pre-line text-[14.5px] leading-relaxed text-foreground/85">{t}</p>;
           })}
         </article>
       </div>

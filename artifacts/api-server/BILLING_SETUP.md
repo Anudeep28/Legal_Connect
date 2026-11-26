@@ -2,12 +2,131 @@
 
 ## Current state
 
-The owner has deferred adding Razorpay credentials. General checkout must remain
-disabled. Automated tests use synthetic provider responses; they are not evidence
-of a real Razorpay payment, capture, refund, or webhook.
+Dedicated Razorpay credentials and a webhook signing secret have been added.
+General checkout remains disabled; `RAZORPAY_CHECKOUT_VERIFIED_MODE` is unset.
+
+### Published endpoint
+
+On 2026-11-14 the owner published the app at
+`https://legal-connect-hub.replit.app`. Deployment metadata confirmed a successful
+public build. `/api/healthz` returned HTTP 200 with `{"status":"ok"}`, and an
+unsigned POST to `/api/billing/webhook` returned HTTP 400 with
+`Invalid webhook signature.` This proves public routing and signature rejection,
+not successful provider delivery. `/api/platform` reported checkout disabled.
+A read-only production query initially found the existing new-account Test
+payment order but no accepted events. After the owner corrected the Test Mode
+webhook URL and republished the owner-access fix, a fresh INR 1000-paise Test
+purchase was paid at 17:50 UTC. Production recorded genuine `payment.captured`
+and `order.paid` webhook events. The purchasing account had exactly one document
+credit after both events, confirming that those two notifications did not
+double-grant the purchase. The owner then requested a full refund. At 18:06 UTC,
+production accepted signed `refund.created` and `refund.processed` events.
+The order became `refunded` with a provider refund reference, and the purchasing
+account's document credits returned from one to zero. This completes the
+production-hosted Test Mode capture and full-refund check; no real funds moved.
+No Live checkout has been enabled or verified; general checkout remains disabled.
+
+### Owner access after first publish
+
+Preview and Production Clerk identities differ, even for the same verified
+email. An imported Preview admin row does not authorize the production identity.
+The owner reported the admin verification panel was missing, and production
+contained both an admin and a client record for the designated email.
+
+`OWNER_ADMIN_BOOTSTRAP_EMAIL` was configured in production only. On startup,
+the server resolves that email against its current Clerk instance, requires
+one matching verified primary email, and grants the target active client
+identity admin access with an audit record. It preserves existing credits,
+orders, and other identities. It refuses suspended and lawyer accounts.
+The audit marker makes the grant one-time per target identity: restarts do not
+restore deliberately revoked privileges. After the grant was confirmed, the
+one-time configuration was removed for future production publishes. The running
+build may retain its startup environment until the next publish; its audit
+marker still prevents repeat grants. No HTTP endpoint accepts an admin role override.
+
+The owner republished, and a read-only production check confirmed the purchasing
+production identity is an active administrator with one owner-designation audit
+record. The bootstrap grant has been applied in the published environment.
+
+Verification on 2026-11-14, against the separate app's development environment:
+
+- After the owner replaced the credentials with the webhook account's Test keys,
+  provider authentication succeeded. A new ₹10 validation order created at
+  09:27 UTC was paid: browser signature verification returned HTTP 200, and an
+  independent provider lookup confirmed capture, matching order, INR currency,
+  and 1000-paise amount. Existing payment records were preserved.
+- The owner reported that the protected health URL returned JSON in a private
+  browser after adding Development access. Nevertheless, after the new purchase,
+  no webhook POST appeared in application logs and no accepted payment event
+  was recorded. Inspect the provider's latest delivery attempt and response;
+  do not request another purchase merely to diagnose missing delivery.
+- The owner subsequently found delivery logs: both `payment.captured` and
+  `order.paid` retries returned HTTP 403. No corresponding webhook requests
+  appeared in API logs. The webhook is mounted before Clerk and CSRF middleware;
+  invalid signatures return 400, not 403. The evidence points to rejection
+  before the application. Inspect the failed delivery's response body to
+  identify the rejecting access layer before changing payment credentials.
+- The actual Razorpay API confirmed the administrator's ₹10 Test Mode purchase
+  was captured for the matching stored order, amount, and currency.
+- The unused validation purchase was fully refunded through the app's normal
+  refund logic. Razorpay returned a processed refund, the app recorded
+  `refunded`, and its test document credit was withdrawn. No real funds moved.
+- All 14 isolated billing tests passed. They use synthetic provider responses;
+  they are not evidence of Razorpay-originated webhook delivery.
+- An in-workspace request reaches the webhook route and receives HTTP 400 for
+  an unsigned payload, as intended. However, an independent external request
+  reaches Replit's "Log in to access a private app" page instead of the API.
+  This earlier check established that the private development access gate can
+  block provider delivery before the application can log or validate it.
+  See "Private Preview access" below.
+- The owner-provided webhook screenshot shows the expected endpoint, enabled
+  status, and required event subscriptions. Its Test/Live mode is not visible.
+  No accepted Razorpay event has yet been recorded in this app's development
+  database. Keep checkout disabled until a provider-originated signed event
+  reaches the app after external access is configured.
+
+Do not mark verification complete or enable checkout based only on a captured
+payment, processed refund, dashboard settlement status, or a locally fabricated
+webhook. A real Razorpay-sent signed event must reach this app successfully.
+Production-hosted Test Mode payment and refund webhooks have now been verified.
+Live Mode payments and owner-approved real-lawyer consultation acceptance
+remain unverified. This is not approval to open paid engagements.
 
 Do not connect this app to the original live app's credentials, webhook, or
 database. Nothing here requires changes to the original service.
+
+## Private Preview access
+
+Do not assume an in-workspace health check proves that Razorpay can reach a
+private development URL. Test from an independent unauthenticated client.
+
+To keep Preview private, the owner can create a short-lived external access
+token in Publishing settings, under Security, scoped to **Development**.
+These controls require a first publish with deployment access set to Private,
+according to Replit's development-URL documentation. They were unavailable
+during the earlier unpublished phase. The owner has since published publicly;
+the published webhook endpoint does not need a Replit access token.
+Temporarily disabling Private preview still requires the owner's informed
+approval; keep Preview private when using the published endpoint.
+Prefer an `Authorization: Bearer` header where the sending service supports
+custom headers. For a URL-only webhook configuration, Replit also supports
+appending `?project-protection-bypass=<development-token>` to the webhook URL.
+Configure that token-bearing URL privately in Razorpay; never store its actual
+value in source, documentation, chat, screenshots, or logs.
+
+The token allows its holder to reach the private project's development
+endpoints, not only the webhook route. App authentication and Razorpay signature
+validation still apply. Use the shortest practical expiry, revoke after testing,
+and remember that webhook access stops when it expires. This access token is
+separate from `RAZORPAY_WEBHOOK_SECRET`; do not replace the signing secret with it.
+Do not make the project public without the owner's informed approval.
+
+After access is configured, replay an existing Test Mode event or use an
+existing unused test purchase for a controlled refund. No additional payment is
+needed just to diagnose this access restriction.
+
+Official instructions:
+https://docs.replit.com/features/deployment-customization/external-access-tokens
 
 ## Secure configuration, when the owner is ready
 
@@ -40,8 +159,10 @@ database. Nothing here requires changes to the original service.
      document entitlements with controlled accounts before wider availability.
 7. Only after these checks pass, set the non-secret
    `RAZORPAY_CHECKOUT_VERIFIED_MODE` to the verified mode (`test` or `live`) using
-   the environment-variable tools. Restart the managed API workflow. A mode
-   mismatch or missing credentials/webhook secret keeps checkout disabled.
+    the environment-variable tools. Preview Test Mode verification belongs in
+    the development environment only; keep production unset until its own
+    verification passes. Restart the managed API workflow. A mode mismatch or
+    missing credentials/webhook secret keeps checkout disabled.
 8. Live mode needs its own verification. Test payments and test entitlements
    must not be mistaken for real revenue. Use isolated test accounts/data and
    explicitly review outstanding test entitlements before switching environments;

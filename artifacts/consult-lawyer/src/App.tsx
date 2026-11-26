@@ -20,7 +20,7 @@ import DocumentEditor from '@/pages/document-editor';
 import Templates from '@/pages/templates';
 import LawyerProfilePage from '@/pages/lawyer-profile';
 import Admin from '@/pages/admin';
-import { ForLawyers, Notifications, Plans, Policy, Settings } from '@/pages/simple';
+import { ForLawyers, Grievances, Notifications, Plans, Policy, Settings } from '@/pages/simple';
 import { SignInPage, SignUpPage } from '@/pages/auth';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15000, refetchOnWindowFocus: false } } });
@@ -179,6 +179,7 @@ function AppRoutes() {
           <Route path="/plans" component={Plans} />
           <Route path="/settings" component={Settings} />
           <Route path="/notifications" component={Notifications} />
+          <Route path="/grievances" component={Grievances} />
           <Route path="/admin" component={Admin} />
           <Route path="/privacy">{() => <Policy path="/privacy" />}</Route>
           <Route path="/disclaimer">{() => <Policy path="/disclaimer" />}</Route>

@@ -15,16 +15,33 @@ import { supportedLanguages } from "../data/languages";
 import { paymentsEnabled } from "../lib/razorpay";
 import { communicationServices } from "../lib/communication-config";
 import { isAiAvailable } from "../lib/ai-providers";
+import { getLegalReviewApproval } from "../lib/legal-review";
+import { getConsultationCheckoutState } from "../lib/consultation-checkout";
+import { resolvePresenceChange } from "../lib/presence";
 
 const router: IRouter = Router();
 
 router.get("/platform", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(lawyers).where(eq(lawyers.approvalStatus, "approved"));
-  const ai = await isAiAvailable();
+  const [rows, ai, legalApproval, checkoutState] = await Promise.all([
+    db.select().from(lawyers).where(eq(lawyers.approvalStatus, "approved")),
+    isAiAvailable(),
+    getLegalReviewApproval(),
+    getConsultationCheckoutState(),
+  ]);
   res.json(GetPlatformResponse.parse({
     name: "Consult with Lawyer",
     demo: rows.some((l) => l.demo),
     paymentsEnabled: paymentsEnabled(),
+    legalReviewComplete: Boolean(legalApproval),
+    paidConsultationsEnabled: paymentsEnabled() && Boolean(legalApproval) && !checkoutState.paused,
+    consultationCheckoutPaused: checkoutState.paused,
+    policyContacts: legalApproval ? {
+      supportContactEmail: legalApproval.supportContactEmail,
+      privacyContactEmail: legalApproval.privacyContactEmail,
+      privacyContactAddress: legalApproval.privacyContactAddress,
+      grievanceOfficerName: legalApproval.grievanceOfficerName,
+      grievanceOfficerEmail: legalApproval.grievanceOfficerEmail,
+    } : null,
     ...communicationServices(),
     ...ai,
     categories: categoryNames.map(([id, name, description]) => ({ id, name, description, count: rows.filter((l) => l.practiceAreas.includes(name)).length })),
@@ -40,7 +57,7 @@ router.get("/platform", async (_req, res): Promise<void> => {
       { id: "monthly", name: "Monthly unlimited", price: 499, description: "30 days of unlimited documents", features: ["Unlimited new documents", "All legal templates", "AI assistance billed separately", "30 days of document access"] },
     ],
     lawyerCount: rows.length,
-    onlineCount: rows.filter((l) => l.online).length,
+    onlineCount: rows.filter((l) => l.presenceStatus === "online").length,
   }));
 });
 
@@ -53,7 +70,7 @@ router.get("/lawyers", async (req, res): Promise<void> => {
     (!search || [l.name, l.title, l.city, ...l.practiceAreas, ...l.languages].join(" ").toLowerCase().includes(search)) &&
     (!area || l.practiceAreas.includes(area)) &&
     (!params.language || l.languages.includes(params.language)) &&
-    (params.online !== "true" || l.online)
+    (params.online !== "true" || l.presenceStatus === "online")
   ));
   rows = rows.sort((a, b) => {
     switch (params.sort) {
@@ -61,7 +78,7 @@ router.get("/lawyers", async (req, res): Promise<void> => {
       case "fee_desc": return b.fee - a.fee;
       case "experience": return b.experienceYears - a.experienceYears;
       case "rating": return b.rating - a.rating || b.reviewCount - a.reviewCount;
-      default: return Number(b.online) - Number(a.online) || b.experienceYears - a.experienceYears;
+      default: return Number(b.presenceStatus === "online") - Number(a.presenceStatus === "online") || b.experienceYears - a.experienceYears;
     }
   });
   res.json(ListLawyersResponse.parse(rows));
@@ -99,12 +116,18 @@ router.put("/lawyer/profile", requireAccount, async (req, res): Promise<void> =>
   if (input.practiceAreas.some((a) => !validAreas.has(a))) throw new HttpError(400, "Select valid practice areas.");
   if (input.languages.some((l) => !supportedLanguages.some((supported) => supported.name === l))) throw new HttpError(400, "Select a supported language.");
   const [existing] = await db.select().from(lawyers).where(eq(lawyers.ownerId, req.account.id));
-  const { online, availability, ...credentials } = input;
+  const { presenceStatus, availability, ...credentials } = input;
   const needsReview = !existing || Object.entries(credentials).some(([key, value]) =>
     JSON.stringify(existing[key as keyof typeof existing]) !== JSON.stringify(value));
   const profile = await db.transaction(async (tx) => {
     const values = {
       ...input,
+      ...resolvePresenceChange(
+        existing?.presenceStatus ?? null,
+        presenceStatus,
+        existing?.presenceChangedAt ?? null,
+      ),
+      online: presenceStatus === "online",
       name: input.name.trim(), title: input.title.trim(),
       practiceAreas: [...new Set(input.practiceAreas)], languages: [...new Set(input.languages)],
       availability: [...new Set(availability)],

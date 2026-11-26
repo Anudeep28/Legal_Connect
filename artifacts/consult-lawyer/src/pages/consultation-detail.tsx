@@ -13,9 +13,12 @@ import {
   useListDeliverables, getListDeliverablesQueryKey, useCreateDeliverable, useUpdateDeliverable,
   useCreateReview, getListLawyerReviewsQueryKey, getGetLawyerQueryKey,
   useAssistWriting, useGetPlatform, getListNotificationsQueryKey,
+  useListCallTranscripts, getListCallTranscriptsQueryKey, useUpdateCallTranscript, useDraftFromCallTranscript,
   type Account, type Consultation, type ConsultationUpdateStatus, type Deliverable, type DeliverableInputStatus,
+  type CallTranscriptSession, type CallTranscriptDraftResponse, type Platform,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
+import { AiRequestConsentDialog } from '@/components/ai-request-consent-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,6 +36,7 @@ import { exportDocx, exportMarkdown, exportPdf } from '@/lib/export';
 import { usePaymentCheckout } from '@/hooks/use-payment-checkout';
 import { PaymentHistory } from '@/components/payment-history';
 import { ConsultationCall } from '@/components/consultation-call';
+import { AiUsageNotice } from '@/components/ai-usage';
 
 export default function ConsultationDetail() {
   const { id = '' } = useParams<{ id: string }>();
@@ -46,6 +50,7 @@ export default function ConsultationDetail() {
 
 function Inner({ id, me }: { id: string; me: Account }) {
   const q = useGetConsultation(id, { query: { enabled: !!id, queryKey: getGetConsultationQueryKey(id), refetchInterval: 10000 } });
+  const [generatedDraft, setGeneratedDraft] = useState<(CallTranscriptDraftResponse & { sessionId: string; version: number }) | null>(null);
   if (q.isLoading) return <div className="space-y-4"><Skeleton className="h-40 rounded-3xl" /><Skeleton className="h-96 rounded-3xl" /></div>;
   if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} title="This consultation is not available" />;
   const c = q.data;
@@ -57,10 +62,11 @@ function Inner({ id, me }: { id: string; me: Account }) {
     <div>
       <Header c={c} asClient={asClient} isClient={isClient} />
       {isClient && <ConsultationPayment c={c} />}
-      {c.mode === 'call' && (isClient || me.role === 'lawyer') && <ConsultationCall consultation={c} />}
+      {c.mode === 'call' && (isClient || me.role === 'lawyer') && <ConsultationCall consultation={c} asLawyer={asLawyer} />}
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.25fr_1fr]">
         <Messages c={c} asClient={asClient} />
         <div className="space-y-6">
+          {asLawyer && c.mode === 'call' && <CallTranscriptWorkspace c={c} onDraftReady={(draft) => setGeneratedDraft({ ...draft, version: Date.now() })} />}
           {c.notes && (
             <section className="rounded-3xl border bg-card p-5">
               <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Client's background note</h3>
@@ -68,7 +74,12 @@ function Inner({ id, me }: { id: string; me: Account }) {
             </section>
           )}
           <Transcript c={c} asClient={asClient} />
-          <Deliverables c={c} asClient={asClient} />
+          <Deliverables
+            c={c}
+            asClient={asClient}
+            initialDraft={generatedDraft}
+            onDraftConsumed={() => setGeneratedDraft(null)}
+          />
           {isClient && c.status === 'completed' && <ReviewBox c={c} />}
         </div>
       </div>
@@ -77,20 +88,222 @@ function Inner({ id, me }: { id: string; me: Account }) {
 }
 
 function ConsultationPayment({ c }: { c: Consultation }) {
-  const platform = useGetPlatform();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const platform = useGetPlatform({ query: { refetchInterval: 15_000 } });
   const checkout = usePaymentCheckout();
   const payable = !c.demo && c.status === 'requested' && ['unpaid', 'pending'].includes(c.paymentStatus) && new Date(c.startsAt).getTime() > Date.now();
+  const checkoutReady = !!platform.data?.paidConsultationsEnabled;
+  const checkoutPaused = !!platform.data?.consultationCheckoutPaused;
+  const continueToPayment = () => {
+    setConfirmOpen(false);
+    void checkout.start({ plan: 'consultation', consultationId: c.id });
+  };
   return <div className="mt-4">
     <Notice icon={<Info />}>
       Payment: <strong>{c.paymentStatus.replace('_', ' ')}</strong>. {c.paymentStatus === 'paid' ? 'Captured payment does not itself confirm the appointment; the lawyer must accept.'
         : c.demo ? 'Illustrative profiles never accept payments.' : 'Only a server-verified captured payment marks this request paid.'}
-      {payable && <Button className="mt-3 block" disabled={!platform.data?.paymentsEnabled || checkout.pending} onClick={() => checkout.start({ plan: 'consultation', consultationId: c.id })} data-testid="button-pay-consultation">
-        {platform.data?.paymentsEnabled ? `Pay ${inr(c.fee)} with Razorpay` : 'Checkout disabled pending verification'}
+      {payable && (
+        <div className="mt-3 rounded-xl border border-border/70 bg-background/70 p-3 text-sm" data-testid="payment-review-summary">
+          <strong>Before you pay:</strong> {inr(c.fee)} is for one 30-minute {c.mode} consultation scheduled for {fmtDateTime(c.startsAt)} IST. Payment is collected before the advocate accepts. The appointment is confirmed only after the advocate accepts. If they decline or cancel, request an eligible refund from Payment history; Razorpay returns it to the original payment method after processing. Client cancellation is generally non-refundable, subject to applicable law.
+        </div>
+      )}
+      {payable && <Button className="mt-3 block" disabled={!checkoutReady || checkout.pending} onClick={() => setConfirmOpen(true)} data-testid="button-pay-consultation">
+        {checkoutReady ? `Pay ${inr(c.fee)} with Razorpay` : checkoutPaused ? 'Consultation checkout is temporarily paused' : 'Paid consultation checkout is closed'}
       </Button>}
+      {payable && !checkoutReady && <p className="mt-2 text-sm">{checkoutPaused
+        ? 'Paid consultation checkout is temporarily paused by the platform. No payment will be taken. Please check back later.'
+        : 'Paid consultations open only after Razorpay verification and qualified-counsel approval of the current policies and contact details.'}</p>}
       <p className="mt-2 text-sm">Consultation refunds require lawyer cancellation. Client cancellation is not refundable, subject to applicable law.</p>
     </Notice>
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="font-display">Review before you pay</AlertDialogTitle>
+          <AlertDialogDescription>
+            You are about to pay {inr(c.fee)} for one 30-minute {c.mode} consultation on {fmtDateTime(c.startsAt)} IST. Payment does not confirm the appointment; the advocate must accept after payment is verified. If the advocate declines or cancels, you can request an eligible refund from Payment history. Client cancellation is generally non-refundable, subject to applicable law.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Go back</AlertDialogCancel>
+          <AlertDialogAction onClick={continueToPayment} data-testid="button-confirm-consultation-payment">Continue to Razorpay</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <PaymentHistory consultationId={c.id} />
   </div>;
+}
+
+function CallTranscriptWorkspace({
+  c,
+  onDraftReady,
+}: {
+  c: Consultation;
+  onDraftReady: (draft: CallTranscriptDraftResponse & { sessionId: string }) => void;
+}) {
+  const q = useListCallTranscripts(c.id, {
+    query: { queryKey: getListCallTranscriptsQueryKey(c.id), refetchInterval: 5000 },
+  });
+  const platform = useGetPlatform();
+  return (
+    <section className="rounded-3xl border bg-card p-5" data-testid="call-transcript-workspace">
+      <h3 className="font-display text-lg font-semibold">Private call transcript</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Only the assigned lawyer can view or edit these transcripts. Correct the text before using it to prepare a document.</p>
+      <div className="mt-3"><AiUsageNotice /></div>
+      {q.isLoading ? <Skeleton className="mt-3 h-20" /> : q.isError ? (
+        <ErrorState error={q.error} onRetry={() => q.refetch()} />
+      ) : q.data?.length ? (
+        <div className="mt-4 space-y-5">
+          {q.data.map((session) => (
+            <CallTranscriptCard
+              key={session.id}
+              c={c}
+              session={session}
+              templates={platform.data?.templates ?? []}
+              languages={platform.data?.languages ?? []}
+              onDraftReady={onDraftReady}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">No consented call transcript is available yet. Transcription begins only after both participants opt in and the call room ends.</p>
+      )}
+    </section>
+  );
+}
+
+function CallTranscriptCard({
+  c,
+  session,
+  templates,
+  languages,
+  onDraftReady,
+}: {
+  c: Consultation;
+  session: CallTranscriptSession;
+  templates: Platform['templates'];
+  languages: Platform['languages'];
+  onDraftReady: (draft: CallTranscriptDraftResponse & { sessionId: string }) => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const save = useUpdateCallTranscript();
+  const generate = useDraftFromCallTranscript();
+  const [text, setText] = useState(session.editedTranscript);
+  const [templateId, setTemplateId] = useState('');
+  const [language, setLanguage] = useState('English');
+  const [draftConsentOpen, setDraftConsentOpen] = useState(false);
+  const draftTriggerRef = useRef<HTMLButtonElement>(null);
+  const dirty = text !== session.editedTranscript;
+
+  useEffect(() => {
+    setText(session.editedTranscript);
+  }, [session.id, session.editedTranscript]);
+  useEffect(() => {
+    if (!templateId && templates[0]) setTemplateId(templates[0].id);
+  }, [templateId, templates]);
+
+  const saveTranscript = () => save.mutate(
+    { id: c.id, sessionId: session.id, data: { editedTranscript: text } },
+    {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListCallTranscriptsQueryKey(c.id) });
+        toast({ title: 'Transcript saved privately' });
+      },
+      onError: (error) => toast({ title: 'Transcript could not be saved', description: errMsg(error), variant: 'destructive' }),
+    },
+  );
+
+  const openDraftConsent = () => {
+    if (!templateId || dirty || session.status !== 'ready' || generate.isPending) return;
+    setDraftConsentOpen(true);
+  };
+
+  const draftFromTranscript = () => {
+    if (!templateId || dirty || session.status !== 'ready' || generate.isPending) return;
+    setDraftConsentOpen(false);
+    generate.mutate(
+      {
+        id: c.id,
+        sessionId: session.id,
+        data: { templateId, language, dataUseAcknowledged: true },
+      },
+      {
+        onSuccess: (draft) => {
+          onDraftReady({ ...draft, sessionId: session.id });
+          toast({ title: 'Draft preview is ready for your review' });
+        },
+        onError: (error) => toast({ title: 'AI draft could not be created', description: errMsg(error), variant: 'destructive' }),
+      },
+    );
+  };
+
+  const statusLabel = session.status === 'recording' ? 'Recording in progress'
+    : session.status === 'processing' ? 'Transcribing the completed call'
+      : session.status === 'ready' ? 'Transcript ready for lawyer review'
+        : session.status === 'withdrawn' ? 'Recording was withdrawn; no transcript was created'
+          : 'Transcription failed; raw audio cleanup is being retried';
+
+  return (
+    <article className="rounded-2xl border p-4" data-testid={`call-transcript-${session.id}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-medium">{statusLabel}</p>
+        <span className="text-xs text-muted-foreground">{new Date(session.createdAt).toLocaleString()}</span>
+      </div>
+      {session.detectedLanguages.length > 0 && (
+        <p className="mt-1 text-xs text-muted-foreground">Detected languages: {session.detectedLanguages.join(', ')}</p>
+      )}
+      {session.status === 'ready' ? (
+        <>
+          <Textarea
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            rows={12}
+            maxLength={100000}
+            className="mt-3 font-mono text-[13px]"
+            aria-label="Edit private call transcript"
+            data-testid={`input-call-transcript-${session.id}`}
+          />
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={saveTranscript} disabled={!dirty || save.isPending} data-testid={`button-save-call-transcript-${session.id}`}>
+              {save.isPending ? <Loader2 className="animate-spin" /> : <Save />} Save transcript
+            </Button>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-sm">
+              <span>Legal template</span>
+              <select value={templateId} onChange={(event) => setTemplateId(event.target.value)} className="w-full rounded-xl border bg-background px-3 py-2" data-testid={`select-call-template-${session.id}`}>
+                {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm">
+              <span>Draft language</span>
+              <select value={language} onChange={(event) => setLanguage(event.target.value)} className="w-full rounded-xl border bg-background px-3 py-2" data-testid={`select-draft-language-${session.id}`}>
+                {languages.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+          </div>
+          <Notice icon={<Info />} className="mt-3">
+            Generating a draft sends this lawyer-edited transcript and the selected template to DeepSeek. The result is only a preview; it is not saved or sent to the client automatically.
+          </Notice>
+          <Button ref={draftTriggerRef} className="mt-3" onClick={openDraftConsent} disabled={!templateId || dirty || generate.isPending} data-testid={`button-generate-call-draft-${session.id}`}>
+            {generate.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Generate document draft
+          </Button>
+          {dirty && <p className="mt-2 text-xs text-muted-foreground">Save your transcript corrections before generating this draft.</p>}
+          <AiRequestConsentDialog
+            open={draftConsentOpen}
+            provider="DeepSeek"
+            description="Your reviewed transcript and selected legal template will be sent to DeepSeek for a draft preview. The draft is not saved or delivered automatically."
+            testIdPrefix={`call-draft-${session.id}`}
+            returnFocusRef={draftTriggerRef}
+            onCancel={() => setDraftConsentOpen(false)}
+            onContinue={draftFromTranscript}
+          />
+        </>
+      ) : session.status === 'failed' ? (
+        <p className="mt-2 text-sm text-muted-foreground">No AI draft can be generated from an incomplete transcript. The call recording is deleted after transcription retries are exhausted.</p>
+      ) : null}
+    </article>
+  );
 }
 
 function useStatusMutation(c: Consultation) {
@@ -313,12 +526,25 @@ function Transcript({ c, asClient }: { c: Consultation; asClient: boolean }) {
   );
 }
 
-function Deliverables({ c, asClient }: { c: Consultation; asClient: boolean }) {
+function Deliverables({
+  c,
+  asClient,
+  initialDraft,
+  onDraftConsumed,
+}: {
+  c: Consultation;
+  asClient: boolean;
+  initialDraft: (CallTranscriptDraftResponse & { sessionId: string; version: number }) | null;
+  onDraftConsumed: () => void;
+}) {
   const q = useListDeliverables(c.id, { query: { queryKey: getListDeliverablesQueryKey(c.id) } });
   const [editing, setEditing] = useState<Deliverable | 'new' | null>(null);
   const [viewing, setViewing] = useState<Deliverable | null>(null);
   const { toast } = useToast();
   const items = (q.data ?? []).filter((d) => !asClient || d.status === 'delivered');
+  useEffect(() => {
+    if (initialDraft) setEditing('new');
+  }, [initialDraft?.version]);
   if (asClient && c.package !== 'consultation_document' && items.length === 0) return null;
   return (
     <section className="rounded-3xl border bg-card p-5">
@@ -352,7 +578,16 @@ function Deliverables({ c, asClient }: { c: Consultation; asClient: boolean }) {
         </ul>
       )}
       {!asClient && <p className="mt-3 text-[11.5px] text-muted-foreground">AI-assisted drafts must be reviewed by you before publishing. Clients only see delivered documents.</p>}
-      {editing && <DeliverableEditor c={c} item={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
+      {editing && <DeliverableEditor
+        key={editing === 'new' ? `new-${initialDraft?.version ?? 'manual'}` : editing.id}
+        c={c}
+        item={editing === 'new' ? null : editing}
+        initialDraft={editing === 'new' ? initialDraft : null}
+        onClose={() => {
+          setEditing(null);
+          if (initialDraft) onDraftConsumed();
+        }}
+      />}
       <Dialog open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>
         <DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto">
           <DialogHeader><DialogTitle className="font-display text-2xl">{viewing?.title}</DialogTitle></DialogHeader>
@@ -368,19 +603,32 @@ function Deliverables({ c, asClient }: { c: Consultation; asClient: boolean }) {
   );
 }
 
-function DeliverableEditor({ c, item, onClose }: { c: Consultation; item: Deliverable | null; onClose: () => void }) {
+function DeliverableEditor({
+  c,
+  item,
+  initialDraft,
+  onClose,
+}: {
+  c: Consultation;
+  item: Deliverable | null;
+  initialDraft: CallTranscriptDraftResponse | null;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const platform = useGetPlatform();
   const create = useCreateDeliverable();
   const update = useUpdateDeliverable();
   const ai = useAssistWriting();
-  const [title, setTitle] = useState(item?.title ?? `${c.topic} - advice note`);
-  const [content, setContent] = useState(item?.content ?? '');
+  const [title, setTitle] = useState(item?.title ?? initialDraft?.title ?? `${c.topic} - advice note`);
+  const [content, setContent] = useState(item?.content ?? initialDraft?.content ?? '');
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const [aiConsentOpen, setAiConsentOpen] = useState(false);
   const pending = create.isPending || update.isPending;
 
   const save = (status: DeliverableInputStatus) => {
-    const data = { title: title.trim() || 'Untitled', content, status };
+    if (status === 'delivered' && !reviewConfirmed) return;
+    const data = { title: title.trim() || 'Untitled', content, status, reviewConfirmed };
     const opts = {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListDeliverablesQueryKey(c.id) });
@@ -393,11 +641,22 @@ function DeliverableEditor({ c, item, onClose }: { c: Consultation; item: Delive
     else create.mutate({ id: c.id, data }, opts);
   };
 
+  const openDraftConsent = () => {
+    const source = [c.topic, c.notes, c.transcript].filter(Boolean).join('\n\n');
+    if (!source.trim()) {
+      toast({ title: 'Nothing to draft', description: 'Add consultation notes or transcript text first.' });
+      return;
+    }
+    setAiConsentOpen(true);
+  };
+
   const draftFromTranscript = () => {
     const source = [c.topic, c.notes, c.transcript].filter(Boolean).join('\n\n');
+    if (!source.trim() || ai.isPending) return;
+    setAiConsentOpen(false);
     ai.mutate(
-      { data: { action: 'draft', text: source, language: 'English' } },
-      { onSuccess: (r) => setContent(r.text), onError: (e) => toast({ title: 'AI draft failed', description: errMsg(e), variant: 'destructive' }) },
+      { data: { action: 'draft', text: source, language: 'English', dataUseAcknowledged: true } },
+      { onSuccess: (r) => { setContent(r.text); setReviewConfirmed(false); }, onError: (e) => toast({ title: 'AI draft failed', description: errMsg(e), variant: 'destructive' }) },
     );
   };
 
@@ -405,17 +664,31 @@ function DeliverableEditor({ c, item, onClose }: { c: Consultation; item: Delive
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92dvh] max-w-3xl overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-2xl">{item ? 'Edit document' : 'New document draft'}</DialogTitle></DialogHeader>
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} data-testid="input-deliverable-title" />
-        <Textarea value={content} onChange={(e) => setContent(e.target.value)} rows={14} className="font-mono text-[13px]" placeholder="Markdown supported" data-testid="input-deliverable-content" />
-        {platform.data?.aiEnabled && (
-          <Button variant="outline" size="sm" onClick={draftFromTranscript} disabled={ai.isPending} className="self-start" data-testid="button-ai-draft">
+        <Input value={title} onChange={(e) => { setTitle(e.target.value); setReviewConfirmed(false); }} maxLength={200} data-testid="input-deliverable-title" />
+        <Textarea value={content} onChange={(e) => { setContent(e.target.value); setReviewConfirmed(false); }} rows={14} className="font-mono text-[13px]" placeholder="Markdown supported" data-testid="input-deliverable-content" />
+        {platform.data?.draftingEnabled && (
+          <>
+          <Button variant="outline" size="sm" onClick={openDraftConsent} disabled={ai.isPending} className="self-start" data-testid="button-ai-draft">
             {ai.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Draft from topic, notes and transcript
           </Button>
+          </>
         )}
+        <AiRequestConsentDialog
+          open={aiConsentOpen}
+          provider="DeepSeek"
+          description="The consultation topic, notes, and transcript will be sent to DeepSeek to create a draft preview."
+          testIdPrefix="consultation-deliverable-draft"
+          onCancel={() => setAiConsentOpen(false)}
+          onContinue={draftFromTranscript}
+        />
         <Notice icon={<Info />}>Review every line before publishing. AI output can be wrong and is not legal advice on its own.</Notice>
+        <label className="flex items-start gap-3 text-sm">
+          <input type="checkbox" checked={reviewConfirmed} onChange={(e) => setReviewConfirmed(e.target.checked)} data-testid="checkbox-review-deliverable" />
+          I reviewed this document and approve sharing it with the client.
+        </label>
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" onClick={() => save('draft')} disabled={pending} data-testid="button-save-draft"><Save /> Save draft</Button>
-          <Button onClick={() => save('delivered')} disabled={pending || !content.trim()} data-testid="button-publish">{pending ? <Loader2 className="animate-spin" /> : <Send />} Publish to client</Button>
+          <Button onClick={() => save('delivered')} disabled={pending || !content.trim() || !reviewConfirmed} data-testid="button-publish">{pending ? <Loader2 className="animate-spin" /> : <Send />} Publish to client</Button>
         </div>
       </DialogContent>
     </Dialog>

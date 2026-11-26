@@ -16,4 +16,5 @@ export interface DeliverableInput {
   /** @maxLength 100000 */
   content: string;
   status: DeliverableInputStatus;
+  reviewConfirmed: boolean;
 }

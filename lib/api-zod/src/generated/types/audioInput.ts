@@ -8,6 +8,8 @@
 import type { AudioInputMimeType } from './audioInputMimeType';
 
 export interface AudioInput {
+  /** The lawyer continued after the ElevenLabs disclosure for this recording. */
+  dataUseAcknowledged: true;
   /** @maxLength 15000000 */
   audio: string;
   mimeType: AudioInputMimeType;

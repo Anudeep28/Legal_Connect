@@ -112,7 +112,18 @@ export const GetConsultationCallResponse = zod.object({
   "enabled": zod.boolean(),
   "canJoin": zod.boolean(),
   "reason": zod.string(),
-  "recordingEnabled": zod.literal(false),
+  "recordingEnabled": zod.boolean(),
+  "recordingConsentEnabled": zod.boolean(),
+  "recordingMode": zod.enum(['pending', 'recorded', 'unrecorded']),
+  "myRecordingConsent": zod.boolean().nullable(),
+  "otherRecordingConsent": zod.boolean().nullable(),
+  "recordingLanguageCode": zod.string(),
+  "recordingLanguageEditable": zod.boolean(),
+  "recordingLanguageOptions": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "nativeName": zod.string()
+})),
   "opensAt": zod.string(),
   "closesAt": zod.string()
 })
@@ -127,7 +138,7 @@ export const JoinConsultationCallParams = zod.object({
 
 export const JoinConsultationCallBody = zod.object({
   "microphoneConsent": zod.literal(true),
-  "recordingDisabledAcknowledged": zod.literal(true)
+  "recordingDisclosureAcknowledged": zod.literal(true)
 })
 
 export const JoinConsultationCallResponse = zod.object({
@@ -135,7 +146,101 @@ export const JoinConsultationCallResponse = zod.object({
   "room": zod.string(),
   "expiresAt": zod.string(),
   "closesAt": zod.string(),
-  "recordingEnabled": zod.literal(false)
+  "recordingEnabled": zod.boolean()
+})
+
+
+/**
+ * Saves or withdraws this participant's per-consultation recording choice. Recording is optional; a no-consent choice locks the consultation to an unrecorded call.
+ */
+
+
+
+export const SetCallRecordingConsentParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const setCallRecordingConsentBodyStopCallDefault = false;
+
+export const SetCallRecordingConsentBody = zod.object({
+  "consent": zod.boolean(),
+  "stopCall": zod.boolean().default(setCallRecordingConsentBodyStopCallDefault)
+})
+
+export const SetCallRecordingConsentResponse = zod.object({
+  "enabled": zod.boolean(),
+  "mode": zod.enum(['pending', 'recorded', 'unrecorded']),
+  "myConsent": zod.boolean().nullable(),
+  "otherConsent": zod.boolean().nullable()
+})
+
+
+
+
+
+export const UpdateCallRecordingLanguageParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const updateCallRecordingLanguageBodyLanguageCodeMin = 2;
+export const updateCallRecordingLanguageBodyLanguageCodeMax = 8;
+
+
+
+export const UpdateCallRecordingLanguageBody = zod.object({
+  "languageCode": zod.string().min(updateCallRecordingLanguageBodyLanguageCodeMin).max(updateCallRecordingLanguageBodyLanguageCodeMax)
+})
+
+export const UpdateCallRecordingLanguageResponse = zod.object({
+  "languageCode": zod.string()
+})
+
+
+
+
+
+export const ListCallTranscriptsParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const ListCallTranscriptsResponseItem = zod.object({
+  "id": zod.string(),
+  "consultationId": zod.string(),
+  "status": zod.enum(['recording', 'processing', 'ready', 'failed', 'withdrawn']),
+  "generatedTranscript": zod.string(),
+  "editedTranscript": zod.string(),
+  "detectedLanguages": zod.array(zod.string()),
+  "createdAt": zod.string(),
+  "completedAt": zod.string().nullable()
+})
+export const ListCallTranscriptsResponse = zod.array(ListCallTranscriptsResponseItem)
+
+
+
+
+
+export const UpdateCallTranscriptParams = zod.object({
+  "id": zod.coerce.string().min(1),
+  "sessionId": zod.coerce.string()
+})
+
+export const updateCallTranscriptBodyEditedTranscriptMax = 100000;
+
+
+
+export const UpdateCallTranscriptBody = zod.object({
+  "editedTranscript": zod.string().max(updateCallTranscriptBodyEditedTranscriptMax)
+})
+
+export const UpdateCallTranscriptResponse = zod.object({
+  "id": zod.string(),
+  "consultationId": zod.string(),
+  "status": zod.enum(['recording', 'processing', 'ready', 'failed', 'withdrawn']),
+  "generatedTranscript": zod.string(),
+  "editedTranscript": zod.string(),
+  "detectedLanguages": zod.array(zod.string()),
+  "createdAt": zod.string(),
+  "completedAt": zod.string().nullable()
 })
 
 
@@ -144,15 +249,31 @@ export const HealthCheckResponse = zod.object({
 })
 
 
+export const ReadinessCheckResponse = zod.object({
+  "status": zod.enum(['ready', 'not_ready']),
+  "database": zod.enum(['ok', 'unavailable'])
+})
+
+
 export const GetPlatformResponse = zod.object({
   "name": zod.string(),
   "demo": zod.boolean(),
   "paymentsEnabled": zod.boolean(),
+  "legalReviewComplete": zod.boolean(),
+  "paidConsultationsEnabled": zod.boolean(),
+  "consultationCheckoutPaused": zod.boolean(),
+  "policyContacts": zod.union([zod.object({
+  "supportContactEmail": zod.string().email(),
+  "privacyContactEmail": zod.string().email(),
+  "privacyContactAddress": zod.string(),
+  "grievanceOfficerName": zod.string(),
+  "grievanceOfficerEmail": zod.string().email()
+}),zod.null()]),
   "callsEnabled": zod.boolean(),
   "emailEnabled": zod.boolean(),
   "pushEnabled": zod.boolean(),
   "phoneVerificationEnabled": zod.boolean(),
-  "recordingEnabled": zod.literal(false),
+  "recordingEnabled": zod.boolean(),
   "remindersEnabled": zod.boolean(),
   "pushPublicKey": zod.string().nullish(),
   "aiEnabled": zod.boolean(),
@@ -259,7 +380,8 @@ export const ListLawyersResponseItem = zod.object({
   "reviewCount": zod.number().int(),
   "verified": zod.boolean(),
   "approvalStatus": zod.enum(['pending', 'approved', 'rejected']),
-  "online": zod.boolean(),
+  "presenceStatus": zod.enum(['online', 'offline', 'in_court']),
+  "presenceChangedAt": zod.coerce.date(),
   "city": zod.string(),
   "avatarUrl": zod.string(),
   "demo": zod.boolean(),
@@ -292,7 +414,8 @@ export const GetLawyerResponse = zod.object({
   "reviewCount": zod.number().int(),
   "verified": zod.boolean(),
   "approvalStatus": zod.enum(['pending', 'approved', 'rejected']),
-  "online": zod.boolean(),
+  "presenceStatus": zod.enum(['online', 'offline', 'in_court']),
+  "presenceChangedAt": zod.coerce.date(),
   "city": zod.string(),
   "avatarUrl": zod.string(),
   "demo": zod.boolean(),
@@ -351,7 +474,8 @@ export const GetLawyerProfileResponse = zod.union([zod.object({
   "reviewCount": zod.number().int(),
   "verified": zod.boolean(),
   "approvalStatus": zod.enum(['pending', 'approved', 'rejected']),
-  "online": zod.boolean(),
+  "presenceStatus": zod.enum(['online', 'offline', 'in_court']),
+  "presenceChangedAt": zod.coerce.date(),
   "city": zod.string(),
   "avatarUrl": zod.string(),
   "demo": zod.boolean(),
@@ -403,7 +527,7 @@ export const SaveLawyerProfileBody = zod.object({
   "fee": zod.number().int().min(1).max(saveLawyerProfileBodyFeeMax),
   "city": zod.string().min(saveLawyerProfileBodyCityMin).max(saveLawyerProfileBodyCityMax),
   "availability": zod.array(zod.number().int().min(saveLawyerProfileBodyAvailabilityItemMin).max(saveLawyerProfileBodyAvailabilityItemMax)).min(1),
-  "online": zod.boolean()
+  "presenceStatus": zod.enum(['online', 'offline', 'in_court'])
 })
 
 export const SaveLawyerProfileResponse = zod.object({
@@ -422,7 +546,8 @@ export const SaveLawyerProfileResponse = zod.object({
   "reviewCount": zod.number().int(),
   "verified": zod.boolean(),
   "approvalStatus": zod.enum(['pending', 'approved', 'rejected']),
-  "online": zod.boolean(),
+  "presenceStatus": zod.enum(['online', 'offline', 'in_court']),
+  "presenceChangedAt": zod.coerce.date(),
   "city": zod.string(),
   "avatarUrl": zod.string(),
   "demo": zod.boolean(),
@@ -448,6 +573,7 @@ export const ListConsultationsResponseItem = zod.object({
   "endsAt": zod.string(),
   "fee": zod.number().int(),
   "transcript": zod.string(),
+  "callRecordingLanguageCode": zod.string(),
   "demo": zod.boolean(),
   "createdAt": zod.string()
 })
@@ -487,6 +613,7 @@ export const CreateConsultationResponse = zod.object({
   "endsAt": zod.string(),
   "fee": zod.number().int(),
   "transcript": zod.string(),
+  "callRecordingLanguageCode": zod.string(),
   "demo": zod.boolean(),
   "createdAt": zod.string()
 })
@@ -516,6 +643,7 @@ export const GetConsultationResponse = zod.object({
   "endsAt": zod.string(),
   "fee": zod.number().int(),
   "transcript": zod.string(),
+  "callRecordingLanguageCode": zod.string(),
   "demo": zod.boolean(),
   "createdAt": zod.string()
 })
@@ -554,6 +682,7 @@ export const UpdateConsultationResponse = zod.object({
   "endsAt": zod.string(),
   "fee": zod.number().int(),
   "transcript": zod.string(),
+  "callRecordingLanguageCode": zod.string(),
   "demo": zod.boolean(),
   "createdAt": zod.string()
 })
@@ -615,7 +744,8 @@ export const ListDeliverablesResponseItem = zod.object({
   "title": zod.string(),
   "content": zod.string(),
   "status": zod.enum(['draft', 'delivered']),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "lawyerReviewedAt": zod.string().nullable()
 })
 export const ListDeliverablesResponse = zod.array(ListDeliverablesResponseItem)
 
@@ -636,7 +766,8 @@ export const createDeliverableBodyContentMax = 100000;
 export const CreateDeliverableBody = zod.object({
   "title": zod.string().min(1).max(createDeliverableBodyTitleMax),
   "content": zod.string().max(createDeliverableBodyContentMax),
-  "status": zod.enum(['draft', 'delivered'])
+  "status": zod.enum(['draft', 'delivered']),
+  "reviewConfirmed": zod.boolean()
 })
 
 export const CreateDeliverableResponse = zod.object({
@@ -645,7 +776,8 @@ export const CreateDeliverableResponse = zod.object({
   "title": zod.string(),
   "content": zod.string(),
   "status": zod.enum(['draft', 'delivered']),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "lawyerReviewedAt": zod.string().nullable()
 })
 
 
@@ -665,7 +797,8 @@ export const updateDeliverableBodyContentMax = 100000;
 export const UpdateDeliverableBody = zod.object({
   "title": zod.string().min(1).max(updateDeliverableBodyTitleMax),
   "content": zod.string().max(updateDeliverableBodyContentMax),
-  "status": zod.enum(['draft', 'delivered'])
+  "status": zod.enum(['draft', 'delivered']),
+  "reviewConfirmed": zod.boolean()
 })
 
 export const UpdateDeliverableResponse = zod.object({
@@ -674,7 +807,8 @@ export const UpdateDeliverableResponse = zod.object({
   "title": zod.string(),
   "content": zod.string(),
   "status": zod.enum(['draft', 'delivered']),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "lawyerReviewedAt": zod.string().nullable()
 })
 
 
@@ -829,6 +963,56 @@ export const DuplicateDocumentResponse = zod.object({
 })
 
 
+export const GetWritingUsageResponse = zod.object({
+  "plan": zod.enum(['trial', 'single', 'monthly']),
+  "drafting": zod.object({
+  "limit": zod.number().int(),
+  "used": zod.number().int(),
+  "remaining": zod.number().int()
+}),
+  "transcription": zod.object({
+  "limit": zod.number().int(),
+  "used": zod.number().int(),
+  "remaining": zod.number().int()
+}),
+  "resetsAt": zod.coerce.date()
+})
+
+
+/**
+ * Daily AI request counts and plan snapshots for the authenticated lawyer only. Contains no prompts, transcripts, or case facts.
+ */
+export const getWritingUsageHistoryQueryDaysDefault = 30;
+export const getWritingUsageHistoryQueryDaysMax = 90;
+
+
+
+export const GetWritingUsageHistoryQueryParams = zod.object({
+  "days": zod.coerce.number().int().min(1).max(getWritingUsageHistoryQueryDaysMax).default(getWritingUsageHistoryQueryDaysDefault)
+})
+
+export const getWritingUsageHistoryResponseDaysMax = 90;
+
+export const getWritingUsageHistoryResponseEntriesItemDayRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getWritingUsageHistoryResponseEntriesItemDraftingRequestsMin = 0;
+
+export const getWritingUsageHistoryResponseEntriesItemTranscriptionRequestsMin = 0;
+
+
+
+export const GetWritingUsageHistoryResponse = zod.object({
+  "days": zod.number().int().min(1).max(getWritingUsageHistoryResponseDaysMax),
+  "retentionDays": zod.number().int(),
+  "entries": zod.array(zod.object({
+  "day": zod.string().regex(getWritingUsageHistoryResponseEntriesItemDayRegExp),
+  "plans": zod.array(zod.enum(['trial', 'single', 'monthly'])),
+  "planHistoryComplete": zod.boolean().describe('False when some requests predate plan snapshots.'),
+  "draftingRequests": zod.number().int().min(getWritingUsageHistoryResponseEntriesItemDraftingRequestsMin),
+  "transcriptionRequests": zod.number().int().min(getWritingUsageHistoryResponseEntriesItemTranscriptionRequestsMin)
+}))
+})
+
+
 export const assistWritingBodyTextMax = 30000;
 
 export const assistWritingBodyLanguageMin = 2;
@@ -837,6 +1021,7 @@ export const assistWritingBodyLanguageMax = 50;
 
 
 export const AssistWritingBody = zod.object({
+  "dataUseAcknowledged": zod.literal(true).describe('The lawyer continued after the DeepSeek disclosure for this request.'),
   "action": zod.enum(['draft', 'translate', 'improve']),
   "text": zod.string().min(1).max(assistWritingBodyTextMax),
   "language": zod.string().min(assistWritingBodyLanguageMin).max(assistWritingBodyLanguageMax)
@@ -852,6 +1037,7 @@ export const transcribeAudioBodyAudioMax = 15000000;
 
 
 export const TranscribeAudioBody = zod.object({
+  "dataUseAcknowledged": zod.literal(true).describe('The lawyer continued after the ElevenLabs disclosure for this recording.'),
   "audio": zod.string().max(transcribeAudioBodyAudioMax),
   "mimeType": zod.enum(['audio/webm', 'audio/mp4', 'audio/wav', 'audio/ogg']),
   "language": zod.string().optional()
@@ -859,6 +1045,34 @@ export const TranscribeAudioBody = zod.object({
 
 export const TranscribeAudioResponse = zod.object({
   "text": zod.string()
+})
+
+
+/**
+ * Creates a private AI draft preview from a lawyer-edited transcript and selected legal template. Does not create or deliver a document.
+ */
+
+
+
+export const DraftFromCallTranscriptParams = zod.object({
+  "id": zod.coerce.string().min(1),
+  "sessionId": zod.coerce.string()
+})
+
+export const draftFromCallTranscriptBodyLanguageMin = 2;
+export const draftFromCallTranscriptBodyLanguageMax = 32;
+
+
+
+export const DraftFromCallTranscriptBody = zod.object({
+  "templateId": zod.string(),
+  "language": zod.string().min(draftFromCallTranscriptBodyLanguageMin).max(draftFromCallTranscriptBodyLanguageMax),
+  "dataUseAcknowledged": zod.literal(true)
+})
+
+export const DraftFromCallTranscriptResponse = zod.object({
+  "title": zod.string(),
+  "content": zod.string()
 })
 
 
@@ -890,6 +1104,101 @@ export const ReadNotificationResponse = zod.object({
 })
 
 
+/**
+ * Lists only the signed-in client's grievance records.
+ */
+export const ListMyGrievancesResponseItem = zod.object({
+  "id": zod.string(),
+  "category": zod.enum(['account', 'consultation', 'payment', 'privacy', 'other']),
+  "description": zod.string(),
+  "status": zod.enum(['submitted', 'under_review', 'resolved']),
+  "officerResponse": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "respondedAt": zod.coerce.date().nullable()
+})
+export const ListMyGrievancesResponse = zod.array(ListMyGrievancesResponseItem)
+
+
+/**
+ * Creates a minimal grievance record. Do not include case facts or unnecessary matter details.
+ */
+export const submitGrievanceBodyDescriptionMin = 10;
+export const submitGrievanceBodyDescriptionMax = 1200;
+
+
+
+export const SubmitGrievanceBody = zod.object({
+  "category": zod.enum(['account', 'consultation', 'payment', 'privacy', 'other']),
+  "description": zod.string().min(submitGrievanceBodyDescriptionMin).max(submitGrievanceBodyDescriptionMax)
+})
+
+export const SubmitGrievanceResponse = zod.object({
+  "id": zod.string(),
+  "category": zod.enum(['account', 'consultation', 'payment', 'privacy', 'other']),
+  "description": zod.string(),
+  "status": zod.enum(['submitted', 'under_review', 'resolved']),
+  "officerResponse": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "respondedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * Lists grievances for the grievance officer or owner-designated administrator only.
+ */
+export const ListAdminGrievancesResponseItem = zod.object({
+  "id": zod.string(),
+  "category": zod.enum(['account', 'consultation', 'payment', 'privacy', 'other']),
+  "description": zod.string(),
+  "status": zod.enum(['submitted', 'under_review', 'resolved']),
+  "officerResponse": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "respondedAt": zod.coerce.date().nullable()
+}).and(zod.object({
+  "clientName": zod.string(),
+  "clientEmail": zod.string().email()
+}))
+export const ListAdminGrievancesResponse = zod.array(ListAdminGrievancesResponseItem)
+
+
+/**
+ * Updates a grievance status and/or records the officer's response.
+ */
+
+
+
+export const UpdateAdminGrievanceParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const updateAdminGrievanceBodyResponseMin = 3;
+export const updateAdminGrievanceBodyResponseMax = 3000;
+
+
+
+export const UpdateAdminGrievanceBody = zod.object({
+  "status": zod.enum(['submitted', 'under_review', 'resolved']).optional(),
+  "response": zod.string().min(updateAdminGrievanceBodyResponseMin).max(updateAdminGrievanceBodyResponseMax).optional()
+})
+
+export const UpdateAdminGrievanceResponse = zod.object({
+  "id": zod.string(),
+  "category": zod.enum(['account', 'consultation', 'payment', 'privacy', 'other']),
+  "description": zod.string(),
+  "status": zod.enum(['submitted', 'under_review', 'resolved']),
+  "officerResponse": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "respondedAt": zod.coerce.date().nullable()
+}).and(zod.object({
+  "clientName": zod.string(),
+  "clientEmail": zod.string().email()
+}))
+
+
 export const GetAdminOverviewResponse = zod.object({
   "users": zod.number().int(),
   "lawyers": zod.number().int(),
@@ -897,6 +1206,428 @@ export const GetAdminOverviewResponse = zod.object({
   "consultations": zod.number().int(),
   "completedConsultations": zod.number().int(),
   "documents": zod.number().int()
+})
+
+
+/**
+ * Returns safe API and database readiness status to the owner-designated administrator only.
+ */
+export const GetAdminSystemStatusResponse = zod.object({
+  "api": zod.enum(['live']),
+  "database": zod.enum(['unknown', 'ready', 'unavailable']),
+  "checkedAt": zod.coerce.date().nullable(),
+  "lastSuccessfulCheckAt": zod.coerce.date().nullable()
+})
+
+
+export const getAdminAiUsageQueryDaysDefault = 30;
+export const getAdminAiUsageQueryDaysMax = 90;
+
+
+
+export const GetAdminAiUsageQueryParams = zod.object({
+  "days": zod.coerce.number().int().min(1).max(getAdminAiUsageQueryDaysMax).default(getAdminAiUsageQueryDaysDefault)
+})
+
+export const getAdminAiUsageResponseMonthlyBudgetMonthlyBudgetUsdMin = 0;
+
+export const getAdminAiUsageResponseMonthlyBudgetWarningPercentMin = 50;
+export const getAdminAiUsageResponseMonthlyBudgetWarningPercentMax = 95;
+
+export const getAdminAiUsageResponseMonthlyBudgetCurrentMonthEstimatedUsdMin = 0;
+
+export const getAdminAiUsageResponseMonthlyBudgetRequestsMin = 0;
+
+export const getAdminAiUsageResponseMonthlyBudgetPricedRequestsMin = 0;
+
+export const getAdminAiUsageResponseDailyLimitsOneDraftingTrialMin = 0;
+export const getAdminAiUsageResponseDailyLimitsOneDraftingTrialMax = 10000;
+
+export const getAdminAiUsageResponseDailyLimitsOneDraftingSingleMin = 0;
+export const getAdminAiUsageResponseDailyLimitsOneDraftingSingleMax = 10000;
+
+export const getAdminAiUsageResponseDailyLimitsOneDraftingMonthlyMin = 0;
+export const getAdminAiUsageResponseDailyLimitsOneDraftingMonthlyMax = 10000;
+
+export const getAdminAiUsageResponseDailyLimitsOneTranscriptionTrialMin = 0;
+export const getAdminAiUsageResponseDailyLimitsOneTranscriptionTrialMax = 10000;
+
+export const getAdminAiUsageResponseDailyLimitsOneTranscriptionSingleMin = 0;
+export const getAdminAiUsageResponseDailyLimitsOneTranscriptionSingleMax = 10000;
+
+export const getAdminAiUsageResponseDailyLimitsOneTranscriptionMonthlyMin = 0;
+export const getAdminAiUsageResponseDailyLimitsOneTranscriptionMonthlyMax = 10000;
+
+export const getAdminAiUsageResponseRowsItemEstimatedCostUsdMin = 0;
+
+
+
+export const GetAdminAiUsageResponse = zod.object({
+  "days": zod.number().int(),
+  "retentionDays": zod.number().int(),
+  "monthlyBudget": zod.object({
+  "enabled": zod.boolean(),
+  "monthlyBudgetUsd": zod.number().min(getAdminAiUsageResponseMonthlyBudgetMonthlyBudgetUsdMin).nullable(),
+  "warningPercent": zod.number().int().min(getAdminAiUsageResponseMonthlyBudgetWarningPercentMin).max(getAdminAiUsageResponseMonthlyBudgetWarningPercentMax),
+  "monthStart": zod.coerce.date(),
+  "currentMonthEstimatedUsd": zod.number().min(getAdminAiUsageResponseMonthlyBudgetCurrentMonthEstimatedUsdMin).nullable(),
+  "costCoverage": zod.enum(['no_usage', 'unavailable', 'partial', 'complete']),
+  "requests": zod.number().int().min(getAdminAiUsageResponseMonthlyBudgetRequestsMin),
+  "pricedRequests": zod.number().int().min(getAdminAiUsageResponseMonthlyBudgetPricedRequestsMin),
+  "alertLevel": zod.enum(['none', 'approaching', 'reached'])
+}),
+  "dailyLimits": zod.object({
+  "drafting": zod.object({
+  "trial": zod.number().int().min(getAdminAiUsageResponseDailyLimitsOneDraftingTrialMin).max(getAdminAiUsageResponseDailyLimitsOneDraftingTrialMax),
+  "single": zod.number().int().min(getAdminAiUsageResponseDailyLimitsOneDraftingSingleMin).max(getAdminAiUsageResponseDailyLimitsOneDraftingSingleMax),
+  "monthly": zod.number().int().min(getAdminAiUsageResponseDailyLimitsOneDraftingMonthlyMin).max(getAdminAiUsageResponseDailyLimitsOneDraftingMonthlyMax)
+}),
+  "transcription": zod.object({
+  "trial": zod.number().int().min(getAdminAiUsageResponseDailyLimitsOneTranscriptionTrialMin).max(getAdminAiUsageResponseDailyLimitsOneTranscriptionTrialMax),
+  "single": zod.number().int().min(getAdminAiUsageResponseDailyLimitsOneTranscriptionSingleMin).max(getAdminAiUsageResponseDailyLimitsOneTranscriptionSingleMax),
+  "monthly": zod.number().int().min(getAdminAiUsageResponseDailyLimitsOneTranscriptionMonthlyMin).max(getAdminAiUsageResponseDailyLimitsOneTranscriptionMonthlyMax)
+})
+}).and(zod.object({
+  "source": zod.enum(['server_settings', 'owner']),
+  "updatedAt": zod.coerce.date().nullable()
+})),
+  "rows": zod.array(zod.object({
+  "day": zod.coerce.date(),
+  "lawyerId": zod.string(),
+  "lawyerName": zod.string(),
+  "provider": zod.enum(['deepseek', 'elevenlabs']),
+  "requests": zod.number().int(),
+  "successfulRequests": zod.number().int(),
+  "successfulRequestsKnown": zod.boolean(),
+  "tokenUsageRequests": zod.number().int(),
+  "inputTokens": zod.number().int(),
+  "outputTokens": zod.number().int(),
+  "pricedRequests": zod.number().int(),
+  "estimatedCostUsd": zod.number().min(getAdminAiUsageResponseRowsItemEstimatedCostUsdMin).nullable()
+}))
+})
+
+
+export const updateAdminAiUsageBudgetBodyMonthlyBudgetUsdMin = 0.01;
+export const updateAdminAiUsageBudgetBodyMonthlyBudgetUsdMax = 1000000000;
+
+export const updateAdminAiUsageBudgetBodyWarningPercentMin = 50;
+export const updateAdminAiUsageBudgetBodyWarningPercentMax = 95;
+
+
+
+export const UpdateAdminAiUsageBudgetBody = zod.object({
+  "enabled": zod.boolean(),
+  "monthlyBudgetUsd": zod.number().min(updateAdminAiUsageBudgetBodyMonthlyBudgetUsdMin).max(updateAdminAiUsageBudgetBodyMonthlyBudgetUsdMax).nullable(),
+  "warningPercent": zod.number().int().min(updateAdminAiUsageBudgetBodyWarningPercentMin).max(updateAdminAiUsageBudgetBodyWarningPercentMax)
+})
+
+export const updateAdminAiUsageBudgetResponseMonthlyBudgetUsdMin = 0;
+
+export const updateAdminAiUsageBudgetResponseWarningPercentMin = 50;
+export const updateAdminAiUsageBudgetResponseWarningPercentMax = 95;
+
+export const updateAdminAiUsageBudgetResponseCurrentMonthEstimatedUsdMin = 0;
+
+export const updateAdminAiUsageBudgetResponseRequestsMin = 0;
+
+export const updateAdminAiUsageBudgetResponsePricedRequestsMin = 0;
+
+
+
+export const UpdateAdminAiUsageBudgetResponse = zod.object({
+  "enabled": zod.boolean(),
+  "monthlyBudgetUsd": zod.number().min(updateAdminAiUsageBudgetResponseMonthlyBudgetUsdMin).nullable(),
+  "warningPercent": zod.number().int().min(updateAdminAiUsageBudgetResponseWarningPercentMin).max(updateAdminAiUsageBudgetResponseWarningPercentMax),
+  "monthStart": zod.coerce.date(),
+  "currentMonthEstimatedUsd": zod.number().min(updateAdminAiUsageBudgetResponseCurrentMonthEstimatedUsdMin).nullable(),
+  "costCoverage": zod.enum(['no_usage', 'unavailable', 'partial', 'complete']),
+  "requests": zod.number().int().min(updateAdminAiUsageBudgetResponseRequestsMin),
+  "pricedRequests": zod.number().int().min(updateAdminAiUsageBudgetResponsePricedRequestsMin),
+  "alertLevel": zod.enum(['none', 'approaching', 'reached'])
+})
+
+
+export const updateAdminAiUsageLimitsBodyDraftingTrialMin = 0;
+export const updateAdminAiUsageLimitsBodyDraftingTrialMax = 10000;
+
+export const updateAdminAiUsageLimitsBodyDraftingSingleMin = 0;
+export const updateAdminAiUsageLimitsBodyDraftingSingleMax = 10000;
+
+export const updateAdminAiUsageLimitsBodyDraftingMonthlyMin = 0;
+export const updateAdminAiUsageLimitsBodyDraftingMonthlyMax = 10000;
+
+export const updateAdminAiUsageLimitsBodyTranscriptionTrialMin = 0;
+export const updateAdminAiUsageLimitsBodyTranscriptionTrialMax = 10000;
+
+export const updateAdminAiUsageLimitsBodyTranscriptionSingleMin = 0;
+export const updateAdminAiUsageLimitsBodyTranscriptionSingleMax = 10000;
+
+export const updateAdminAiUsageLimitsBodyTranscriptionMonthlyMin = 0;
+export const updateAdminAiUsageLimitsBodyTranscriptionMonthlyMax = 10000;
+
+
+
+export const UpdateAdminAiUsageLimitsBody = zod.object({
+  "drafting": zod.object({
+  "trial": zod.number().int().min(updateAdminAiUsageLimitsBodyDraftingTrialMin).max(updateAdminAiUsageLimitsBodyDraftingTrialMax),
+  "single": zod.number().int().min(updateAdminAiUsageLimitsBodyDraftingSingleMin).max(updateAdminAiUsageLimitsBodyDraftingSingleMax),
+  "monthly": zod.number().int().min(updateAdminAiUsageLimitsBodyDraftingMonthlyMin).max(updateAdminAiUsageLimitsBodyDraftingMonthlyMax)
+}),
+  "transcription": zod.object({
+  "trial": zod.number().int().min(updateAdminAiUsageLimitsBodyTranscriptionTrialMin).max(updateAdminAiUsageLimitsBodyTranscriptionTrialMax),
+  "single": zod.number().int().min(updateAdminAiUsageLimitsBodyTranscriptionSingleMin).max(updateAdminAiUsageLimitsBodyTranscriptionSingleMax),
+  "monthly": zod.number().int().min(updateAdminAiUsageLimitsBodyTranscriptionMonthlyMin).max(updateAdminAiUsageLimitsBodyTranscriptionMonthlyMax)
+})
+})
+
+export const updateAdminAiUsageLimitsResponseOneDraftingTrialMin = 0;
+export const updateAdminAiUsageLimitsResponseOneDraftingTrialMax = 10000;
+
+export const updateAdminAiUsageLimitsResponseOneDraftingSingleMin = 0;
+export const updateAdminAiUsageLimitsResponseOneDraftingSingleMax = 10000;
+
+export const updateAdminAiUsageLimitsResponseOneDraftingMonthlyMin = 0;
+export const updateAdminAiUsageLimitsResponseOneDraftingMonthlyMax = 10000;
+
+export const updateAdminAiUsageLimitsResponseOneTranscriptionTrialMin = 0;
+export const updateAdminAiUsageLimitsResponseOneTranscriptionTrialMax = 10000;
+
+export const updateAdminAiUsageLimitsResponseOneTranscriptionSingleMin = 0;
+export const updateAdminAiUsageLimitsResponseOneTranscriptionSingleMax = 10000;
+
+export const updateAdminAiUsageLimitsResponseOneTranscriptionMonthlyMin = 0;
+export const updateAdminAiUsageLimitsResponseOneTranscriptionMonthlyMax = 10000;
+
+
+
+export const UpdateAdminAiUsageLimitsResponse = zod.object({
+  "drafting": zod.object({
+  "trial": zod.number().int().min(updateAdminAiUsageLimitsResponseOneDraftingTrialMin).max(updateAdminAiUsageLimitsResponseOneDraftingTrialMax),
+  "single": zod.number().int().min(updateAdminAiUsageLimitsResponseOneDraftingSingleMin).max(updateAdminAiUsageLimitsResponseOneDraftingSingleMax),
+  "monthly": zod.number().int().min(updateAdminAiUsageLimitsResponseOneDraftingMonthlyMin).max(updateAdminAiUsageLimitsResponseOneDraftingMonthlyMax)
+}),
+  "transcription": zod.object({
+  "trial": zod.number().int().min(updateAdminAiUsageLimitsResponseOneTranscriptionTrialMin).max(updateAdminAiUsageLimitsResponseOneTranscriptionTrialMax),
+  "single": zod.number().int().min(updateAdminAiUsageLimitsResponseOneTranscriptionSingleMin).max(updateAdminAiUsageLimitsResponseOneTranscriptionSingleMax),
+  "monthly": zod.number().int().min(updateAdminAiUsageLimitsResponseOneTranscriptionMonthlyMin).max(updateAdminAiUsageLimitsResponseOneTranscriptionMonthlyMax)
+})
+}).and(zod.object({
+  "source": zod.enum(['server_settings', 'owner']),
+  "updatedAt": zod.coerce.date().nullable()
+}))
+
+
+export const GetAdminLegalReviewResponse = zod.object({
+  "canRecord": zod.boolean(),
+  "canManageGrievances": zod.boolean(),
+  "paymentVerificationComplete": zod.boolean(),
+  "paidConsultationsEnabled": zod.boolean(),
+  "consultationCheckout": zod.object({
+  "paused": zod.boolean(),
+  "reason": zod.string().nullable(),
+  "changedAt": zod.coerce.date().nullable()
+}),
+  "approval": zod.union([zod.object({
+  "counselName": zod.string(),
+  "barCouncil": zod.string(),
+  "enrollmentNumber": zod.string(),
+  "counselEmail": zod.string().email(),
+  "supportContactEmail": zod.string().email(),
+  "privacyContactEmail": zod.string().email(),
+  "privacyContactAddress": zod.string(),
+  "grievanceOfficerName": zod.string(),
+  "grievanceOfficerEmail": zod.string().email(),
+  "approvedAt": zod.string()
+}),zod.null()]).optional()
+})
+
+
+export const recordAdminLegalReviewBodyCounselNameMin = 2;
+export const recordAdminLegalReviewBodyCounselNameMax = 160;
+
+export const recordAdminLegalReviewBodyBarCouncilMin = 2;
+export const recordAdminLegalReviewBodyBarCouncilMax = 160;
+
+export const recordAdminLegalReviewBodyEnrollmentNumberMin = 2;
+export const recordAdminLegalReviewBodyEnrollmentNumberMax = 80;
+
+export const recordAdminLegalReviewBodyCounselEmailMax = 254;
+
+export const recordAdminLegalReviewBodySupportContactEmailMax = 254;
+
+export const recordAdminLegalReviewBodyPrivacyContactEmailMax = 254;
+
+export const recordAdminLegalReviewBodyPrivacyContactAddressMin = 8;
+export const recordAdminLegalReviewBodyPrivacyContactAddressMax = 500;
+
+export const recordAdminLegalReviewBodyGrievanceOfficerNameMin = 2;
+export const recordAdminLegalReviewBodyGrievanceOfficerNameMax = 160;
+
+export const recordAdminLegalReviewBodyGrievanceOfficerEmailMax = 254;
+
+
+
+export const RecordAdminLegalReviewBody = zod.object({
+  "counselName": zod.string().min(recordAdminLegalReviewBodyCounselNameMin).max(recordAdminLegalReviewBodyCounselNameMax),
+  "barCouncil": zod.string().min(recordAdminLegalReviewBodyBarCouncilMin).max(recordAdminLegalReviewBodyBarCouncilMax),
+  "enrollmentNumber": zod.string().min(recordAdminLegalReviewBodyEnrollmentNumberMin).max(recordAdminLegalReviewBodyEnrollmentNumberMax),
+  "counselEmail": zod.string().email().max(recordAdminLegalReviewBodyCounselEmailMax),
+  "supportContactEmail": zod.string().email().max(recordAdminLegalReviewBodySupportContactEmailMax),
+  "privacyContactEmail": zod.string().email().max(recordAdminLegalReviewBodyPrivacyContactEmailMax),
+  "privacyContactAddress": zod.string().min(recordAdminLegalReviewBodyPrivacyContactAddressMin).max(recordAdminLegalReviewBodyPrivacyContactAddressMax),
+  "grievanceOfficerName": zod.string().min(recordAdminLegalReviewBodyGrievanceOfficerNameMin).max(recordAdminLegalReviewBodyGrievanceOfficerNameMax),
+  "grievanceOfficerEmail": zod.string().email().max(recordAdminLegalReviewBodyGrievanceOfficerEmailMax),
+  "confirmApproval": zod.literal(true)
+})
+
+export const RecordAdminLegalReviewResponse = zod.object({
+  "canRecord": zod.boolean(),
+  "canManageGrievances": zod.boolean(),
+  "paymentVerificationComplete": zod.boolean(),
+  "paidConsultationsEnabled": zod.boolean(),
+  "consultationCheckout": zod.object({
+  "paused": zod.boolean(),
+  "reason": zod.string().nullable(),
+  "changedAt": zod.coerce.date().nullable()
+}),
+  "approval": zod.union([zod.object({
+  "counselName": zod.string(),
+  "barCouncil": zod.string(),
+  "enrollmentNumber": zod.string(),
+  "counselEmail": zod.string().email(),
+  "supportContactEmail": zod.string().email(),
+  "privacyContactEmail": zod.string().email(),
+  "privacyContactAddress": zod.string(),
+  "grievanceOfficerName": zod.string(),
+  "grievanceOfficerEmail": zod.string().email(),
+  "approvedAt": zod.string()
+}),zod.null()]).optional()
+})
+
+
+export const updateAdminConsultationCheckoutBodyReasonMin = 3;
+export const updateAdminConsultationCheckoutBodyReasonMax = 500;
+
+
+
+export const UpdateAdminConsultationCheckoutBody = zod.object({
+  "paused": zod.boolean(),
+  "reason": zod.string().min(updateAdminConsultationCheckoutBodyReasonMin).max(updateAdminConsultationCheckoutBodyReasonMax)
+})
+
+export const UpdateAdminConsultationCheckoutResponse = zod.object({
+  "paused": zod.boolean(),
+  "reason": zod.string().nullable(),
+  "changedAt": zod.coerce.date().nullable()
+})
+
+
+export const GetAdminConsultationCheckoutHistoryResponse = zod.object({
+  "events": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "action": zod.enum(['paused', 'resumed']),
+  "reason": zod.string(),
+  "changedAt": zod.coerce.date(),
+  "actorName": zod.string(),
+  "actorEmail": zod.string().email()
+}))
+})
+
+
+export const GetAdminTwilioUsageBudgetResponse = zod.object({
+  "enabled": zod.boolean(),
+  "budgetAmount": zod.number().nullable(),
+  "budgetCurrency": zod.string(),
+  "warningPercent": zod.number().int(),
+  "lookupStatus": zod.enum(['not_checked', 'checking', 'success', 'partial', 'no_data', 'failed', 'not_configured']),
+  "currentSpend": zod.number().nullable(),
+  "usageCurrency": zod.string().nullable(),
+  "participantMinutes": zod.number().nullable(),
+  "periodStart": zod.string().nullable(),
+  "periodEnd": zod.string().nullable(),
+  "usageAsOf": zod.coerce.date().nullable(),
+  "lastAttemptAt": zod.coerce.date().nullable(),
+  "lastSuccessAt": zod.coerce.date().nullable(),
+  "providerConfigured": zod.boolean(),
+  "dataDelayed": zod.boolean(),
+  "currencyMatches": zod.boolean(),
+  "periodCurrent": zod.boolean(),
+  "alertLevel": zod.enum(['none', 'approaching', 'reached'])
+})
+
+
+export const updateAdminTwilioUsageBudgetBodyBudgetAmountMin = 0.01;
+export const updateAdminTwilioUsageBudgetBodyBudgetAmountMax = 1000000000;
+
+export const updateAdminTwilioUsageBudgetBodyBudgetCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+export const updateAdminTwilioUsageBudgetBodyWarningPercentMin = 50;
+export const updateAdminTwilioUsageBudgetBodyWarningPercentMax = 95;
+
+
+
+export const UpdateAdminTwilioUsageBudgetBody = zod.object({
+  "enabled": zod.boolean(),
+  "budgetAmount": zod.number().min(updateAdminTwilioUsageBudgetBodyBudgetAmountMin).max(updateAdminTwilioUsageBudgetBodyBudgetAmountMax).nullable(),
+  "budgetCurrency": zod.string().regex(updateAdminTwilioUsageBudgetBodyBudgetCurrencyRegExp),
+  "warningPercent": zod.number().int().min(updateAdminTwilioUsageBudgetBodyWarningPercentMin).max(updateAdminTwilioUsageBudgetBodyWarningPercentMax)
+})
+
+export const UpdateAdminTwilioUsageBudgetResponse = zod.object({
+  "enabled": zod.boolean(),
+  "budgetAmount": zod.number().nullable(),
+  "budgetCurrency": zod.string(),
+  "warningPercent": zod.number().int(),
+  "lookupStatus": zod.enum(['not_checked', 'checking', 'success', 'partial', 'no_data', 'failed', 'not_configured']),
+  "currentSpend": zod.number().nullable(),
+  "usageCurrency": zod.string().nullable(),
+  "participantMinutes": zod.number().nullable(),
+  "periodStart": zod.string().nullable(),
+  "periodEnd": zod.string().nullable(),
+  "usageAsOf": zod.coerce.date().nullable(),
+  "lastAttemptAt": zod.coerce.date().nullable(),
+  "lastSuccessAt": zod.coerce.date().nullable(),
+  "providerConfigured": zod.boolean(),
+  "dataDelayed": zod.boolean(),
+  "currencyMatches": zod.boolean(),
+  "periodCurrent": zod.boolean(),
+  "alertLevel": zod.enum(['none', 'approaching', 'reached'])
+})
+
+
+export const RefreshAdminTwilioUsageBudgetResponse = zod.object({
+  "enabled": zod.boolean(),
+  "budgetAmount": zod.number().nullable(),
+  "budgetCurrency": zod.string(),
+  "warningPercent": zod.number().int(),
+  "lookupStatus": zod.enum(['not_checked', 'checking', 'success', 'partial', 'no_data', 'failed', 'not_configured']),
+  "currentSpend": zod.number().nullable(),
+  "usageCurrency": zod.string().nullable(),
+  "participantMinutes": zod.number().nullable(),
+  "periodStart": zod.string().nullable(),
+  "periodEnd": zod.string().nullable(),
+  "usageAsOf": zod.coerce.date().nullable(),
+  "lastAttemptAt": zod.coerce.date().nullable(),
+  "lastSuccessAt": zod.coerce.date().nullable(),
+  "providerConfigured": zod.boolean(),
+  "dataDelayed": zod.boolean(),
+  "currencyMatches": zod.boolean(),
+  "periodCurrent": zod.boolean(),
+  "alertLevel": zod.enum(['none', 'approaching', 'reached'])
+})
+
+
+export const GetAdminTwilioUsageHistoryResponse = zod.object({
+  "months": zod.array(zod.object({
+  "periodStart": zod.coerce.date(),
+  "periodEnd": zod.coerce.date().nullable(),
+  "status": zod.enum(['success', 'partial', 'no_data']),
+  "spend": zod.number().nullable(),
+  "currency": zod.string().nullable(),
+  "participantMinutes": zod.number().nullable(),
+  "usageAsOf": zod.coerce.date().nullable(),
+  "checkedAt": zod.coerce.date()
+}))
 })
 
 
@@ -968,7 +1699,8 @@ export const ListAdminLawyersResponseItem = zod.object({
   "reviewCount": zod.number().int(),
   "verified": zod.boolean(),
   "approvalStatus": zod.enum(['pending', 'approved', 'rejected']),
-  "online": zod.boolean(),
+  "presenceStatus": zod.enum(['online', 'offline', 'in_court']),
+  "presenceChangedAt": zod.coerce.date(),
   "city": zod.string(),
   "avatarUrl": zod.string(),
   "demo": zod.boolean(),
@@ -1011,7 +1743,8 @@ export const ModerateLawyerResponse = zod.object({
   "reviewCount": zod.number().int(),
   "verified": zod.boolean(),
   "approvalStatus": zod.enum(['pending', 'approved', 'rejected']),
-  "online": zod.boolean(),
+  "presenceStatus": zod.enum(['online', 'offline', 'in_court']),
+  "presenceChangedAt": zod.coerce.date(),
   "city": zod.string(),
   "avatarUrl": zod.string(),
   "demo": zod.boolean(),

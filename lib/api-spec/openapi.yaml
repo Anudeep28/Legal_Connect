@@ -110,6 +110,67 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CallAccess" }
+  /consultations/{id}/call/recording-consent:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    post:
+      operationId: setCallRecordingConsent
+      description: Saves or withdraws this participant's per-consultation recording choice. Recording is optional; a no-consent choice locks the consultation to an unrecorded call.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallRecordingConsentInput" }
+      responses:
+        "200":
+          description: Current mutual-consent state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallRecordingConsentState" }
+  /consultations/{id}/call/recording-language:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    patch:
+      operationId: updateCallRecordingLanguage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallRecordingLanguageInput" }
+      responses:
+        "200":
+          description: Saved language preference
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallRecordingLanguageResponse" }
+  /consultations/{id}/call-transcripts:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      operationId: listCallTranscripts
+      responses:
+        "200":
+          description: Private transcripts for the assigned lawyer
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CallTranscriptSession" } }
+  /consultations/{id}/call-transcripts/{sessionId}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: sessionId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: updateCallTranscript
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallTranscriptUpdate" }
+      responses:
+        "200":
+          description: Updated private transcript
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallTranscriptSession" }
   /healthz:
     get:
       operationId: healthCheck
@@ -119,6 +180,20 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/HealthStatus" }
+  /readyz:
+    get:
+      operationId: readinessCheck
+      responses:
+        "200":
+          description: API is ready for database-backed requests
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadinessCheckStatus" }
+        "503":
+          description: Database-backed requests are unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadinessCheckStatus" }
   /platform:
     get:
       operationId: getPlatform
@@ -247,6 +322,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Consultation" }
+        "503":
+          description: Paid consultation requests are temporarily unavailable while checkout is paused, or calling is not configured.
   /consultations/{id}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -412,6 +489,27 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Document" }
+  /writing/usage:
+    get:
+      operationId: getWritingUsage
+      responses:
+        "200":
+          description: Daily allowances for the authenticated lawyer. Provider attempts including failures count; resets at midnight UTC.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WritingAllowance" }
+  /writing/usage-history:
+    get:
+      operationId: getWritingUsageHistory
+      description: Daily AI request counts and plan snapshots for the authenticated lawyer only. Contains no prompts, transcripts, or case facts.
+      parameters:
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 90, default: 30 } }
+      responses:
+        "200":
+          description: Bounded daily usage history for the signed-in lawyer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WritingUsageHistory" }
   /writing/assist:
     post:
       operationId: assistWriting
@@ -440,6 +538,24 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TextResult" }
+  /writing/consultations/{id}/call-transcripts/{sessionId}/draft:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: sessionId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: draftFromCallTranscript
+      description: Creates a private AI draft preview from a lawyer-edited transcript and selected legal template. Does not create or deliver a document.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallTranscriptDraftInput" }
+      responses:
+        "200":
+          description: Draft preview for lawyer review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CallTranscriptDraftResponse" }
   /notifications:
     get:
       operationId: listNotifications
@@ -460,6 +576,61 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Notification" }
+  /grievances:
+    get:
+      operationId: listMyGrievances
+      description: Lists only the signed-in client's grievance records.
+      responses:
+        "200":
+          description: This client's grievance submissions and current responses
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/MyGrievance" } }
+    post:
+      operationId: submitGrievance
+      description: Creates a minimal grievance record. Do not include case facts or unnecessary matter details.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GrievanceInput" }
+      responses:
+        "201":
+          description: Grievance submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyGrievance" }
+  /admin/grievances:
+    get:
+      operationId: listAdminGrievances
+      description: Lists grievances for the grievance officer or owner-designated administrator only.
+      responses:
+        "200":
+          description: Grievances awaiting or receiving officer review
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/AdminGrievance" } }
+        "403":
+          description: Grievance-officer access required
+  /admin/grievances/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    patch:
+      operationId: updateAdminGrievance
+      description: Updates a grievance status and/or records the officer's response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminGrievanceUpdate" }
+      responses:
+        "200":
+          description: Updated grievance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminGrievance" }
+        "403":
+          description: Grievance-officer access required
   /admin/overview:
     get:
       operationId: getAdminOverview
@@ -469,6 +640,175 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminOverview" }
+  /admin/system-status:
+    get:
+      operationId: getAdminSystemStatus
+      description: Returns safe API and database readiness status to the owner-designated administrator only.
+      responses:
+        "200":
+          description: Current API liveness and the latest database readiness check
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSystemStatus" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Owner-designated administrator access required
+        "503":
+          description: Owner access could not be verified while the database is unavailable
+  /admin/ai-usage:
+    get:
+      operationId: getAdminAiUsage
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 90, default: 30 }
+      responses:
+        "200":
+          description: Daily AI request aggregates and available usage-based estimates
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAiUsage" }
+        "403":
+          description: Only the owner-designated administrator may view AI usage
+  /admin/ai-usage-budget:
+    put:
+      operationId: updateAdminAiUsageBudget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AiUsageBudgetInput" }
+      responses:
+        "200":
+          description: Updated monthly AI spend alert settings and current estimate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAiUsageBudget" }
+        "400":
+          description: Invalid monthly budget or warning threshold
+        "403":
+          description: Only the owner-designated administrator may configure alerts
+  /admin/ai-usage-limits:
+    put:
+      operationId: updateAdminAiUsageLimits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AiUsageLimitsInput" }
+      responses:
+        "200":
+          description: Updated daily AI request limits for each plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAiUsageLimits" }
+        "400":
+          description: A daily AI limit is not a whole number from 0 to 10,000
+        "403":
+          description: Only the owner-designated administrator may change daily limits
+  /admin/legal-review:
+    get:
+      operationId: getAdminLegalReview
+      responses:
+        "200":
+          description: Current counsel approval and consultation checkout gate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminLegalReview" }
+    put:
+      operationId: recordAdminLegalReview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LegalCounselApprovalInput" }
+      responses:
+        "200":
+          description: Counsel approval and policy contacts recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminLegalReview" }
+        "403":
+          description: Only the owner-designated administrator may record approval
+  /admin/consultation-checkout:
+    put:
+      operationId: updateAdminConsultationCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConsultationCheckoutPauseInput" }
+      responses:
+        "200":
+          description: Paid consultation checkout pause state updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConsultationCheckoutState" }
+        "403":
+          description: Only the owner-designated administrator may pause or resume checkout
+  /admin/consultation-checkout-history:
+    get:
+      operationId: getAdminConsultationCheckoutHistory
+      responses:
+        "200":
+          description: Most recent pause and resume events for paid consultation checkout
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminConsultationCheckoutHistory" }
+        "403":
+          description: Only the owner-designated administrator may view checkout history
+  /admin/twilio-usage-budget:
+    get:
+      operationId: getAdminTwilioUsageBudget
+      responses:
+        "200":
+          description: Owner-configured monthly Twilio Video alert budget and latest provider usage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTwilioUsageBudget" }
+        "403":
+          description: Only the owner-designated administrator may view call usage
+    put:
+      operationId: updateAdminTwilioUsageBudget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TwilioUsageBudgetInput" }
+      responses:
+        "200":
+          description: Updated monthly usage alert settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTwilioUsageBudget" }
+        "400":
+          description: Invalid budget or warning threshold
+        "403":
+          description: Only the owner-designated administrator may configure alerts
+  /admin/twilio-usage-budget/refresh:
+    post:
+      operationId: refreshAdminTwilioUsageBudget
+      responses:
+        "200":
+          description: Latest posted provider usage, or a safe status when lookup fails
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTwilioUsageBudget" }
+        "403":
+          description: Only the owner-designated administrator may request a lookup
+  /admin/twilio-usage-history:
+    get:
+      operationId: getAdminTwilioUsageHistory
+      responses:
+        "200":
+          description: Stored monthly snapshots of account-level Twilio Programmable Video usage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTwilioUsageHistory" }
+        "403":
+          description: Only the owner-designated administrator may view call usage
   /admin/users:
     get:
       operationId: listAdminUsers
@@ -658,6 +998,12 @@ components:
       required: [status]
       properties:
         status: { type: string }
+    ReadinessCheckStatus:
+      type: object
+      required: [status, database]
+      properties:
+        status: { type: string, enum: [ready, not_ready] }
+        database: { type: string, enum: [ok, unavailable] }
     ServiceError:
       type: object
       required: [error]
@@ -703,16 +1049,23 @@ components:
         features: { type: array, items: { type: string } }
     Platform:
       type: object
-      required: [name, demo, paymentsEnabled, callsEnabled, emailEnabled, pushEnabled, phoneVerificationEnabled, recordingEnabled, remindersEnabled, aiEnabled, draftingEnabled, dictationEnabled, categories, templates, languages, plans, lawyerCount, onlineCount]
+      required: [name, demo, paymentsEnabled, legalReviewComplete, paidConsultationsEnabled, consultationCheckoutPaused, policyContacts, callsEnabled, emailEnabled, pushEnabled, phoneVerificationEnabled, recordingEnabled, remindersEnabled, aiEnabled, draftingEnabled, dictationEnabled, categories, templates, languages, plans, lawyerCount, onlineCount]
       properties:
         name: { type: string }
         demo: { type: boolean }
         paymentsEnabled: { type: boolean }
+        legalReviewComplete: { type: boolean }
+        paidConsultationsEnabled: { type: boolean }
+        consultationCheckoutPaused: { type: boolean }
+        policyContacts:
+          oneOf:
+            - { $ref: "#/components/schemas/ApprovedPolicyContacts" }
+            - { type: "null" }
         callsEnabled: { type: boolean }
         emailEnabled: { type: boolean }
         pushEnabled: { type: boolean }
         phoneVerificationEnabled: { type: boolean }
-        recordingEnabled: { type: boolean, const: false }
+        recordingEnabled: { type: boolean }
         remindersEnabled: { type: boolean }
         pushPublicKey: { type: ["string", "null"] }
         aiEnabled: { type: boolean }
@@ -724,6 +1077,172 @@ components:
         plans: { type: array, items: { $ref: "#/components/schemas/Plan" } }
         lawyerCount: { type: integer }
         onlineCount: { type: integer }
+    ApprovedPolicyContacts:
+      type: object
+      required: [supportContactEmail, privacyContactEmail, privacyContactAddress, grievanceOfficerName, grievanceOfficerEmail]
+      properties:
+        supportContactEmail: { type: string, format: email }
+        privacyContactEmail: { type: string, format: email }
+        privacyContactAddress: { type: string }
+        grievanceOfficerName: { type: string }
+        grievanceOfficerEmail: { type: string, format: email }
+    LegalCounselApproval:
+      type: object
+      required: [counselName, barCouncil, enrollmentNumber, counselEmail, supportContactEmail, privacyContactEmail, privacyContactAddress, grievanceOfficerName, grievanceOfficerEmail, approvedAt]
+      properties:
+        counselName: { type: string }
+        barCouncil: { type: string }
+        enrollmentNumber: { type: string }
+        counselEmail: { type: string, format: email }
+        supportContactEmail: { type: string, format: email }
+        privacyContactEmail: { type: string, format: email }
+        privacyContactAddress: { type: string }
+        grievanceOfficerName: { type: string }
+        grievanceOfficerEmail: { type: string, format: email }
+        approvedAt: { type: string }
+    LegalCounselApprovalInput:
+      type: object
+      required: [counselName, barCouncil, enrollmentNumber, counselEmail, supportContactEmail, privacyContactEmail, privacyContactAddress, grievanceOfficerName, grievanceOfficerEmail, confirmApproval]
+      properties:
+        counselName: { type: string, minLength: 2, maxLength: 160 }
+        barCouncil: { type: string, minLength: 2, maxLength: 160 }
+        enrollmentNumber: { type: string, minLength: 2, maxLength: 80 }
+        counselEmail: { type: string, format: email, maxLength: 254 }
+        supportContactEmail: { type: string, format: email, maxLength: 254 }
+        privacyContactEmail: { type: string, format: email, maxLength: 254 }
+        privacyContactAddress: { type: string, minLength: 8, maxLength: 500 }
+        grievanceOfficerName: { type: string, minLength: 2, maxLength: 160 }
+        grievanceOfficerEmail: { type: string, format: email, maxLength: 254 }
+        confirmApproval: { type: boolean, const: true }
+    AdminLegalReview:
+      type: object
+      required: [canRecord, canManageGrievances, paymentVerificationComplete, paidConsultationsEnabled, consultationCheckout]
+      properties:
+        canRecord: { type: boolean }
+        canManageGrievances: { type: boolean }
+        paymentVerificationComplete: { type: boolean }
+        paidConsultationsEnabled: { type: boolean }
+        consultationCheckout: { $ref: "#/components/schemas/ConsultationCheckoutState" }
+        approval:
+          oneOf:
+            - { $ref: "#/components/schemas/LegalCounselApproval" }
+            - { type: "null" }
+    ConsultationCheckoutPauseInput:
+      type: object
+      required: [paused, reason]
+      properties:
+        paused: { type: boolean }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    ConsultationCheckoutState:
+      type: object
+      required: [paused, reason, changedAt]
+      properties:
+        paused: { type: boolean }
+        reason: { type: ["string", "null"] }
+        changedAt: { type: ["string", "null"], format: date-time }
+    AdminConsultationCheckoutHistory:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/AdminConsultationCheckoutHistoryEvent" }
+    AdminConsultationCheckoutHistoryEvent:
+      type: object
+      required: [id, action, reason, changedAt, actorName, actorEmail]
+      properties:
+        id: { type: string, format: uuid }
+        action: { type: string, enum: [paused, resumed] }
+        reason: { type: string }
+        changedAt: { type: string, format: date-time }
+        actorName: { type: string }
+        actorEmail: { type: string, format: email }
+    GrievanceInput:
+      type: object
+      required: [category, description]
+      properties:
+        category: { type: string, enum: [account, consultation, payment, privacy, other] }
+        description: { type: string, minLength: 10, maxLength: 1200 }
+    GrievanceStatus:
+      type: string
+      enum: [submitted, under_review, resolved]
+    MyGrievance:
+      type: object
+      required: [id, category, description, status, officerResponse, submittedAt, updatedAt, respondedAt]
+      properties:
+        id: { type: string }
+        category: { type: string, enum: [account, consultation, payment, privacy, other] }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/GrievanceStatus" }
+        officerResponse: { type: string }
+        submittedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        respondedAt: { type: ["string", "null"], format: date-time }
+    AdminGrievance:
+      allOf:
+        - { $ref: "#/components/schemas/MyGrievance" }
+        - type: object
+          required: [clientName, clientEmail]
+          properties:
+            clientName: { type: string }
+            clientEmail: { type: string, format: email }
+    AdminGrievanceUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        status: { $ref: "#/components/schemas/GrievanceStatus" }
+        response: { type: string, minLength: 3, maxLength: 3000 }
+    TwilioUsageBudgetInput:
+      type: object
+      required: [enabled, budgetAmount, budgetCurrency, warningPercent]
+      properties:
+        enabled: { type: boolean }
+        budgetAmount: { type: ["number", "null"], minimum: 0.01, maximum: 1000000000 }
+        budgetCurrency: { type: string, pattern: "^[A-Z]{3}$" }
+        warningPercent: { type: integer, minimum: 50, maximum: 95 }
+    AdminTwilioUsageBudget:
+      type: object
+      required: [enabled, budgetAmount, budgetCurrency, warningPercent, lookupStatus, currentSpend, usageCurrency, participantMinutes, periodStart, periodEnd, usageAsOf, lastAttemptAt, lastSuccessAt, providerConfigured, dataDelayed, currencyMatches, periodCurrent, alertLevel]
+      properties:
+        enabled: { type: boolean }
+        budgetAmount: { type: ["number", "null"] }
+        budgetCurrency: { type: string }
+        warningPercent: { type: integer }
+        lookupStatus:
+          type: string
+          enum: [not_checked, checking, success, partial, no_data, failed, not_configured]
+        currentSpend: { type: ["number", "null"] }
+        usageCurrency: { type: ["string", "null"] }
+        participantMinutes: { type: ["number", "null"] }
+        periodStart: { type: ["string", "null"] }
+        periodEnd: { type: ["string", "null"] }
+        usageAsOf: { type: ["string", "null"], format: date-time }
+        lastAttemptAt: { type: ["string", "null"], format: date-time }
+        lastSuccessAt: { type: ["string", "null"], format: date-time }
+        providerConfigured: { type: boolean }
+        dataDelayed: { type: boolean }
+        currencyMatches: { type: boolean }
+        periodCurrent: { type: boolean }
+        alertLevel: { type: string, enum: [none, approaching, reached] }
+    AdminTwilioUsageHistory:
+      type: object
+      required: [months]
+      properties:
+        months:
+          type: array
+          items: { $ref: "#/components/schemas/AdminTwilioUsageHistoryItem" }
+    AdminTwilioUsageHistoryItem:
+      type: object
+      required: [periodStart, periodEnd, status, spend, currency, participantMinutes, usageAsOf, checkedAt]
+      properties:
+        periodStart: { type: string, format: date }
+        periodEnd: { type: ["string", "null"], format: date }
+        status: { type: string, enum: [success, partial, no_data] }
+        spend: { type: ["number", "null"] }
+        currency: { type: ["string", "null"] }
+        participantMinutes: { type: ["number", "null"] }
+        usageAsOf: { type: ["string", "null"], format: date-time }
+        checkedAt: { type: string, format: date-time }
     Account:
       type: object
       required: [id, name, email, role, status, emailNotifications, pushNotifications, phone, phoneVerifiedAt, subscriptionPlan, documentCredits, createdAt]
@@ -786,18 +1305,96 @@ components:
         ok: { type: boolean }
     CallConsentInput:
       type: object
-      required: [microphoneConsent, recordingDisabledAcknowledged]
+      required: [microphoneConsent, recordingDisclosureAcknowledged]
       properties:
         microphoneConsent: { type: boolean, const: true }
-        recordingDisabledAcknowledged: { type: boolean, const: true }
+        recordingDisclosureAcknowledged: { type: boolean, const: true }
+    CallRecordingConsentInput:
+      type: object
+      required: [consent]
+      properties:
+        consent: { type: boolean }
+        stopCall: { type: boolean, default: false }
+    CallRecordingConsentState:
+      type: object
+      required: [enabled, mode, myConsent, otherConsent]
+      properties:
+        enabled: { type: boolean }
+        mode: { type: string, enum: [pending, recorded, unrecorded] }
+        myConsent: { type: ["boolean", "null"] }
+        otherConsent: { type: ["boolean", "null"] }
+    CallRecordingLanguageInput:
+      type: object
+      required: [languageCode]
+      properties:
+        languageCode: { type: string, minLength: 2, maxLength: 8 }
+    CallRecordingLanguageResponse:
+      type: object
+      required: [languageCode]
+      properties:
+        languageCode: { type: string }
+    CallTranscriptWord:
+      type: object
+      required: [text, startSeconds, endSeconds, speaker]
+      properties:
+        text: { type: string }
+        startSeconds: { type: number, minimum: 0 }
+        endSeconds: { type: number, minimum: 0 }
+        speaker: { type: string, enum: [client, lawyer] }
+        languageCode: { type: string, nullable: true }
+    CallTranscriptSession:
+      type: object
+      required: [id, consultationId, status, generatedTranscript, editedTranscript, detectedLanguages, createdAt, completedAt]
+      properties:
+        id: { type: string }
+        consultationId: { type: string }
+        status: { type: string, enum: [recording, processing, ready, failed, withdrawn] }
+        generatedTranscript: { type: string }
+        editedTranscript: { type: string }
+        detectedLanguages: { type: array, items: { type: string } }
+        createdAt: { type: string }
+        completedAt: { type: string, nullable: true }
+    CallTranscriptUpdate:
+      type: object
+      required: [editedTranscript]
+      properties:
+        editedTranscript: { type: string, maxLength: 100000 }
+    CallTranscriptDraftInput:
+      type: object
+      required: [templateId, language, dataUseAcknowledged]
+      properties:
+        templateId: { type: string }
+        language: { type: string, minLength: 2, maxLength: 32 }
+        dataUseAcknowledged: { type: boolean, const: true }
+    CallTranscriptDraftResponse:
+      type: object
+      required: [title, content]
+      properties:
+        title: { type: string }
+        content: { type: string }
     CallAvailability:
       type: object
-      required: [enabled, canJoin, reason, recordingEnabled, opensAt, closesAt]
+      required: [enabled, canJoin, reason, recordingEnabled, recordingConsentEnabled, recordingMode, myRecordingConsent, otherRecordingConsent, recordingLanguageCode, recordingLanguageEditable, recordingLanguageOptions, opensAt, closesAt]
       properties:
         enabled: { type: boolean }
         canJoin: { type: boolean }
         reason: { type: string }
-        recordingEnabled: { type: boolean, const: false }
+        recordingEnabled: { type: boolean }
+        recordingConsentEnabled: { type: boolean }
+        recordingMode: { type: string, enum: [pending, recorded, unrecorded] }
+        myRecordingConsent: { type: ["boolean", "null"] }
+        otherRecordingConsent: { type: ["boolean", "null"] }
+        recordingLanguageCode: { type: string }
+        recordingLanguageEditable: { type: boolean }
+        recordingLanguageOptions:
+          type: array
+          items:
+            type: object
+            required: [code, name, nativeName]
+            properties:
+              code: { type: string }
+              name: { type: string }
+              nativeName: { type: string }
         opensAt: { type: string }
         closesAt: { type: string }
     CallAccess:
@@ -808,7 +1405,7 @@ components:
         room: { type: string }
         expiresAt: { type: string }
         closesAt: { type: string }
-        recordingEnabled: { type: boolean, const: false }
+        recordingEnabled: { type: boolean }
     CommunicationDelivery:
       type: object
       required: [id, channel, status, attempts, nextAttemptAt, lastError, createdAt]
@@ -822,7 +1419,7 @@ components:
         createdAt: { type: string }
     Lawyer:
       type: object
-      required: [id, name, title, bio, practiceAreas, languages, experienceYears, barCouncil, enrollmentNumber, fee, documentFeePercent, rating, reviewCount, verified, approvalStatus, online, city, avatarUrl, demo, availability, rejectionReason]
+      required: [id, name, title, bio, practiceAreas, languages, experienceYears, barCouncil, enrollmentNumber, fee, documentFeePercent, rating, reviewCount, verified, approvalStatus, presenceStatus, presenceChangedAt, city, avatarUrl, demo, availability, rejectionReason]
       properties:
         id: { type: string }
         name: { type: string }
@@ -839,7 +1436,8 @@ components:
         reviewCount: { type: integer }
         verified: { type: boolean }
         approvalStatus: { type: string, enum: [pending, approved, rejected] }
-        online: { type: boolean }
+        presenceStatus: { type: string, enum: [online, offline, in_court] }
+        presenceChangedAt: { type: string, format: date-time }
         city: { type: string }
         avatarUrl: { type: string }
         demo: { type: boolean }
@@ -847,7 +1445,7 @@ components:
         rejectionReason: { type: string }
     LawyerInput:
       type: object
-      required: [name, title, bio, practiceAreas, languages, experienceYears, barCouncil, enrollmentNumber, fee, city, availability, online]
+      required: [name, title, bio, practiceAreas, languages, experienceYears, barCouncil, enrollmentNumber, fee, city, availability, presenceStatus]
       properties:
         name: { type: string, minLength: 2, maxLength: 100 }
         title: { type: string, minLength: 3, maxLength: 150 }
@@ -860,10 +1458,10 @@ components:
         fee: { type: integer, minimum: 1, maximum: 100000 }
         city: { type: string, minLength: 2, maxLength: 100 }
         availability: { type: array, minItems: 1, items: { type: integer, minimum: 0, maximum: 6 } }
-        online: { type: boolean }
+        presenceStatus: { type: string, enum: [online, offline, in_court] }
     Consultation:
       type: object
-      required: [id, userId, clientName, lawyerId, lawyerName, lawyerAvatar, topic, notes, mode, package, status, paymentStatus, startsAt, endsAt, fee, transcript, demo, createdAt]
+      required: [id, userId, clientName, lawyerId, lawyerName, lawyerAvatar, topic, notes, mode, package, status, paymentStatus, startsAt, endsAt, fee, transcript, callRecordingLanguageCode, demo, createdAt]
       properties:
         id: { type: string }
         userId: { type: string }
@@ -881,6 +1479,7 @@ components:
         endsAt: { type: string }
         fee: { type: integer }
         transcript: { type: string }
+        callRecordingLanguageCode: { type: string }
         demo: { type: boolean }
         createdAt: { type: string }
     ConsultationInput:
@@ -915,7 +1514,7 @@ components:
         content: { type: string, minLength: 1, maxLength: 5000 }
     Deliverable:
       type: object
-      required: [id, consultationId, title, content, status, createdAt]
+      required: [id, consultationId, title, content, status, createdAt, lawyerReviewedAt]
       properties:
         id: { type: string }
         consultationId: { type: string }
@@ -923,13 +1522,15 @@ components:
         content: { type: string }
         status: { type: string, enum: [draft, delivered] }
         createdAt: { type: string }
+        lawyerReviewedAt: { type: string, nullable: true }
     DeliverableInput:
       type: object
-      required: [title, content, status]
+      required: [title, content, status, reviewConfirmed]
       properties:
         title: { type: string, minLength: 1, maxLength: 200 }
         content: { type: string, maxLength: 100000 }
         status: { type: string, enum: [draft, delivered] }
+        reviewConfirmed: { type: boolean }
     Review:
       type: object
       required: [id, consultationId, lawyerId, clientName, rating, comment, visible, moderationReason, createdAt]
@@ -970,17 +1571,54 @@ components:
         templateId: { type: string }
         category: { type: string }
         language: { type: string }
+    WritingAllowance:
+      type: object
+      required: [plan, drafting, transcription, resetsAt]
+      properties:
+        plan: { type: string, enum: [trial, single, monthly] }
+        drafting: { $ref: "#/components/schemas/AiAllowance" }
+        transcription: { $ref: "#/components/schemas/AiAllowance" }
+        resetsAt: { type: string, format: date-time }
+    WritingUsageHistory:
+      type: object
+      required: [days, retentionDays, entries]
+      properties:
+        days: { type: integer, minimum: 1, maximum: 90 }
+        retentionDays: { type: integer }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/WritingUsageHistoryEntry" }
+    WritingUsageHistoryEntry:
+      type: object
+      required: [day, plans, planHistoryComplete, draftingRequests, transcriptionRequests]
+      properties:
+        day: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        plans:
+          type: array
+          items: { type: string, enum: [trial, single, monthly] }
+        planHistoryComplete: { type: boolean, description: "False when some requests predate plan snapshots." }
+        draftingRequests: { type: integer, minimum: 0 }
+        transcriptionRequests: { type: integer, minimum: 0 }
+    AiAllowance:
+      type: object
+      required: [limit, used, remaining]
+      properties:
+        limit: { type: integer }
+        used: { type: integer }
+        remaining: { type: integer }
     WritingInput:
       type: object
-      required: [action, text, language]
+      required: [action, text, language, dataUseAcknowledged]
       properties:
+        dataUseAcknowledged: { type: boolean, const: true, description: "The lawyer continued after the DeepSeek disclosure for this request." }
         action: { type: string, enum: [draft, translate, improve] }
         text: { type: string, minLength: 1, maxLength: 30000 }
         language: { type: string, minLength: 2, maxLength: 50 }
     AudioInput:
       type: object
-      required: [audio, mimeType]
+      required: [audio, mimeType, dataUseAcknowledged]
       properties:
+        dataUseAcknowledged: { type: boolean, const: true, description: "The lawyer continued after the ElevenLabs disclosure for this recording." }
         audio: { type: string, maxLength: 15000000 }
         mimeType: { type: string, enum: [audio/webm, audio/mp4, audio/wav, audio/ogg] }
         language: { type: string }
@@ -1009,6 +1647,82 @@ components:
         consultations: { type: integer }
         completedConsultations: { type: integer }
         documents: { type: integer }
+    AdminSystemStatus:
+      type: object
+      required: [api, database, checkedAt, lastSuccessfulCheckAt]
+      properties:
+        api: { type: string, enum: [live] }
+        database: { type: string, enum: [unknown, ready, unavailable] }
+        checkedAt: { type: ["string", "null"], format: date-time }
+        lastSuccessfulCheckAt: { type: ["string", "null"], format: date-time }
+    AdminAiUsage:
+      type: object
+      required: [days, retentionDays, rows, monthlyBudget, dailyLimits]
+      properties:
+        days: { type: integer }
+        retentionDays: { type: integer }
+        monthlyBudget: { $ref: "#/components/schemas/AdminAiUsageBudget" }
+        dailyLimits: { $ref: "#/components/schemas/AdminAiUsageLimits" }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAiUsageRow" }
+    AiPlanLimits:
+      type: object
+      required: [trial, single, monthly]
+      properties:
+        trial: { type: integer, minimum: 0, maximum: 10000 }
+        single: { type: integer, minimum: 0, maximum: 10000 }
+        monthly: { type: integer, minimum: 0, maximum: 10000 }
+    AiUsageLimitsInput:
+      type: object
+      required: [drafting, transcription]
+      properties:
+        drafting: { $ref: "#/components/schemas/AiPlanLimits" }
+        transcription: { $ref: "#/components/schemas/AiPlanLimits" }
+    AdminAiUsageLimits:
+      allOf:
+        - $ref: "#/components/schemas/AiUsageLimitsInput"
+        - type: object
+          required: [source, updatedAt]
+          properties:
+            source: { type: string, enum: [server_settings, owner] }
+            updatedAt: { type: ["string", "null"], format: date-time }
+    AdminAiUsageBudget:
+      type: object
+      required: [enabled, monthlyBudgetUsd, warningPercent, monthStart, currentMonthEstimatedUsd, costCoverage, requests, pricedRequests, alertLevel]
+      properties:
+        enabled: { type: boolean }
+        monthlyBudgetUsd: { type: ["number", "null"], minimum: 0 }
+        warningPercent: { type: integer, minimum: 50, maximum: 95 }
+        monthStart: { type: string, format: date }
+        currentMonthEstimatedUsd: { type: ["number", "null"], minimum: 0 }
+        costCoverage: { type: string, enum: [no_usage, unavailable, partial, complete] }
+        requests: { type: integer, minimum: 0 }
+        pricedRequests: { type: integer, minimum: 0 }
+        alertLevel: { type: string, enum: [none, approaching, reached] }
+    AiUsageBudgetInput:
+      type: object
+      required: [enabled, monthlyBudgetUsd, warningPercent]
+      properties:
+        enabled: { type: boolean }
+        monthlyBudgetUsd: { type: ["number", "null"], minimum: 0.01, maximum: 1000000000 }
+        warningPercent: { type: integer, minimum: 50, maximum: 95 }
+    AdminAiUsageRow:
+      type: object
+      required: [day, lawyerId, lawyerName, provider, requests, successfulRequests, successfulRequestsKnown, tokenUsageRequests, inputTokens, outputTokens, pricedRequests, estimatedCostUsd]
+      properties:
+        day: { type: string, format: date }
+        lawyerId: { type: string }
+        lawyerName: { type: string }
+        provider: { type: string, enum: [deepseek, elevenlabs] }
+        requests: { type: integer }
+        successfulRequests: { type: integer }
+        successfulRequestsKnown: { type: boolean }
+        tokenUsageRequests: { type: integer }
+        inputTokens: { type: integer }
+        outputTokens: { type: integer }
+        pricedRequests: { type: integer }
+        estimatedCostUsd: { type: ["number", "null"], minimum: 0 }
     UserModeration:
       type: object
       required: [status, reason]

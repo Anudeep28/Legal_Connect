@@ -91,7 +91,7 @@ export default function Lawyers() {
             </Select>
             <Label className="flex h-11 cursor-pointer items-center gap-2 rounded-full border px-4 text-sm font-normal">
               <Switch checked={online} onCheckedChange={(c) => update({ online: c ? 'true' : null })} data-testid="switch-online" />
-              Available now
+              Online now
             </Label>
           </div>
         </div>
@@ -113,7 +113,7 @@ export default function Lawyers() {
         <EmptyState
           icon={<UsersRound />}
           title="No advocates match these filters"
-          body="Try a broader legal area, a different language, or turn off Available now."
+          body="Try a broader legal area, a different language, or turn off Online now."
           action={<Button variant="outline" onClick={() => { setText(''); setLocation('/lawyers'); }}>Reset filters</Button>}
         />
       ) : (

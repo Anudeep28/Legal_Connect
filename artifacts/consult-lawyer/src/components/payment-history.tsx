@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useListPayments, getListPaymentsQueryKey, useReconcilePayment, useRefundPayment,
+  useListConsultations, getListConsultationsQueryKey, useGetPlatform,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/kit';
@@ -14,9 +15,13 @@ export function PaymentHistory({ consultationId }: { consultationId?: string }) 
   const query = useListPayments({ query: {
     enabled: signedIn, queryKey: getListPaymentsQueryKey(), refetchInterval: 10000,
   } });
+  const consultations = useListConsultations({ query: {
+    enabled: signedIn, queryKey: getListConsultationsQueryKey(), refetchInterval: 10000,
+  } });
   const reconcile = useReconcilePayment();
   const refund = useRefundPayment();
   const checkout = usePaymentCheckout();
+  const platform = useGetPlatform();
   const qc = useQueryClient();
   const { toast } = useToast();
   if (!signedIn) return null;
@@ -25,7 +30,7 @@ export function PaymentHistory({ consultationId }: { consultationId?: string }) 
   const actions = {
     onSuccess: () => {
       qc.invalidateQueries();
-      toast({ title: 'Payment status updated', description: 'Refunds are complete only when Razorpay confirms processing.' });
+      toast({ title: 'Payment status updated', description: 'Razorpay confirms refund processing automatically; no manual client or lawyer confirmation is needed.' });
     },
     onError: (e: unknown) => toast({ title: 'Could not confirm payment status', description: errMsg(e), variant: 'destructive' as const }),
   };
@@ -43,9 +48,14 @@ export function PaymentHistory({ consultationId }: { consultationId?: string }) 
               <p className="text-sm">{p.mode === 'test' && <strong>Test mode — no real funds · </strong>}Status: <strong>{p.status.replace('_', ' ')}</strong> · {fmtDate(p.createdAt)}</p>
               <p className="break-all text-xs text-muted-foreground">Order: {p.providerOrderId}{p.providerPaymentId && ` · Payment: ${p.providerPaymentId}`}</p>
               {p.entitlementEndsAt && <p className="text-sm">Plan ends: {fmtDate(p.entitlementEndsAt)} · Documents created: {p.usedCount}</p>}
-              {p.status === 'refund_pending' && <p className="text-sm text-muted-foreground">Refund awaiting provider confirmation. Access has been withdrawn; checking again will not create a duplicate refund.</p>}
+              {p.status === 'refund_pending' && <p className="text-sm text-muted-foreground">The refund is not yet confirmed complete. The app checks Razorpay automatically; no approval from you or the lawyer is needed. Access has been withdrawn. Use Check status to refresh; if it remains pending, contact the platform owner to check whether Razorpay accepted and processed it. Do not submit a separate refund while its status is uncertain.</p>}
               <div className="flex flex-wrap gap-2">
-                {p.status === 'pending' && <Button size="sm" disabled={busy} onClick={() => checkout.start({ plan: p.kind, ...(p.consultationId ? { consultationId: p.consultationId } : {}) })}>Resume checkout</Button>}
+                {p.status === 'pending' && (!p.consultationId || consultations.data?.some(c => c.id === p.consultationId && c.status === 'requested' && ['pending', 'unpaid'].includes(c.paymentStatus) && new Date(c.startsAt).getTime() > Date.now())) && (
+                  p.consultationId && !platform.data?.paidConsultationsEnabled
+                    ? <p className="text-sm text-muted-foreground">Consultation checkout is closed pending counsel approval and Razorpay verification.</p>
+                    : <Button size="sm" disabled={busy} onClick={() => checkout.start({ plan: p.kind, ...(p.consultationId ? { consultationId: p.consultationId } : {}) })}>Resume checkout</Button>
+                )}
+                {p.status === 'pending' && p.consultationId && consultations.data?.some(c => c.id === p.consultationId && (c.status === 'cancelled' || new Date(c.startsAt).getTime() <= Date.now())) && <p className="text-sm text-muted-foreground">This appointment is cancelled or its start time has passed. Do not pay this order. Check status for any earlier payment; request a new appointment for another date.</p>}
                 {['pending', 'refund_pending'].includes(p.status) && <Button size="sm" variant="outline" disabled={busy} onClick={() => reconcile.mutate({ id: p.id }, actions)}>Check status</Button>}
                 {p.refundable && <Button size="sm" variant="outline" disabled={busy} onClick={() => {
                   if (window.confirm('Request a full refund to the original payment method? Associated document access or credits will be withdrawn immediately.')) refund.mutate({ id: p.id }, actions);

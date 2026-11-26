@@ -18,6 +18,7 @@ async function main() {
   ];
   await db.insert(lawyers).values(examples.map((example, index) => ({
     ...example,
+    presenceStatus: example.online ? "online" as const : "offline" as const,
     bio: "Illustrative profile for exploring this separate pilot. This is not a real practitioner listing, and requesting a slot will not connect you to a lawyer. Real advocates can apply through the professional profile page and are published only after the platform reviews their application.",
     demo: true, verified: false, approvalStatus: "approved" as const,
     barCouncil: "Illustrative — not a registered practitioner",

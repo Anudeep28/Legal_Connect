@@ -9,6 +9,27 @@ export interface HealthStatus {
   status: string;
 }
 
+export type ReadinessCheckStatusStatus = typeof ReadinessCheckStatusStatus[keyof typeof ReadinessCheckStatusStatus];
+
+
+export const ReadinessCheckStatusStatus = {
+  ready: 'ready',
+  not_ready: 'not_ready',
+} as const;
+
+export type ReadinessCheckStatusDatabase = typeof ReadinessCheckStatusDatabase[keyof typeof ReadinessCheckStatusDatabase];
+
+
+export const ReadinessCheckStatusDatabase = {
+  ok: 'ok',
+  unavailable: 'unavailable',
+} as const;
+
+export interface ReadinessCheckStatus {
+  status: ReadinessCheckStatusStatus;
+  database: ReadinessCheckStatusDatabase;
+}
+
 export interface ServiceError {
   error: string;
 }
@@ -45,15 +66,27 @@ export interface Plan {
   features: string[];
 }
 
+export interface ApprovedPolicyContacts {
+  supportContactEmail: string;
+  privacyContactEmail: string;
+  privacyContactAddress: string;
+  grievanceOfficerName: string;
+  grievanceOfficerEmail: string;
+}
+
 export interface Platform {
   name: string;
   demo: boolean;
   paymentsEnabled: boolean;
+  legalReviewComplete: boolean;
+  paidConsultationsEnabled: boolean;
+  consultationCheckoutPaused: boolean;
+  policyContacts: ApprovedPolicyContacts | null;
   callsEnabled: boolean;
   emailEnabled: boolean;
   pushEnabled: boolean;
   phoneVerificationEnabled: boolean;
-  recordingEnabled: false;
+  recordingEnabled: boolean;
   remindersEnabled: boolean;
   /** @nullable */
   pushPublicKey?: string | null;
@@ -66,6 +99,267 @@ export interface Platform {
   plans: Plan[];
   lawyerCount: number;
   onlineCount: number;
+}
+
+export interface LegalCounselApproval {
+  counselName: string;
+  barCouncil: string;
+  enrollmentNumber: string;
+  counselEmail: string;
+  supportContactEmail: string;
+  privacyContactEmail: string;
+  privacyContactAddress: string;
+  grievanceOfficerName: string;
+  grievanceOfficerEmail: string;
+  approvedAt: string;
+}
+
+export interface LegalCounselApprovalInput {
+  /**
+     * @minLength 2
+     * @maxLength 160
+     */
+  counselName: string;
+  /**
+     * @minLength 2
+     * @maxLength 160
+     */
+  barCouncil: string;
+  /**
+     * @minLength 2
+     * @maxLength 80
+     */
+  enrollmentNumber: string;
+  /** @maxLength 254 */
+  counselEmail: string;
+  /** @maxLength 254 */
+  supportContactEmail: string;
+  /** @maxLength 254 */
+  privacyContactEmail: string;
+  /**
+     * @minLength 8
+     * @maxLength 500
+     */
+  privacyContactAddress: string;
+  /**
+     * @minLength 2
+     * @maxLength 160
+     */
+  grievanceOfficerName: string;
+  /** @maxLength 254 */
+  grievanceOfficerEmail: string;
+  confirmApproval: true;
+}
+
+export interface ConsultationCheckoutState {
+  paused: boolean;
+  /** @nullable */
+  reason: string | null;
+  /** @nullable */
+  changedAt: string | null;
+}
+
+export interface AdminLegalReview {
+  canRecord: boolean;
+  canManageGrievances: boolean;
+  paymentVerificationComplete: boolean;
+  paidConsultationsEnabled: boolean;
+  consultationCheckout: ConsultationCheckoutState;
+  approval?: LegalCounselApproval | null;
+}
+
+export interface ConsultationCheckoutPauseInput {
+  paused: boolean;
+  /**
+     * @minLength 3
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export type AdminConsultationCheckoutHistoryEventAction = typeof AdminConsultationCheckoutHistoryEventAction[keyof typeof AdminConsultationCheckoutHistoryEventAction];
+
+
+export const AdminConsultationCheckoutHistoryEventAction = {
+  paused: 'paused',
+  resumed: 'resumed',
+} as const;
+
+export interface AdminConsultationCheckoutHistoryEvent {
+  id: string;
+  action: AdminConsultationCheckoutHistoryEventAction;
+  reason: string;
+  changedAt: string;
+  actorName: string;
+  actorEmail: string;
+}
+
+export interface AdminConsultationCheckoutHistory {
+  events: AdminConsultationCheckoutHistoryEvent[];
+}
+
+export type GrievanceInputCategory = typeof GrievanceInputCategory[keyof typeof GrievanceInputCategory];
+
+
+export const GrievanceInputCategory = {
+  account: 'account',
+  consultation: 'consultation',
+  payment: 'payment',
+  privacy: 'privacy',
+  other: 'other',
+} as const;
+
+export interface GrievanceInput {
+  category: GrievanceInputCategory;
+  /**
+     * @minLength 10
+     * @maxLength 1200
+     */
+  description: string;
+}
+
+export type GrievanceStatus = typeof GrievanceStatus[keyof typeof GrievanceStatus];
+
+
+export const GrievanceStatus = {
+  submitted: 'submitted',
+  under_review: 'under_review',
+  resolved: 'resolved',
+} as const;
+
+export type MyGrievanceCategory = typeof MyGrievanceCategory[keyof typeof MyGrievanceCategory];
+
+
+export const MyGrievanceCategory = {
+  account: 'account',
+  consultation: 'consultation',
+  payment: 'payment',
+  privacy: 'privacy',
+  other: 'other',
+} as const;
+
+export interface MyGrievance {
+  id: string;
+  category: MyGrievanceCategory;
+  description: string;
+  status: GrievanceStatus;
+  officerResponse: string;
+  submittedAt: string;
+  updatedAt: string;
+  /** @nullable */
+  respondedAt: string | null;
+}
+
+export type AdminGrievance = MyGrievance & {
+  clientName: string;
+  clientEmail: string;
+};
+
+export interface AdminGrievanceUpdate {
+  status?: GrievanceStatus;
+  /**
+     * @minLength 3
+     * @maxLength 3000
+     */
+  response?: string;
+}
+
+export interface TwilioUsageBudgetInput {
+  enabled: boolean;
+  /**
+     * @minimum 0.01
+     * @maximum 1000000000
+     * @nullable
+     */
+  budgetAmount: number | null;
+  /** @pattern ^[A-Z]{3}$ */
+  budgetCurrency: string;
+  /**
+     * @minimum 50
+     * @maximum 95
+     */
+  warningPercent: number;
+}
+
+export type AdminTwilioUsageBudgetLookupStatus = typeof AdminTwilioUsageBudgetLookupStatus[keyof typeof AdminTwilioUsageBudgetLookupStatus];
+
+
+export const AdminTwilioUsageBudgetLookupStatus = {
+  not_checked: 'not_checked',
+  checking: 'checking',
+  success: 'success',
+  partial: 'partial',
+  no_data: 'no_data',
+  failed: 'failed',
+  not_configured: 'not_configured',
+} as const;
+
+export type AdminTwilioUsageBudgetAlertLevel = typeof AdminTwilioUsageBudgetAlertLevel[keyof typeof AdminTwilioUsageBudgetAlertLevel];
+
+
+export const AdminTwilioUsageBudgetAlertLevel = {
+  none: 'none',
+  approaching: 'approaching',
+  reached: 'reached',
+} as const;
+
+export interface AdminTwilioUsageBudget {
+  enabled: boolean;
+  /** @nullable */
+  budgetAmount: number | null;
+  budgetCurrency: string;
+  warningPercent: number;
+  lookupStatus: AdminTwilioUsageBudgetLookupStatus;
+  /** @nullable */
+  currentSpend: number | null;
+  /** @nullable */
+  usageCurrency: string | null;
+  /** @nullable */
+  participantMinutes: number | null;
+  /** @nullable */
+  periodStart: string | null;
+  /** @nullable */
+  periodEnd: string | null;
+  /** @nullable */
+  usageAsOf: string | null;
+  /** @nullable */
+  lastAttemptAt: string | null;
+  /** @nullable */
+  lastSuccessAt: string | null;
+  providerConfigured: boolean;
+  dataDelayed: boolean;
+  currencyMatches: boolean;
+  periodCurrent: boolean;
+  alertLevel: AdminTwilioUsageBudgetAlertLevel;
+}
+
+export type AdminTwilioUsageHistoryItemStatus = typeof AdminTwilioUsageHistoryItemStatus[keyof typeof AdminTwilioUsageHistoryItemStatus];
+
+
+export const AdminTwilioUsageHistoryItemStatus = {
+  success: 'success',
+  partial: 'partial',
+  no_data: 'no_data',
+} as const;
+
+export interface AdminTwilioUsageHistoryItem {
+  periodStart: string;
+  /** @nullable */
+  periodEnd: string | null;
+  status: AdminTwilioUsageHistoryItemStatus;
+  /** @nullable */
+  spend: number | null;
+  /** @nullable */
+  currency: string | null;
+  /** @nullable */
+  participantMinutes: number | null;
+  /** @nullable */
+  usageAsOf: string | null;
+  checkedAt: string;
+}
+
+export interface AdminTwilioUsageHistory {
+  months: AdminTwilioUsageHistoryItem[];
 }
 
 export type AccountRole = typeof AccountRole[keyof typeof AccountRole];
@@ -160,15 +454,136 @@ export interface ActionResult {
 
 export const CallConsentInputValue = {
   microphoneConsent: true,
-  recordingDisabledAcknowledged: true,
+  recordingDisclosureAcknowledged: true,
 } as const;
 export type CallConsentInput = typeof CallConsentInputValue;
+
+export interface CallRecordingConsentInput {
+  consent: boolean;
+  stopCall?: boolean;
+}
+
+export type CallRecordingConsentStateMode = typeof CallRecordingConsentStateMode[keyof typeof CallRecordingConsentStateMode];
+
+
+export const CallRecordingConsentStateMode = {
+  pending: 'pending',
+  recorded: 'recorded',
+  unrecorded: 'unrecorded',
+} as const;
+
+export interface CallRecordingConsentState {
+  enabled: boolean;
+  mode: CallRecordingConsentStateMode;
+  /** @nullable */
+  myConsent: boolean | null;
+  /** @nullable */
+  otherConsent: boolean | null;
+}
+
+export interface CallRecordingLanguageInput {
+  /**
+     * @minLength 2
+     * @maxLength 8
+     */
+  languageCode: string;
+}
+
+export interface CallRecordingLanguageResponse {
+  languageCode: string;
+}
+
+export type CallTranscriptWordSpeaker = typeof CallTranscriptWordSpeaker[keyof typeof CallTranscriptWordSpeaker];
+
+
+export const CallTranscriptWordSpeaker = {
+  client: 'client',
+  lawyer: 'lawyer',
+} as const;
+
+export interface CallTranscriptWord {
+  text: string;
+  /** @minimum 0 */
+  startSeconds: number;
+  /** @minimum 0 */
+  endSeconds: number;
+  speaker: CallTranscriptWordSpeaker;
+  /** @nullable */
+  languageCode?: string | null;
+}
+
+export type CallTranscriptSessionStatus = typeof CallTranscriptSessionStatus[keyof typeof CallTranscriptSessionStatus];
+
+
+export const CallTranscriptSessionStatus = {
+  recording: 'recording',
+  processing: 'processing',
+  ready: 'ready',
+  failed: 'failed',
+  withdrawn: 'withdrawn',
+} as const;
+
+export interface CallTranscriptSession {
+  id: string;
+  consultationId: string;
+  status: CallTranscriptSessionStatus;
+  generatedTranscript: string;
+  editedTranscript: string;
+  detectedLanguages: string[];
+  createdAt: string;
+  /** @nullable */
+  completedAt: string | null;
+}
+
+export interface CallTranscriptUpdate {
+  /** @maxLength 100000 */
+  editedTranscript: string;
+}
+
+export interface CallTranscriptDraftInput {
+  templateId: string;
+  /**
+     * @minLength 2
+     * @maxLength 32
+     */
+  language: string;
+  dataUseAcknowledged: true;
+}
+
+export interface CallTranscriptDraftResponse {
+  title: string;
+  content: string;
+}
+
+export type CallAvailabilityRecordingMode = typeof CallAvailabilityRecordingMode[keyof typeof CallAvailabilityRecordingMode];
+
+
+export const CallAvailabilityRecordingMode = {
+  pending: 'pending',
+  recorded: 'recorded',
+  unrecorded: 'unrecorded',
+} as const;
+
+export type CallAvailabilityRecordingLanguageOptionsItem = {
+  code: string;
+  name: string;
+  nativeName: string;
+};
 
 export interface CallAvailability {
   enabled: boolean;
   canJoin: boolean;
   reason: string;
-  recordingEnabled: false;
+  recordingEnabled: boolean;
+  recordingConsentEnabled: boolean;
+  recordingMode: CallAvailabilityRecordingMode;
+  /** @nullable */
+  myRecordingConsent: boolean | null;
+  /** @nullable */
+  otherRecordingConsent: boolean | null;
+  recordingLanguageCode: string;
+  recordingLanguageEditable: boolean;
+  recordingLanguageOptions: CallAvailabilityRecordingLanguageOptionsItem[];
   opensAt: string;
   closesAt: string;
 }
@@ -178,7 +593,7 @@ export interface CallAccess {
   room: string;
   expiresAt: string;
   closesAt: string;
-  recordingEnabled: false;
+  recordingEnabled: boolean;
 }
 
 export type CommunicationDeliveryChannel = typeof CommunicationDeliveryChannel[keyof typeof CommunicationDeliveryChannel];
@@ -222,6 +637,15 @@ export const LawyerApprovalStatus = {
   rejected: 'rejected',
 } as const;
 
+export type LawyerPresenceStatus = typeof LawyerPresenceStatus[keyof typeof LawyerPresenceStatus];
+
+
+export const LawyerPresenceStatus = {
+  online: 'online',
+  offline: 'offline',
+  in_court: 'in_court',
+} as const;
+
 export interface Lawyer {
   id: string;
   name: string;
@@ -239,13 +663,23 @@ export interface Lawyer {
   reviewCount: number;
   verified: boolean;
   approvalStatus: LawyerApprovalStatus;
-  online: boolean;
+  presenceStatus: LawyerPresenceStatus;
+  presenceChangedAt: string;
   city: string;
   avatarUrl: string;
   demo: boolean;
   availability: number[];
   rejectionReason: string;
 }
+
+export type LawyerInputPresenceStatus = typeof LawyerInputPresenceStatus[keyof typeof LawyerInputPresenceStatus];
+
+
+export const LawyerInputPresenceStatus = {
+  online: 'online',
+  offline: 'offline',
+  in_court: 'in_court',
+} as const;
 
 export interface LawyerInput {
   /**
@@ -298,7 +732,7 @@ export interface LawyerInput {
      * @items.maximum 6
      */
   availability: number[];
-  online: boolean;
+  presenceStatus: LawyerInputPresenceStatus;
 }
 
 export type ConsultationMode = typeof ConsultationMode[keyof typeof ConsultationMode];
@@ -355,6 +789,7 @@ export interface Consultation {
   endsAt: string;
   fee: number;
   transcript: string;
+  callRecordingLanguageCode: string;
   demo: boolean;
   createdAt: string;
 }
@@ -445,6 +880,8 @@ export interface Deliverable {
   content: string;
   status: DeliverableStatus;
   createdAt: string;
+  /** @nullable */
+  lawyerReviewedAt: string | null;
 }
 
 export type DeliverableInputStatus = typeof DeliverableInputStatus[keyof typeof DeliverableInputStatus];
@@ -464,6 +901,7 @@ export interface DeliverableInput {
   /** @maxLength 100000 */
   content: string;
   status: DeliverableInputStatus;
+  reviewConfirmed: boolean;
 }
 
 export interface Review {
@@ -512,6 +950,59 @@ export interface DocumentInput {
   language: string;
 }
 
+export type WritingAllowancePlan = typeof WritingAllowancePlan[keyof typeof WritingAllowancePlan];
+
+
+export const WritingAllowancePlan = {
+  trial: 'trial',
+  single: 'single',
+  monthly: 'monthly',
+} as const;
+
+export interface AiAllowance {
+  limit: number;
+  used: number;
+  remaining: number;
+}
+
+export interface WritingAllowance {
+  plan: WritingAllowancePlan;
+  drafting: AiAllowance;
+  transcription: AiAllowance;
+  resetsAt: string;
+}
+
+export type WritingUsageHistoryEntryPlansItem = typeof WritingUsageHistoryEntryPlansItem[keyof typeof WritingUsageHistoryEntryPlansItem];
+
+
+export const WritingUsageHistoryEntryPlansItem = {
+  trial: 'trial',
+  single: 'single',
+  monthly: 'monthly',
+} as const;
+
+export interface WritingUsageHistoryEntry {
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  day: string;
+  plans: WritingUsageHistoryEntryPlansItem[];
+  /** False when some requests predate plan snapshots. */
+  planHistoryComplete: boolean;
+  /** @minimum 0 */
+  draftingRequests: number;
+  /** @minimum 0 */
+  transcriptionRequests: number;
+}
+
+export interface WritingUsageHistory {
+  /**
+     * @minimum 1
+     * @maximum 90
+     */
+  days: number;
+  retentionDays: number;
+  entries: WritingUsageHistoryEntry[];
+}
+
 export type WritingInputAction = typeof WritingInputAction[keyof typeof WritingInputAction];
 
 
@@ -522,6 +1013,8 @@ export const WritingInputAction = {
 } as const;
 
 export interface WritingInput {
+  /** The lawyer continued after the DeepSeek disclosure for this request. */
+  dataUseAcknowledged: true;
   action: WritingInputAction;
   /**
      * @minLength 1
@@ -546,6 +1039,8 @@ export const AudioInputMimeType = {
 } as const;
 
 export interface AudioInput {
+  /** The lawyer continued after the ElevenLabs disclosure for this recording. */
+  dataUseAcknowledged: true;
   /** @maxLength 15000000 */
   audio: string;
   mimeType: AudioInputMimeType;
@@ -572,6 +1067,163 @@ export interface AdminOverview {
   consultations: number;
   completedConsultations: number;
   documents: number;
+}
+
+export type AdminSystemStatusApi = typeof AdminSystemStatusApi[keyof typeof AdminSystemStatusApi];
+
+
+export const AdminSystemStatusApi = {
+  live: 'live',
+} as const;
+
+export type AdminSystemStatusDatabase = typeof AdminSystemStatusDatabase[keyof typeof AdminSystemStatusDatabase];
+
+
+export const AdminSystemStatusDatabase = {
+  unknown: 'unknown',
+  ready: 'ready',
+  unavailable: 'unavailable',
+} as const;
+
+export interface AdminSystemStatus {
+  api: AdminSystemStatusApi;
+  database: AdminSystemStatusDatabase;
+  /** @nullable */
+  checkedAt: string | null;
+  /** @nullable */
+  lastSuccessfulCheckAt: string | null;
+}
+
+export type AdminAiUsageBudgetCostCoverage = typeof AdminAiUsageBudgetCostCoverage[keyof typeof AdminAiUsageBudgetCostCoverage];
+
+
+export const AdminAiUsageBudgetCostCoverage = {
+  no_usage: 'no_usage',
+  unavailable: 'unavailable',
+  partial: 'partial',
+  complete: 'complete',
+} as const;
+
+export type AdminAiUsageBudgetAlertLevel = typeof AdminAiUsageBudgetAlertLevel[keyof typeof AdminAiUsageBudgetAlertLevel];
+
+
+export const AdminAiUsageBudgetAlertLevel = {
+  none: 'none',
+  approaching: 'approaching',
+  reached: 'reached',
+} as const;
+
+export interface AdminAiUsageBudget {
+  enabled: boolean;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  monthlyBudgetUsd: number | null;
+  /**
+     * @minimum 50
+     * @maximum 95
+     */
+  warningPercent: number;
+  monthStart: string;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  currentMonthEstimatedUsd: number | null;
+  costCoverage: AdminAiUsageBudgetCostCoverage;
+  /** @minimum 0 */
+  requests: number;
+  /** @minimum 0 */
+  pricedRequests: number;
+  alertLevel: AdminAiUsageBudgetAlertLevel;
+}
+
+export interface AiPlanLimits {
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  trial: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  single: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  monthly: number;
+}
+
+export interface AiUsageLimitsInput {
+  drafting: AiPlanLimits;
+  transcription: AiPlanLimits;
+}
+
+export type AdminAiUsageLimitsSource = typeof AdminAiUsageLimitsSource[keyof typeof AdminAiUsageLimitsSource];
+
+
+export const AdminAiUsageLimitsSource = {
+  server_settings: 'server_settings',
+  owner: 'owner',
+} as const;
+
+export type AdminAiUsageLimits = AiUsageLimitsInput & ({
+  source: AdminAiUsageLimitsSource;
+  /** @nullable */
+  updatedAt: string | null;
+});
+
+export type AdminAiUsageRowProvider = typeof AdminAiUsageRowProvider[keyof typeof AdminAiUsageRowProvider];
+
+
+export const AdminAiUsageRowProvider = {
+  deepseek: 'deepseek',
+  elevenlabs: 'elevenlabs',
+} as const;
+
+export interface AdminAiUsageRow {
+  day: string;
+  lawyerId: string;
+  lawyerName: string;
+  provider: AdminAiUsageRowProvider;
+  requests: number;
+  successfulRequests: number;
+  successfulRequestsKnown: boolean;
+  tokenUsageRequests: number;
+  inputTokens: number;
+  outputTokens: number;
+  pricedRequests: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  estimatedCostUsd: number | null;
+}
+
+export interface AdminAiUsage {
+  days: number;
+  retentionDays: number;
+  monthlyBudget: AdminAiUsageBudget;
+  dailyLimits: AdminAiUsageLimits;
+  rows: AdminAiUsageRow[];
+}
+
+export interface AiUsageBudgetInput {
+  enabled: boolean;
+  /**
+     * @minimum 0.01
+     * @maximum 1000000000
+     * @nullable
+     */
+  monthlyBudgetUsd: number | null;
+  /**
+     * @minimum 50
+     * @maximum 95
+     */
+  warningPercent: number;
 }
 
 export type UserModerationStatus = typeof UserModerationStatus[keyof typeof UserModerationStatus];
@@ -746,4 +1398,20 @@ export const ListLawyersSort = {
   experience: 'experience',
   rating: 'rating',
 } as const;
+
+export type GetWritingUsageHistoryParams = {
+/**
+ * @minimum 1
+ * @maximum 90
+ */
+days?: number;
+};
+
+export type GetAdminAiUsageParams = {
+/**
+ * @minimum 1
+ * @maximum 90
+ */
+days?: number;
+};
 

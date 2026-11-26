@@ -1,49 +1,249 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, Users, Scale, Hourglass, MessagesSquare, CheckCheck, FileText, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Users, Scale, Hourglass, MessagesSquare, CheckCheck, FileText, Eye, EyeOff, ShieldCheck, Info } from 'lucide-react';
 import {
   useGetAdminOverview, getGetAdminOverviewQueryKey,
+  useGetAdminLegalReview,
   useListAdminUsers, getListAdminUsersQueryKey, useModerateUser,
   useListAdminLawyers, getListAdminLawyersQueryKey, useModerateLawyer,
   useListAdminReviews, getListAdminReviewsQueryKey, useModerateReview,
+  getGetAdminLegalReviewQueryKey, useRecordAdminLegalReview,
+  useUpdateAdminConsultationCheckout,
+  getGetAdminConsultationCheckoutHistoryQueryKey, useGetAdminConsultationCheckoutHistory,
+  useListAdminGrievances, getListAdminGrievancesQueryKey, useUpdateAdminGrievance,
+  getGetPlatformQueryKey,
   getListLawyersQueryKey, getListLawyerReviewsQueryKey,
-  type UserModerationStatus, type LawyerModerationApprovalStatus,
+  type UserModerationStatus, type LawyerModerationApprovalStatus, type LegalCounselApprovalInput,
+  type AdminGrievance, type GrievanceStatus,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Guard } from '@/components/guard';
 import { AppPage } from '@/components/shell';
-import { DemoTag, EmptyState, ErrorState, ListSkeleton, PageHeader, PersonAvatar, Stars } from '@/components/kit';
+import { DemoTag, EmptyState, ErrorState, ListSkeleton, Notice, PageHeader, PersonAvatar, Stars } from '@/components/kit';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { errMsg, fmtDate, inr } from '@/lib/format';
+import { errMsg, fmtDate, fmtDateTime, inr } from '@/lib/format';
+import { AdminTwilioUsage } from '@/components/admin-twilio-usage';
+import { AdminAiUsage } from '@/components/admin-ai-usage';
+import { AdminSystemStatus } from '@/components/admin-system-status';
 
 export default function Admin() {
   return (
     <AppPage wide>
+      <AdminSystemStatus />
       <Guard roles={['admin']}>
-        {() => (
-          <>
-            <PageHeader eyebrow="Administration" title="Platform oversight" sub="Every action requires a reason and is enforced on the server." />
-            <Tabs defaultValue="overview">
-              <TabsList className="mb-6 h-auto flex-wrap rounded-full bg-secondary p-1">
-                {['overview', 'lawyers', 'users', 'reviews'].map((t) => (
-                  <TabsTrigger key={t} value={t} className="rounded-full px-4 capitalize data-[state=active]:bg-card" data-testid={`tab-admin-${t}`}>{t === 'lawyers' ? 'Lawyer approvals' : t}</TabsTrigger>
-                ))}
-              </TabsList>
-              <TabsContent value="overview"><Overview /></TabsContent>
-              <TabsContent value="lawyers"><LawyersTab /></TabsContent>
-              <TabsContent value="users"><UsersTab /></TabsContent>
-              <TabsContent value="reviews"><ReviewsTab /></TabsContent>
-            </Tabs>
-          </>
-        )}
+        {() => <AdminWorkspace />}
       </Guard>
     </AppPage>
+  );
+}
+
+function AdminWorkspace() {
+  const legalReviewAccess = useGetAdminLegalReview();
+  const tabs = ['overview', 'lawyers', 'users', 'reviews', 'legal-review', ...(legalReviewAccess.data?.canManageGrievances ? ['grievances'] : []), 'call-usage', ...(legalReviewAccess.data?.canRecord ? ['ai-usage'] : [])];
+  return (
+    <>
+      <PageHeader eyebrow="Administration" title="Platform oversight" sub="Owner-controlled changes are recorded and enforced on the server." />
+      <Tabs defaultValue="overview">
+        <TabsList className="mb-6 h-auto flex-wrap rounded-full bg-secondary p-1">
+          {tabs.map((t) => (
+            <TabsTrigger key={t} value={t} className="rounded-full px-4 capitalize data-[state=active]:bg-card" data-testid={`tab-admin-${t}`}>{t === 'lawyers' ? 'Lawyer approvals' : t === 'legal-review' ? 'Legal approval' : t === 'call-usage' ? 'Call usage' : t === 'ai-usage' ? 'AI usage' : t}</TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value="overview"><Overview /></TabsContent>
+        <TabsContent value="lawyers"><LawyersTab /></TabsContent>
+        <TabsContent value="users"><UsersTab /></TabsContent>
+        <TabsContent value="reviews"><ReviewsTab /></TabsContent>
+        <TabsContent value="legal-review"><LegalReviewTab /></TabsContent>
+        {legalReviewAccess.data?.canManageGrievances && <TabsContent value="grievances"><GrievancesTab /></TabsContent>}
+        <TabsContent value="call-usage"><AdminTwilioUsage /></TabsContent>
+        {legalReviewAccess.data?.canRecord && <TabsContent value="ai-usage"><AdminAiUsage /></TabsContent>}
+      </Tabs>
+    </>
+  );
+}
+
+type CounselForm = Omit<LegalCounselApprovalInput, 'confirmApproval'>;
+const initialCounselForm: CounselForm = {
+  counselName: '',
+  barCouncil: '',
+  enrollmentNumber: '',
+  counselEmail: '',
+  supportContactEmail: 'support@consultwithlawyer.in',
+  privacyContactEmail: 'privacy@consultwithlawyer.in',
+  privacyContactAddress: 'Amanora Park Town, Amanora Gold Tower, Tower 42, Flat 1012, Hadapsar, Pune 411028',
+  grievanceOfficerName: 'Bhagyashree Patil',
+  grievanceOfficerEmail: 'privacy@consultwithlawyer.in',
+};
+const counselFields: { key: keyof CounselForm; label: string; type?: string; wide?: boolean }[] = [
+  { key: 'counselName', label: 'Qualified counsel name' },
+  { key: 'barCouncil', label: 'Bar Council' },
+  { key: 'enrollmentNumber', label: 'Enrolment number' },
+  { key: 'counselEmail', label: 'Counsel email', type: 'email' },
+  { key: 'supportContactEmail', label: 'Public support email', type: 'email' },
+  { key: 'privacyContactEmail', label: 'Privacy contact email', type: 'email' },
+  { key: 'grievanceOfficerName', label: 'Grievance officer name' },
+  { key: 'grievanceOfficerEmail', label: 'Grievance officer email', type: 'email' },
+  { key: 'privacyContactAddress', label: 'Business contact address', wide: true },
+];
+
+function LegalReviewTab() {
+  const q = useGetAdminLegalReview();
+  const save = useRecordAdminLegalReview();
+  const checkoutChange = useUpdateAdminConsultationCheckout();
+  const checkoutHistory = useGetAdminConsultationCheckoutHistory({
+    query: { enabled: q.data?.canRecord === true },
+  });
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [form, setForm] = useState<CounselForm>(initialCounselForm);
+  const [confirmed, setConfirmed] = useState(false);
+  const [checkoutReason, setCheckoutReason] = useState('');
+  useEffect(() => {
+    if (!q.data?.approval) return;
+    const { approvedAt: _approvedAt, ...saved } = q.data.approval;
+    setForm(saved);
+  }, [q.data?.approval]);
+  if (q.isLoading) return <ListSkeleton />;
+  if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
+  const current = q.data.approval;
+  const complete = Object.values(form).every((value) => value.trim().length > 0);
+  return (
+    <div className="max-w-4xl space-y-5">
+      <Notice icon={<ShieldCheck />}>
+        Paid consultations open only after both Razorpay verification and a recorded qualified-counsel approval. This does not change client-content rights or refund rules.
+        <div className="mt-2 font-medium">
+          Razorpay: {q.data.paymentVerificationComplete ? 'verified' : 'not verified'} · Counsel: {current ? 'approval recorded' : 'not approved'} · Paid consultations: {q.data.paidConsultationsEnabled ? 'enabled' : 'closed'}
+        </div>
+        {current && <p className="mt-2 text-sm">Current approval recorded {fmtDate(current.approvedAt)} for {current.counselName} ({current.barCouncil}, {current.enrollmentNumber}).</p>}
+      </Notice>
+      <section className="space-y-4 rounded-3xl border bg-card p-5 md:p-7">
+        <div>
+          <h2 className="font-display text-2xl font-semibold">Consultation checkout pause</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Pause new paid consultation orders during provider, staffing, or operational issues. This does not change Razorpay verification or counsel approval.</p>
+        </div>
+        <Notice icon={<Info />}>
+          New consultation checkout is {q.data.consultationCheckout.paused ? 'temporarily paused' : 'not paused'}.
+          {q.data.consultationCheckout.changedAt && <p className="mt-1 text-sm">Last change {fmtDate(q.data.consultationCheckout.changedAt)}: {q.data.consultationCheckout.reason}</p>}
+        </Notice>
+        {!q.data.canRecord ? (
+          <Notice icon={<Info />}>Only the owner-designated administrator can pause or resume paid consultation checkout.</Notice>
+        ) : (
+          <form className="space-y-3" onSubmit={(event) => {
+            event.preventDefault();
+            const paused = !q.data.consultationCheckout.paused;
+            checkoutChange.mutate({ data: { paused, reason: checkoutReason.trim() } }, {
+              onSuccess: (result) => {
+                qc.setQueryData(getGetAdminLegalReviewQueryKey(), (old: typeof q.data | undefined) => old ? {
+                  ...old,
+                  consultationCheckout: result,
+                  paidConsultationsEnabled: old.paymentVerificationComplete && Boolean(old.approval) && !result.paused,
+                } : old);
+                qc.invalidateQueries({ queryKey: getGetAdminConsultationCheckoutHistoryQueryKey() });
+                qc.invalidateQueries({ queryKey: getGetPlatformQueryKey() });
+                setCheckoutReason('');
+                toast({
+                  title: paused ? 'Consultation checkout paused' : 'Consultation checkout resumed',
+                  description: paused ? 'Clients cannot create new paid consultation orders.' : 'New orders still require Razorpay verification and counsel approval.',
+                });
+              },
+              onError: (error) => toast({ title: 'Checkout state was not changed', description: errMsg(error), variant: 'destructive' }),
+            });
+          }}>
+            <div>
+              <Label htmlFor="consultation-checkout-reason">Operational reason</Label>
+              <Textarea
+                id="consultation-checkout-reason"
+                className="mt-1.5"
+                value={checkoutReason}
+                onChange={(event) => setCheckoutReason(event.target.value)}
+                minLength={3}
+                maxLength={500}
+                rows={3}
+                required
+                placeholder="Brief reason; do not include client names or case details."
+                data-testid="input-consultation-checkout-reason"
+              />
+            </div>
+            <Button type="submit" disabled={checkoutReason.trim().length < 3 || checkoutChange.isPending} variant={q.data.consultationCheckout.paused ? 'default' : 'destructive'} className="rounded-full" data-testid="button-toggle-consultation-checkout">
+              {checkoutChange.isPending && <Loader2 className="animate-spin" />}
+              {q.data.consultationCheckout.paused ? 'Resume paid consultations' : 'Pause paid consultations'}
+            </Button>
+          </form>
+        )}
+      </section>
+      {q.data.canRecord && (
+        <section className="space-y-4 rounded-3xl border bg-card p-5 md:p-7" data-testid="checkout-pause-history">
+          <div>
+            <h2 className="font-display text-2xl font-semibold">Checkout pause history</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Recent pause and resume events, including who made each change and why. Read-only; the most recent 100 events are shown.</p>
+          </div>
+          {checkoutHistory.isLoading ? <ListSkeleton /> : checkoutHistory.isError ? (
+            <ErrorState error={checkoutHistory.error} onRetry={() => checkoutHistory.refetch()} />
+          ) : checkoutHistory.data?.events.length ? (
+            <ol className="divide-y rounded-2xl border">
+              {checkoutHistory.data.events.map((event) => (
+                <li key={event.id} className="space-y-1 p-4" data-testid={`checkout-history-event-${event.id}`}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <strong>{event.action === 'paused' ? 'Consultation checkout paused' : 'Consultation checkout resumed'}</strong>
+                    <time className="text-sm text-muted-foreground" dateTime={event.changedAt}>{fmtDateTime(event.changedAt)}</time>
+                  </div>
+                  <p className="text-sm">{event.reason}</p>
+                  <p className="text-xs text-muted-foreground">Changed by {event.actorName} · {event.actorEmail}</p>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">No pause or resume changes have been recorded.</p>
+          )}
+        </section>
+      )}
+      {!q.data.canRecord ? (
+        <Notice icon={<Info />}>Only the owner-designated administrator can record or update this approval.</Notice>
+      ) : (
+        <form className="space-y-5 rounded-3xl border bg-card p-5 md:p-7" onSubmit={(event) => {
+          event.preventDefault();
+          save.mutate({ data: { ...form, confirmApproval: true } }, {
+            onSuccess: (result) => {
+              qc.setQueryData(getGetAdminLegalReviewQueryKey(), result);
+              qc.invalidateQueries({ queryKey: getGetPlatformQueryKey() });
+              setConfirmed(false);
+              toast({ title: 'Counsel approval recorded', description: result.paidConsultationsEnabled ? 'Paid consultation checkout is now open.' : 'The payment-verification gate is still closed.' });
+            },
+            onError: (error) => toast({ title: 'Approval was not recorded', description: errMsg(error), variant: 'destructive' }),
+          });
+        }}>
+          <div>
+            <h2 className="font-display text-2xl font-semibold">Counsel approval and policy contacts</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Enter the qualified counsel who reviewed the current public policies. The approved contacts below are shown in those policies.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {counselFields.map(({ key, label, type = 'text', wide }) => (
+              <div key={key} className={wide ? 'sm:col-span-2' : ''}>
+                <Label htmlFor={`legal-${key}`}>{label}</Label>
+                <Input id={`legal-${key}`} className="mt-1.5" type={type} required maxLength={key === 'privacyContactAddress' ? 500 : 254} value={form[key]} onChange={(event) => setForm((old) => ({ ...old, [key]: event.target.value }))} />
+              </div>
+            ))}
+          </div>
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm">
+            <Checkbox checked={confirmed} onCheckedChange={(checked) => setConfirmed(checked === true)} className="mt-0.5" />
+            <span>I confirm qualified counsel has reviewed and approved the current Terms, Privacy Policy, Disclaimer, Refund Policy, and all policy contact details entered above.</span>
+          </label>
+          <Button type="submit" disabled={!q.data.canRecord || !complete || !confirmed || save.isPending} className="rounded-full">
+            {save.isPending && <Loader2 className="animate-spin" />}
+            {current ? 'Update counsel approval' : 'Record counsel approval'}
+          </Button>
+        </form>
+      )}
+    </div>
   );
 }
 
@@ -239,5 +439,96 @@ function ReviewsTab() {
         })}
       />
     </div>
+  );
+}
+
+function GrievancesTab() {
+  const q = useListAdminGrievances({ query: { queryKey: getListAdminGrievancesQueryKey(), refetchInterval: 30_000 } });
+  if (q.isLoading) return <ListSkeleton />;
+  if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
+  if (!q.data?.length) return <EmptyState icon={<Info />} title="No grievances submitted" body="Client submissions will appear here for authorized review." />;
+  return (
+    <div className="space-y-4">
+      <Notice icon={<Info />}>Grievance descriptions are private. Review only the service concern and avoid adding unnecessary legal-matter details to your response.</Notice>
+      {q.data.map((item) => <GrievanceReviewCard key={item.id} item={item} />)}
+    </div>
+  );
+}
+
+function GrievanceReviewCard({ item }: { item: AdminGrievance }) {
+  const [status, setStatus] = useState<GrievanceStatus>(item.status);
+  const [response, setResponse] = useState(item.officerResponse);
+  const mutation = useUpdateAdminGrievance();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  useEffect(() => {
+    setStatus(item.status);
+    setResponse(item.officerResponse);
+  }, [item.status, item.officerResponse]);
+  const responseChanged = response.trim() !== item.officerResponse;
+  const canSave = (status !== item.status || responseChanged) &&
+    (!responseChanged || response.trim().length >= 3) &&
+    (status !== 'resolved' || response.trim().length >= 3);
+  const options: GrievanceStatus[] = item.status === 'submitted'
+    ? ['submitted', 'under_review', 'resolved']
+    : item.status === 'under_review' ? ['under_review', 'resolved'] : ['resolved'];
+  return (
+    <article className="rounded-2xl border bg-card p-5" data-testid={`row-admin-grievance-${item.id}`}>
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+        <div className="flex-1">
+          <h3 className="font-semibold">{item.clientName} <span className="font-normal text-muted-foreground">· {item.clientEmail}</span></h3>
+          <p className="mt-1 text-xs text-muted-foreground">Reference {item.id.slice(0, 8).toUpperCase()} · Submitted {fmtDate(item.submittedAt)}</p>
+        </div>
+        <span className="rounded-full bg-secondary px-2.5 py-1 text-xs capitalize">{item.status.replace('_', ' ')}</span>
+      </div>
+      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.category}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm">{item.description}</p>
+      <div className="mt-5 grid gap-4 md:grid-cols-[190px_1fr]">
+        <div>
+          <Label htmlFor={`grievance-status-${item.id}`}>Status</Label>
+          <select
+            id={`grievance-status-${item.id}`}
+            className="mt-1.5 h-11 w-full rounded-xl border bg-background px-3 text-sm"
+            value={status}
+            onChange={(event) => setStatus(event.target.value as GrievanceStatus)}
+          >
+            {options.map((option) => <option key={option} value={option}>{option.replace('_', ' ')}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label htmlFor={`grievance-response-${item.id}`}>Officer response</Label>
+          <Textarea
+            id={`grievance-response-${item.id}`}
+            className="mt-1.5 min-h-24"
+            value={response}
+            onChange={(event) => setResponse(event.target.value)}
+            maxLength={3000}
+            placeholder="Write a response the client can see."
+          />
+        </div>
+      </div>
+      <div className="mt-4 flex justify-end">
+        <Button
+          size="sm"
+          disabled={!canSave || mutation.isPending}
+          onClick={() => mutation.mutate({
+            id: item.id,
+            data: {
+              ...(status !== item.status ? { status } : {}),
+              ...(responseChanged ? { response: response.trim() } : {}),
+            },
+          }, {
+            onSuccess: () => {
+              qc.invalidateQueries({ queryKey: getListAdminGrievancesQueryKey() });
+              toast({ title: 'Grievance updated', description: 'The client can see the current status and response.' });
+            },
+            onError: (error) => toast({ title: 'Could not update grievance', description: errMsg(error), variant: 'destructive' }),
+          })}
+          data-testid={`button-save-grievance-${item.id}`}
+        >
+          {mutation.isPending && <Loader2 className="animate-spin" />} Save update
+        </Button>
+      </div>
+    </article>
   );
 }

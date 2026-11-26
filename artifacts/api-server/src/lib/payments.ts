@@ -4,6 +4,12 @@ import { db, accounts, consultations, lawyers, paymentOrders, paymentEvents, not
 import { HttpError, type Account } from "../middlewares/access";
 import { credentials, razorpay, requireCheckout, providerPayment, type ProviderPayment, type ProviderRefund } from "./razorpay";
 import { DAY, DOCUMENT_PRICES, hasMonthlyAccess, unusedDocumentRefund } from "./payment-rules";
+import { hasLegalReviewApproval } from "./legal-review";
+import {
+  getConsultationCheckoutState,
+  lockConsultationCheckoutControl,
+  consultationCheckoutPausedError,
+} from "./consultation-checkout";
 
 type Order = typeof paymentOrders.$inferSelect;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -36,13 +42,33 @@ export async function paymentView(order: Order) {
 export async function createOrder(account: Account, input: Checkout, adminValidation = false) {
   if (adminValidation && (account.role !== "admin" || input.plan !== "single"))
     throw new HttpError(403, "Only an administrator can create a verification purchase.");
+  if (input.plan === "consultation" && (await getConsultationCheckoutState()).paused)
+    throw new HttpError(503, consultationCheckoutPausedError());
   const config = adminValidation ? credentials() : requireCheckout();
+  if (input.plan === "consultation" && !(await hasLegalReviewApproval()))
+    throw new HttpError(503, "Paid consultation checkout is disabled until qualified counsel approves the current policies and contact details. No payment was taken.");
   if (adminValidation && !process.env.RAZORPAY_WEBHOOK_SECRET)
     throw new HttpError(503, "Configure the webhook signing secret before running payment verification.");
+  // A lost callback/webhook must not send a client back to a captured order.
+  // Reconcile outside the transaction: applyCaptured obtains its own account lock.
+  if (input.plan === "consultation" && input.consultationId) {
+    const [pending] = await db.select().from(paymentOrders).where(and(
+      eq(paymentOrders.userId, account.id), eq(paymentOrders.kind, "consultation"),
+      eq(paymentOrders.consultationId, input.consultationId),
+      eq(paymentOrders.mode, config.mode), eq(paymentOrders.status, "pending"),
+    )).orderBy(desc(paymentOrders.createdAt)).limit(1);
+    if (pending) {
+      const reconciled = await reconcileOrder(pending);
+      if (reconciled.status !== "pending")
+        throw new HttpError(409, "Razorpay has already captured or refunded this booking's payment. Its status has been updated; do not pay again. For a different appointment, create a new consultation request.");
+    }
+  }
   return db.transaction(async (tx) => {
     const locked = await lockAccount(tx, account.id);
     let amount: number;
     if (input.plan === "consultation") {
+      const checkoutControl = await lockConsultationCheckoutControl(tx);
+      if (checkoutControl.paused) throw new HttpError(503, consultationCheckoutPausedError());
       if (!input.consultationId) throw new HttpError(400, "Choose the consultation to pay for.");
       const [c] = await tx.select().from(consultations)
         .where(and(eq(consultations.id, input.consultationId), eq(consultations.userId, account.id))).for("update");
