@@ -2,13 +2,14 @@ import { Router, type IRouter, type Request, type RequestHandler } from "express
 import { rateLimit } from "express-rate-limit";
 import * as api from "@workspace/api-zod";
 import { and, eq } from "drizzle-orm";
-import { db, callRecordingSessions } from "@workspace/db";
+import { db, callRecordingSessions, consultations } from "@workspace/db";
 import { requireAccount, requireLawyer, HttpError } from "../middlewares/access";
 import { supportedLanguages } from "../data/languages";
 import { legalTemplates } from "../data/templates";
 import { accessibleConsultation } from "../lib/legal";
 import { ensureCompatibleAudio } from "../lib/audio";
 import { buildWritingMessages } from "../lib/writing-prompts";
+import { briefAsText, buildActionPlanMessages, parseActionPlanDraft } from "../lib/action-plan";
 import { validateWritingOutput } from "../lib/writing-output-validation";
 import {
   getAiUsage,
@@ -197,6 +198,46 @@ router.post("/writing/consultations/:id/call-transcripts/:sessionId/draft", asyn
   } catch (err) {
     if (err instanceof HttpError) throw err;
     req.log.warn({ name: (err as Error).name }, "Call transcript drafting request failed");
+    providerError(err);
+  } finally {
+    await releaseAiRequestLock(requestLock, req);
+    active.delete(req.account.id);
+  }
+});
+
+router.post("/writing/consultations/:id/action-plan/draft", async (req, res): Promise<void> => {
+  const { id } = api.DraftActionPlanParams.parse(req.params);
+  const input = api.DraftActionPlanBody.parse(req.body);
+  if (!input.dataUseAcknowledged)
+    throw new HttpError(400, "Acknowledge that your notes and the client brief will be sent to DeepSeek before generating a plan.");
+  if (!input.notes.trim()) throw new HttpError(400, "Write your consultation notes first.");
+  if (!supportedLanguages.some((language) => language.name === input.language || language.code === input.language))
+    throw new HttpError(400, "Please select a supported language.");
+  if (!aiKeyReady()) throw new HttpError(503, "DeepSeek drafting is not configured. Write the plan manually.");
+  if (active.has(req.account.id)) throw new HttpError(429, "An AI request is already running. Please wait for it to finish.");
+  const record = await readAccessibleConsultation(req.account, id);
+  if (record.lawyerOwnerId !== req.account.id)
+    throw new HttpError(403, "Only the assigned lawyer can draft this action plan.");
+  const [row] = await db.select({ brief: consultations.brief, notes: consultations.notes }).from(consultations).where(eq(consultations.id, id));
+  const briefText = briefAsText(record.topic, row?.brief ?? null, row?.notes ?? "");
+
+  active.add(req.account.id);
+  let requestLock: AiWritingLock | null = null;
+  try {
+    requestLock = await acquireAiRequestLock(req.account.id, req);
+    await reserveUsage(req.account.id, "drafting");
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    const completion = await completeWithAi(buildActionPlanMessages(input.language, briefText, input.notes.trim(), today));
+    const draft = parseActionPlanDraft(completion.text);
+    if (!draft || !draft.summary) {
+      req.log.warn({ action: "action_plan" }, "AI action plan output could not be parsed");
+      throw new ProviderRequestError();
+    }
+    await recordProviderSuccess(req.account.id, "drafting", completion.usage);
+    res.set("Cache-Control", "no-store").json(api.DraftActionPlanResponse.parse(draft));
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    req.log.warn({ name: (err as Error).name }, "Action plan drafting request failed");
     providerError(err);
   } finally {
     await releaseAiRequestLock(requestLock, req);

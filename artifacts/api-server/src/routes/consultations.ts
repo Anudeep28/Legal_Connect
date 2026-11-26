@@ -7,6 +7,7 @@ import * as api from "@workspace/api-zod";
 import { requireAccount, HttpError } from "../middlewares/access";
 import { accessibleConsultation, consultationRows, availableSlots, notify } from "../lib/legal";
 import { lockAccount } from "../lib/payments";
+import { normalizeBrief } from "../lib/action-plan";
 import { consultationRequestPausedError, lockConsultationCheckoutControl } from "../lib/consultation-checkout";
 
 export function createConsultationsRouter(dependencies: { authMiddlewares?: RequestHandler[] } = {}) {
@@ -38,6 +39,7 @@ router.post("/consultations", async (req, res): Promise<void> => {
     await tx.insert(consultations).values({
       id, userId: req.account.id, lawyerId: lawyer.id,
       topic: input.topic.trim(), notes: input.notes?.trim() ?? "",
+      brief: input.brief ? normalizeBrief(input.brief) : null,
       startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 30 * 60000).toISOString(),
       mode: input.mode, package: input.package, demo: lawyer.demo,
       fee: Math.round(lawyer.fee * (input.package === "consultation_document" ? 1 + lawyer.documentFeePercent / 100 : 1)),

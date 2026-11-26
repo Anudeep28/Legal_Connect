@@ -3,6 +3,17 @@ import { pgTable, text, integer, boolean, timestamp, uniqueIndex, index, jsonb, 
 import { accounts } from "./accounts";
 import { lawyers } from "./lawyers";
 
+export type ConsultationBrief = {
+  whatHappened: string;
+  location: string;
+  keyDates: string;
+  otherParty: string;
+  desiredOutcome: string;
+  questions: string;
+  preferredLanguage: string;
+  updatedAt: string;
+};
+
 export const consultations = pgTable("consultations", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => accounts.id),
@@ -23,6 +34,8 @@ export const consultations = pgTable("consultations", {
   callRecordingStopPending: boolean("call_recording_stop_pending").notNull().default(false),
   callRecordingLanguageCode: text("call_recording_language_code").notNull().default("auto"),
   demo: boolean("demo").notNull().default(false),
+  // Structured pre-call brief written by the client. Null for older requests.
+  brief: jsonb("brief").$type<ConsultationBrief>(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("consultation_active_slot").on(t.lawyerId, t.startsAt).where(sql`${t.status} <> 'cancelled'`),
@@ -134,3 +147,44 @@ export const reviews = pgTable("lawyer_reviews", {
   moderationReason: text("moderation_reason").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 });
+
+// Files the client attaches to the pre-call brief. Bytes live in App Storage;
+// only the private object path and metadata are stored here.
+export const consultationAttachments = pgTable("consultation_attachments", {
+  id: text("id").primaryKey(),
+  consultationId: text("consultation_id").notNull().references(() => consultations.id, { onDelete: "cascade" }),
+  uploaderId: text("uploader_id").notNull().references(() => accounts.id),
+  objectPath: text("object_path").notNull(),
+  name: text("name").notNull(),
+  contentType: text("content_type").notNull(),
+  size: integer("size").notNull(),
+  status: text("status").$type<"pending" | "ready">().notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("consultation_attachment_object").on(t.objectPath),
+  index("consultation_attachment_consultation").on(t.consultationId, t.createdAt),
+]);
+
+export type ActionPlanStep = {
+  id: string;
+  text: string;
+  owner: "client" | "lawyer";
+  dueDate: string | null;
+  done: boolean;
+};
+
+// One lawyer-reviewed action plan per consultation. Clients only see it once published.
+export const consultationActionPlans = pgTable("consultation_action_plans", {
+  id: text("id").primaryKey(),
+  consultationId: text("consultation_id").notNull().references(() => consultations.id, { onDelete: "cascade" }),
+  summary: text("summary").notNull().default(""),
+  steps: jsonb("steps").$type<ActionPlanStep[]>().notNull().default([]),
+  documentsNeeded: jsonb("documents_needed").$type<string[]>().notNull().default([]),
+  templateIds: jsonb("template_ids").$type<string[]>().notNull().default([]),
+  status: text("status").$type<"draft" | "published">().notNull().default("draft"),
+  aiAssisted: boolean("ai_assisted").notNull().default(false),
+  lawyerReviewedAt: timestamp("lawyer_reviewed_at", { withTimezone: true, mode: "string" }),
+  publishedAt: timestamp("published_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("consultation_action_plan_consultation").on(t.consultationId)]);

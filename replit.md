@@ -58,7 +58,9 @@ Indian lawyer discovery, consultation requests, messaging, document drafting, an
 - All consultation times display in `Asia/Kolkata`. API slot dates use `YYYY-MM-DD`; stored instants use ISO timezone-aware timestamps.
 - The slot endpoint puts date in the path to avoid conflicting generated parameter exports.
 - AI requires managed OpenAI integration variables; usage is billed to Replit credits. Limit AI operations by authenticated account and do not log legal text or SQL parameter errors.
-- Audio is processed transiently and deleted after conversion, not stored as base64 in PostgreSQL. Persistent future uploads require App Storage.
+- Audio is processed transiently and deleted after conversion, not stored as base64 in PostgreSQL.
+- Case-brief attachments live in App Storage (private dir). Access is enforced by database rows (client uploader + assigned lawyer only), not storage ACLs; files are served through the API with nosniff and a sandbox CSP. Keep `@google-cloud/storage` on v7: v9 rejects the empty project id that Replit's storage sidecar relies on.
+- Consultation flow: client case brief (guided questions + attachments, editable while requested/booked) → lawyer action plan (summary, owned steps with due dates, documents to gather, suggested templates; AI suggestion optional, explicit review required before the client sees it; a sent plan cannot be hidden again) → one-click template drafts pre-filled from the brief, saved as private deliverable drafts.
 - No database DDL or seeding on server startup. Replit's publish flow handles managed production schema changes.
 
 ## Launch prerequisites

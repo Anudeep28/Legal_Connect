@@ -5,6 +5,7 @@
  * Consult with Lawyer — independent legal consultation platform.
  * OpenAPI spec version: 1.0.0
  */
+import type { ConsultationBrief } from './consultationBrief';
 import type { ConsultationMode } from './consultationMode';
 import type { ConsultationPackage } from './consultationPackage';
 import type { ConsultationPaymentStatus } from './consultationPaymentStatus';
@@ -29,5 +30,6 @@ export interface Consultation {
   transcript: string;
   callRecordingLanguageCode: string;
   demo: boolean;
+  brief?: ConsultationBrief | null;
   createdAt: string;
 }

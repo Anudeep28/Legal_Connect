@@ -16,7 +16,6 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +23,8 @@ import { cn } from '@/lib/utils';
 import { errMsg, fmtTime, inr, istDateKey, labelOfKey, weekdayOfKey } from '@/lib/format';
 import { useAccount } from '@/lib/account';
 import { Notice } from '@/components/kit';
+import { BriefFields, emptyBrief } from '@/components/case-brief';
+import type { ConsultationBriefInput } from '@workspace/api-client-react';
 
 export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { lawyer: Lawyer; open: boolean; onOpenChange: (o: boolean) => void; callsEnabled: boolean }) {
   const { signedIn } = useAccount();
@@ -32,10 +33,12 @@ export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { la
   const { toast } = useToast();
   const days = useMemo(() => Array.from({ length: 14 }, (_, i) => istDateKey(i)), []);
   const checkoutStatus = useGetPlatform({ query: { enabled: open && !lawyer.demo, refetchOnWindowFocus: true } });
+  const platformInfo = useGetPlatform({ query: { enabled: open } });
+  const languages = platformInfo.data?.languages ?? [];
   const [date, setDate] = useState(() => days.find((d) => lawyer.availability.includes(weekdayOfKey(d))) ?? days[0]);
   const [slot, setSlot] = useState<string | null>(null);
   const [topic, setTopic] = useState('');
-  const [notes, setNotes] = useState('');
+  const [brief, setBrief] = useState<Required<ConsultationBriefInput>>(emptyBrief);
   const [pkg, setPkg] = useState<ConsultationInputPackage>('consultation_only');
   const [mode, setMode] = useState<'chat' | 'call'>('chat');
   const [checkingCheckout, setCheckingCheckout] = useState(false);
@@ -79,7 +82,7 @@ export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { la
       }
     }
     create.mutate(
-      { data: { lawyerId: lawyer.id, startsAt: slot, topic: topic.trim(), notes: notes.trim() || undefined, mode, package: pkg } },
+      { data: { lawyerId: lawyer.id, startsAt: slot, topic: topic.trim(), brief: brief.whatHappened.trim() ? brief : undefined, mode, package: pkg } },
       {
         onSuccess: (c) => {
           qc.invalidateQueries({ queryKey: getListConsultationsQueryKey() });
@@ -231,10 +234,11 @@ export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { la
                 <Label htmlFor="topic" className="text-[13px]">What is this about?</Label>
                 <Input id="topic" value={topic} maxLength={200} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Landlord is withholding my security deposit" className="mt-1.5" data-testid="input-topic" />
               </div>
-              <div>
-                <Label htmlFor="notes" className="text-[13px]">Background for the lawyer (optional)</Label>
-                <Textarea id="notes" value={notes} maxLength={5000} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Dates, documents you have, what you have tried so far. Avoid sharing passwords or ID numbers." className="mt-1.5" data-testid="input-notes" />
-              </div>
+            </section>
+            <section className="rounded-2xl border bg-muted/30 p-4">
+              <p className="font-display text-base font-semibold">Case brief for the lawyer</p>
+              <p className="mb-3 text-xs text-muted-foreground">Optional but recommended: your lawyer reads this before the call. You can edit it and attach documents from the consultation page after sending.</p>
+              <BriefFields value={brief} onChange={setBrief} languages={languages} idPrefix="booking-brief" />
             </section>
             <Notice icon={<Info />}>
               This saves an <strong>unpaid consultation request</strong>, not a confirmed appointment. Sending it does not charge you. If paid checkout is enabled, you pay from the consultation page before the advocate can accept; payment alone does not confirm the appointment. Fee {inr(total)}. Client cancellation is generally not refundable; if the advocate declines or cancels, you may request an eligible refund, subject to applicable law.

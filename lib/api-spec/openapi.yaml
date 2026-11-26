@@ -428,6 +428,131 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Review" }
+  /consultations/{id}/brief:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    put:
+      operationId: updateConsultationBrief
+      description: Client-only. Saves the structured pre-call brief while the consultation is open.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConsultationBriefInput" }
+      responses:
+        "200":
+          description: Updated consultation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Consultation" }
+  /consultations/{id}/attachments:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      operationId: listConsultationAttachments
+      responses:
+        "200":
+          description: Uploaded brief attachments, visible to both participants
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ConsultationAttachment" } }
+    post:
+      operationId: requestConsultationAttachmentUpload
+      description: Client-only. Reserves an attachment and returns a short-lived private upload URL. The file is sent directly to storage, then confirmed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttachmentUploadInput" }
+      responses:
+        "201":
+          description: Upload reserved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttachmentUploadTicket" }
+  /consultations/{id}/attachments/{attachmentId}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: attachmentId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: deleteConsultationAttachment
+      responses:
+        "204": { description: Removed }
+  /consultations/{id}/attachments/{attachmentId}/confirm:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: attachmentId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: confirmConsultationAttachment
+      responses:
+        "200":
+          description: Upload verified and shared with the lawyer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConsultationAttachment" }
+  /consultations/{id}/action-plan:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      operationId: getActionPlan
+      responses:
+        "200":
+          description: Lawyer sees drafts; the client sees only a published plan
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/ActionPlan" }
+                  - { type: "null" }
+    put:
+      operationId: saveActionPlan
+      description: Assigned lawyer only. Publishing requires explicit review confirmation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionPlanInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionPlan" }
+  /consultations/{id}/action-plan/steps/{stepId}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: stepId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: updateActionPlanStep
+      description: Participants mark published steps done or not done. Clients may only change their own steps.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionPlanStepUpdate" }
+      responses:
+        "200":
+          description: Updated plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionPlan" }
+  /writing/consultations/{id}/action-plan/draft:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    post:
+      operationId: draftActionPlan
+      description: Private AI suggestion from the lawyer's notes and the client brief. Nothing is saved or shown to the client.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionPlanDraftInput" }
+      responses:
+        "200":
+          description: Suggested plan for lawyer review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionPlanDraft" }
   /documents:
     get:
       operationId: listDocuments
@@ -1481,7 +1606,131 @@ components:
         transcript: { type: string }
         callRecordingLanguageCode: { type: string }
         demo: { type: boolean }
+        brief:
+          oneOf:
+            - { $ref: "#/components/schemas/ConsultationBrief" }
+            - { type: "null" }
         createdAt: { type: string }
+    ConsultationBrief:
+      type: object
+      required: [whatHappened, location, keyDates, otherParty, desiredOutcome, questions, preferredLanguage, updatedAt]
+      properties:
+        whatHappened: { type: string }
+        location: { type: string }
+        keyDates: { type: string }
+        otherParty: { type: string }
+        desiredOutcome: { type: string }
+        questions: { type: string }
+        preferredLanguage: { type: string }
+        updatedAt: { type: string }
+    ConsultationBriefInput:
+      type: object
+      required: [whatHappened]
+      properties:
+        whatHappened: { type: string, maxLength: 5000 }
+        location: { type: string, maxLength: 300 }
+        keyDates: { type: string, maxLength: 2000 }
+        otherParty: { type: string, maxLength: 300 }
+        desiredOutcome: { type: string, maxLength: 2000 }
+        questions: { type: string, maxLength: 2000 }
+        preferredLanguage: { type: string, maxLength: 50 }
+    ConsultationAttachment:
+      type: object
+      required: [id, consultationId, name, contentType, size, uploadedBy, createdAt, downloadPath]
+      properties:
+        id: { type: string }
+        consultationId: { type: string }
+        name: { type: string }
+        contentType: { type: string }
+        size: { type: integer }
+        uploadedBy: { type: string, enum: [client, lawyer] }
+        createdAt: { type: string }
+        downloadPath: { type: string, description: "Path below the API base for participant-only download" }
+    AttachmentUploadInput:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        size: { type: integer, minimum: 1, maximum: 10485760 }
+        contentType: { type: string, enum: [application/pdf, image/jpeg, image/png, image/webp, application/vnd.openxmlformats-officedocument.wordprocessingml.document, text/plain] }
+    AttachmentUploadTicket:
+      type: object
+      required: [attachmentId, uploadURL]
+      properties:
+        attachmentId: { type: string }
+        uploadURL: { type: string }
+    ActionPlanStep:
+      type: object
+      required: [id, text, owner, dueDate, done]
+      properties:
+        id: { type: string }
+        text: { type: string }
+        owner: { type: string, enum: [client, lawyer] }
+        dueDate: { type: string, nullable: true }
+        done: { type: boolean }
+    ActionPlan:
+      type: object
+      required: [id, consultationId, summary, steps, documentsNeeded, templateIds, status, aiAssisted, lawyerReviewedAt, publishedAt, updatedAt]
+      properties:
+        id: { type: string }
+        consultationId: { type: string }
+        summary: { type: string }
+        steps: { type: array, items: { $ref: "#/components/schemas/ActionPlanStep" } }
+        documentsNeeded: { type: array, items: { type: string } }
+        templateIds: { type: array, items: { type: string } }
+        status: { type: string, enum: [draft, published] }
+        aiAssisted: { type: boolean }
+        lawyerReviewedAt: { type: string, nullable: true }
+        publishedAt: { type: string, nullable: true }
+        updatedAt: { type: string }
+    ActionPlanStepInput:
+      type: object
+      required: [text, owner]
+      properties:
+        id: { type: string, maxLength: 64 }
+        text: { type: string, minLength: 1, maxLength: 500 }
+        owner: { type: string, enum: [client, lawyer] }
+        dueDate: { type: string, nullable: true, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        done: { type: boolean }
+    ActionPlanInput:
+      type: object
+      required: [summary, steps, documentsNeeded, templateIds, status, reviewConfirmed, aiAssisted]
+      properties:
+        summary: { type: string, maxLength: 4000 }
+        steps: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/ActionPlanStepInput" } }
+        documentsNeeded: { type: array, maxItems: 20, items: { type: string, minLength: 1, maxLength: 200 } }
+        templateIds: { type: array, maxItems: 5, items: { type: string } }
+        status: { type: string, enum: [draft, published] }
+        reviewConfirmed: { type: boolean }
+        aiAssisted: { type: boolean }
+    ActionPlanStepUpdate:
+      type: object
+      required: [done]
+      properties:
+        done: { type: boolean }
+    ActionPlanDraftInput:
+      type: object
+      required: [notes, language, dataUseAcknowledged]
+      properties:
+        notes: { type: string, minLength: 1, maxLength: 20000 }
+        language: { type: string, minLength: 2, maxLength: 50 }
+        dataUseAcknowledged: { type: boolean, const: true }
+    ActionPlanDraft:
+      type: object
+      required: [summary, steps, documentsNeeded, templateIds]
+      properties:
+        summary: { type: string }
+        steps:
+          type: array
+          items:
+            type: object
+            required: [text, owner, dueDate]
+            properties:
+              text: { type: string }
+              owner: { type: string, enum: [client, lawyer] }
+              dueDate: { type: string, nullable: true }
+        documentsNeeded: { type: array, items: { type: string } }
+        templateIds: { type: array, items: { type: string } }
     ConsultationInput:
       type: object
       required: [lawyerId, startsAt, topic, mode, package]
@@ -1492,6 +1741,7 @@ components:
         notes: { type: string, maxLength: 5000 }
         mode: { type: string, enum: [chat, call] }
         package: { type: string, enum: [consultation_only, consultation_document] }
+        brief: { $ref: "#/components/schemas/ConsultationBriefInput" }
     ConsultationUpdate:
       type: object
       properties:

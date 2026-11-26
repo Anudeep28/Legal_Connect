@@ -15,14 +15,16 @@ export function TemplateFiller({
   pending,
   ctaLabel = 'Create document',
   disabledReason,
+  initialValues,
 }: {
   template: Template;
   onCreate?: (content: string, values: Record<string, string>) => void;
   pending?: boolean;
   ctaLabel?: string;
   disabledReason?: string;
+  initialValues?: Record<string, string>;
 }) {
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [values, setValues] = useState<Record<string, string>>(() => initialValues ?? {});
   const filled = useMemo(() => fillTemplate(template.content, values), [template.content, values]);
   const missing = template.fields.filter((f) => f.required && !values[f.id]?.trim());
 

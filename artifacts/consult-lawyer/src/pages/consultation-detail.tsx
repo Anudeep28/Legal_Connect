@@ -37,6 +37,8 @@ import { usePaymentCheckout } from '@/hooks/use-payment-checkout';
 import { PaymentHistory } from '@/components/payment-history';
 import { ConsultationCall } from '@/components/consultation-call';
 import { AiUsageNotice } from '@/components/ai-usage';
+import { CaseBrief } from '@/components/case-brief';
+import { ActionPlanSection } from '@/components/action-plan';
 
 export default function ConsultationDetail() {
   const { id = '' } = useParams<{ id: string }>();
@@ -51,6 +53,7 @@ export default function ConsultationDetail() {
 function Inner({ id, me }: { id: string; me: Account }) {
   const q = useGetConsultation(id, { query: { enabled: !!id, queryKey: getGetConsultationQueryKey(id), refetchInterval: 10000 } });
   const [generatedDraft, setGeneratedDraft] = useState<(CallTranscriptDraftResponse & { sessionId: string; version: number }) | null>(null);
+  const platform = useGetPlatform();
   if (q.isLoading) return <div className="space-y-4"><Skeleton className="h-40 rounded-3xl" /><Skeleton className="h-96 rounded-3xl" /></div>;
   if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} title="This consultation is not available" />;
   const c = q.data;
@@ -63,16 +66,23 @@ function Inner({ id, me }: { id: string; me: Account }) {
       <Header c={c} asClient={asClient} isClient={isClient} />
       {isClient && <ConsultationPayment c={c} />}
       {c.mode === 'call' && (isClient || me.role === 'lawyer') && <ConsultationCall consultation={c} asLawyer={asLawyer} />}
+      {(isClient || asLawyer) && (
+        <div className="mt-6">
+          <ActionPlanSection
+            c={c}
+            asLawyer={asLawyer}
+            isClient={isClient}
+            templates={platform.data?.templates ?? []}
+            languages={platform.data?.languages ?? []}
+            draftingEnabled={!!platform.data?.draftingEnabled}
+          />
+        </div>
+      )}
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.25fr_1fr]">
         <Messages c={c} asClient={asClient} />
         <div className="space-y-6">
           {asLawyer && c.mode === 'call' && <CallTranscriptWorkspace c={c} onDraftReady={(draft) => setGeneratedDraft({ ...draft, version: Date.now() })} />}
-          {c.notes && (
-            <section className="rounded-3xl border bg-card p-5">
-              <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Client's background note</h3>
-              <p className="mt-2 whitespace-pre-line text-[14.5px] leading-relaxed">{c.notes}</p>
-            </section>
-          )}
+          {(isClient || asLawyer) && <CaseBrief c={c} isClient={isClient} languages={platform.data?.languages ?? []} />}
           <Transcript c={c} asClient={asClient} />
           <Deliverables
             c={c}

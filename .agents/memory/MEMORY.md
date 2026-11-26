@@ -8,3 +8,4 @@
 - [DeepSeek API account](deepseek-api-account.md) — app uses the standard Open Platform account; use its public API terms unless a separate written agreement is supplied.
 - [Cross-instance AI request locks](ai-request-locks.md) — use short PostgreSQL leases with owner tokens; do not hold pooled connections during provider calls.
 - [GitHub sync instructions](github-sync.md) — sync this project's future changes to main without creating branches; preserve the old app until replacement is explicitly approved.
+- [Object storage library version](object-storage-version.md) — keep @google-cloud/storage on v7; v9 breaks metadata reads with Replit's sidecar auth.

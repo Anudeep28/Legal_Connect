@@ -575,6 +575,16 @@ export const ListConsultationsResponseItem = zod.object({
   "transcript": zod.string(),
   "callRecordingLanguageCode": zod.string(),
   "demo": zod.boolean(),
+  "brief": zod.union([zod.object({
+  "whatHappened": zod.string(),
+  "location": zod.string(),
+  "keyDates": zod.string(),
+  "otherParty": zod.string(),
+  "desiredOutcome": zod.string(),
+  "questions": zod.string(),
+  "preferredLanguage": zod.string(),
+  "updatedAt": zod.string()
+}),zod.null()]).optional(),
   "createdAt": zod.string()
 })
 export const ListConsultationsResponse = zod.array(ListConsultationsResponseItem)
@@ -585,6 +595,20 @@ export const createConsultationBodyTopicMax = 200;
 
 export const createConsultationBodyNotesMax = 5000;
 
+export const createConsultationBodyBriefWhatHappenedMax = 5000;
+
+export const createConsultationBodyBriefLocationMax = 300;
+
+export const createConsultationBodyBriefKeyDatesMax = 2000;
+
+export const createConsultationBodyBriefOtherPartyMax = 300;
+
+export const createConsultationBodyBriefDesiredOutcomeMax = 2000;
+
+export const createConsultationBodyBriefQuestionsMax = 2000;
+
+export const createConsultationBodyBriefPreferredLanguageMax = 50;
+
 
 
 export const CreateConsultationBody = zod.object({
@@ -593,7 +617,16 @@ export const CreateConsultationBody = zod.object({
   "topic": zod.string().min(createConsultationBodyTopicMin).max(createConsultationBodyTopicMax),
   "notes": zod.string().max(createConsultationBodyNotesMax).optional(),
   "mode": zod.enum(['chat', 'call']),
-  "package": zod.enum(['consultation_only', 'consultation_document'])
+  "package": zod.enum(['consultation_only', 'consultation_document']),
+  "brief": zod.object({
+  "whatHappened": zod.string().max(createConsultationBodyBriefWhatHappenedMax),
+  "location": zod.string().max(createConsultationBodyBriefLocationMax).optional(),
+  "keyDates": zod.string().max(createConsultationBodyBriefKeyDatesMax).optional(),
+  "otherParty": zod.string().max(createConsultationBodyBriefOtherPartyMax).optional(),
+  "desiredOutcome": zod.string().max(createConsultationBodyBriefDesiredOutcomeMax).optional(),
+  "questions": zod.string().max(createConsultationBodyBriefQuestionsMax).optional(),
+  "preferredLanguage": zod.string().max(createConsultationBodyBriefPreferredLanguageMax).optional()
+}).optional()
 })
 
 export const CreateConsultationResponse = zod.object({
@@ -615,6 +648,16 @@ export const CreateConsultationResponse = zod.object({
   "transcript": zod.string(),
   "callRecordingLanguageCode": zod.string(),
   "demo": zod.boolean(),
+  "brief": zod.union([zod.object({
+  "whatHappened": zod.string(),
+  "location": zod.string(),
+  "keyDates": zod.string(),
+  "otherParty": zod.string(),
+  "desiredOutcome": zod.string(),
+  "questions": zod.string(),
+  "preferredLanguage": zod.string(),
+  "updatedAt": zod.string()
+}),zod.null()]).optional(),
   "createdAt": zod.string()
 })
 
@@ -645,6 +688,16 @@ export const GetConsultationResponse = zod.object({
   "transcript": zod.string(),
   "callRecordingLanguageCode": zod.string(),
   "demo": zod.boolean(),
+  "brief": zod.union([zod.object({
+  "whatHappened": zod.string(),
+  "location": zod.string(),
+  "keyDates": zod.string(),
+  "otherParty": zod.string(),
+  "desiredOutcome": zod.string(),
+  "questions": zod.string(),
+  "preferredLanguage": zod.string(),
+  "updatedAt": zod.string()
+}),zod.null()]).optional(),
   "createdAt": zod.string()
 })
 
@@ -684,6 +737,16 @@ export const UpdateConsultationResponse = zod.object({
   "transcript": zod.string(),
   "callRecordingLanguageCode": zod.string(),
   "demo": zod.boolean(),
+  "brief": zod.union([zod.object({
+  "whatHappened": zod.string(),
+  "location": zod.string(),
+  "keyDates": zod.string(),
+  "otherParty": zod.string(),
+  "desiredOutcome": zod.string(),
+  "questions": zod.string(),
+  "preferredLanguage": zod.string(),
+  "updatedAt": zod.string()
+}),zod.null()]).optional(),
   "createdAt": zod.string()
 })
 
@@ -840,6 +903,317 @@ export const CreateReviewResponse = zod.object({
   "visible": zod.boolean(),
   "moderationReason": zod.string(),
   "createdAt": zod.string()
+})
+
+
+/**
+ * Client-only. Saves the structured pre-call brief while the consultation is open.
+ */
+
+
+
+export const UpdateConsultationBriefParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const updateConsultationBriefBodyWhatHappenedMax = 5000;
+
+export const updateConsultationBriefBodyLocationMax = 300;
+
+export const updateConsultationBriefBodyKeyDatesMax = 2000;
+
+export const updateConsultationBriefBodyOtherPartyMax = 300;
+
+export const updateConsultationBriefBodyDesiredOutcomeMax = 2000;
+
+export const updateConsultationBriefBodyQuestionsMax = 2000;
+
+export const updateConsultationBriefBodyPreferredLanguageMax = 50;
+
+
+
+export const UpdateConsultationBriefBody = zod.object({
+  "whatHappened": zod.string().max(updateConsultationBriefBodyWhatHappenedMax),
+  "location": zod.string().max(updateConsultationBriefBodyLocationMax).optional(),
+  "keyDates": zod.string().max(updateConsultationBriefBodyKeyDatesMax).optional(),
+  "otherParty": zod.string().max(updateConsultationBriefBodyOtherPartyMax).optional(),
+  "desiredOutcome": zod.string().max(updateConsultationBriefBodyDesiredOutcomeMax).optional(),
+  "questions": zod.string().max(updateConsultationBriefBodyQuestionsMax).optional(),
+  "preferredLanguage": zod.string().max(updateConsultationBriefBodyPreferredLanguageMax).optional()
+})
+
+export const UpdateConsultationBriefResponse = zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "clientName": zod.string(),
+  "lawyerId": zod.string(),
+  "lawyerName": zod.string(),
+  "lawyerAvatar": zod.string(),
+  "topic": zod.string(),
+  "notes": zod.string(),
+  "mode": zod.enum(['chat', 'call']),
+  "package": zod.enum(['consultation_only', 'consultation_document']),
+  "status": zod.enum(['requested', 'booked', 'cancelled', 'completed']),
+  "paymentStatus": zod.enum(['unpaid', 'pending', 'paid', 'refund_pending', 'refunded']),
+  "startsAt": zod.string(),
+  "endsAt": zod.string(),
+  "fee": zod.number().int(),
+  "transcript": zod.string(),
+  "callRecordingLanguageCode": zod.string(),
+  "demo": zod.boolean(),
+  "brief": zod.union([zod.object({
+  "whatHappened": zod.string(),
+  "location": zod.string(),
+  "keyDates": zod.string(),
+  "otherParty": zod.string(),
+  "desiredOutcome": zod.string(),
+  "questions": zod.string(),
+  "preferredLanguage": zod.string(),
+  "updatedAt": zod.string()
+}),zod.null()]).optional(),
+  "createdAt": zod.string()
+})
+
+
+
+
+
+export const ListConsultationAttachmentsParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const ListConsultationAttachmentsResponseItem = zod.object({
+  "id": zod.string(),
+  "consultationId": zod.string(),
+  "name": zod.string(),
+  "contentType": zod.string(),
+  "size": zod.number().int(),
+  "uploadedBy": zod.enum(['client', 'lawyer']),
+  "createdAt": zod.string(),
+  "downloadPath": zod.string().describe('Path below the API base for participant-only download')
+})
+export const ListConsultationAttachmentsResponse = zod.array(ListConsultationAttachmentsResponseItem)
+
+
+/**
+ * Client-only. Reserves an attachment and returns a short-lived private upload URL. The file is sent directly to storage, then confirmed.
+ */
+
+
+
+export const RequestConsultationAttachmentUploadParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const requestConsultationAttachmentUploadBodyNameMax = 200;
+
+export const requestConsultationAttachmentUploadBodySizeMax = 10485760;
+
+
+
+export const RequestConsultationAttachmentUploadBody = zod.object({
+  "name": zod.string().min(1).max(requestConsultationAttachmentUploadBodyNameMax),
+  "size": zod.number().int().min(1).max(requestConsultationAttachmentUploadBodySizeMax),
+  "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'])
+})
+
+export const RequestConsultationAttachmentUploadResponse = zod.object({
+  "attachmentId": zod.string(),
+  "uploadURL": zod.string()
+})
+
+
+
+
+
+export const DeleteConsultationAttachmentParams = zod.object({
+  "id": zod.coerce.string().min(1),
+  "attachmentId": zod.coerce.string()
+})
+
+export const DeleteConsultationAttachmentResponse = zod.void()
+
+
+
+
+
+export const ConfirmConsultationAttachmentParams = zod.object({
+  "id": zod.coerce.string().min(1),
+  "attachmentId": zod.coerce.string()
+})
+
+export const ConfirmConsultationAttachmentResponse = zod.object({
+  "id": zod.string(),
+  "consultationId": zod.string(),
+  "name": zod.string(),
+  "contentType": zod.string(),
+  "size": zod.number().int(),
+  "uploadedBy": zod.enum(['client', 'lawyer']),
+  "createdAt": zod.string(),
+  "downloadPath": zod.string().describe('Path below the API base for participant-only download')
+})
+
+
+
+
+
+export const GetActionPlanParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const GetActionPlanResponse = zod.union([zod.object({
+  "id": zod.string(),
+  "consultationId": zod.string(),
+  "summary": zod.string(),
+  "steps": zod.array(zod.object({
+  "id": zod.string(),
+  "text": zod.string(),
+  "owner": zod.enum(['client', 'lawyer']),
+  "dueDate": zod.string().nullable(),
+  "done": zod.boolean()
+})),
+  "documentsNeeded": zod.array(zod.string()),
+  "templateIds": zod.array(zod.string()),
+  "status": zod.enum(['draft', 'published']),
+  "aiAssisted": zod.boolean(),
+  "lawyerReviewedAt": zod.string().nullable(),
+  "publishedAt": zod.string().nullable(),
+  "updatedAt": zod.string()
+}),zod.null()])
+
+
+/**
+ * Assigned lawyer only. Publishing requires explicit review confirmation.
+ */
+
+
+
+export const SaveActionPlanParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const saveActionPlanBodySummaryMax = 4000;
+
+export const saveActionPlanBodyStepsItemIdMax = 64;
+
+export const saveActionPlanBodyStepsItemTextMax = 500;
+
+export const saveActionPlanBodyStepsItemDueDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const saveActionPlanBodyStepsMax = 20;
+
+export const saveActionPlanBodyDocumentsNeededItemMax = 200;
+
+export const saveActionPlanBodyDocumentsNeededMax = 20;
+
+export const saveActionPlanBodyTemplateIdsMax = 5;
+
+
+
+export const SaveActionPlanBody = zod.object({
+  "summary": zod.string().max(saveActionPlanBodySummaryMax),
+  "steps": zod.array(zod.object({
+  "id": zod.string().max(saveActionPlanBodyStepsItemIdMax).optional(),
+  "text": zod.string().min(1).max(saveActionPlanBodyStepsItemTextMax),
+  "owner": zod.enum(['client', 'lawyer']),
+  "dueDate": zod.string().regex(saveActionPlanBodyStepsItemDueDateRegExp).nullish(),
+  "done": zod.boolean().optional()
+})).max(saveActionPlanBodyStepsMax),
+  "documentsNeeded": zod.array(zod.string().min(1).max(saveActionPlanBodyDocumentsNeededItemMax)).max(saveActionPlanBodyDocumentsNeededMax),
+  "templateIds": zod.array(zod.string()).max(saveActionPlanBodyTemplateIdsMax),
+  "status": zod.enum(['draft', 'published']),
+  "reviewConfirmed": zod.boolean(),
+  "aiAssisted": zod.boolean()
+})
+
+export const SaveActionPlanResponse = zod.object({
+  "id": zod.string(),
+  "consultationId": zod.string(),
+  "summary": zod.string(),
+  "steps": zod.array(zod.object({
+  "id": zod.string(),
+  "text": zod.string(),
+  "owner": zod.enum(['client', 'lawyer']),
+  "dueDate": zod.string().nullable(),
+  "done": zod.boolean()
+})),
+  "documentsNeeded": zod.array(zod.string()),
+  "templateIds": zod.array(zod.string()),
+  "status": zod.enum(['draft', 'published']),
+  "aiAssisted": zod.boolean(),
+  "lawyerReviewedAt": zod.string().nullable(),
+  "publishedAt": zod.string().nullable(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * Participants mark published steps done or not done. Clients may only change their own steps.
+ */
+
+
+
+export const UpdateActionPlanStepParams = zod.object({
+  "id": zod.coerce.string().min(1),
+  "stepId": zod.coerce.string()
+})
+
+export const UpdateActionPlanStepBody = zod.object({
+  "done": zod.boolean()
+})
+
+export const UpdateActionPlanStepResponse = zod.object({
+  "id": zod.string(),
+  "consultationId": zod.string(),
+  "summary": zod.string(),
+  "steps": zod.array(zod.object({
+  "id": zod.string(),
+  "text": zod.string(),
+  "owner": zod.enum(['client', 'lawyer']),
+  "dueDate": zod.string().nullable(),
+  "done": zod.boolean()
+})),
+  "documentsNeeded": zod.array(zod.string()),
+  "templateIds": zod.array(zod.string()),
+  "status": zod.enum(['draft', 'published']),
+  "aiAssisted": zod.boolean(),
+  "lawyerReviewedAt": zod.string().nullable(),
+  "publishedAt": zod.string().nullable(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * Private AI suggestion from the lawyer's notes and the client brief. Nothing is saved or shown to the client.
+ */
+
+
+
+export const DraftActionPlanParams = zod.object({
+  "id": zod.coerce.string().min(1)
+})
+
+export const draftActionPlanBodyNotesMax = 20000;
+
+export const draftActionPlanBodyLanguageMin = 2;
+export const draftActionPlanBodyLanguageMax = 50;
+
+
+
+export const DraftActionPlanBody = zod.object({
+  "notes": zod.string().min(1).max(draftActionPlanBodyNotesMax),
+  "language": zod.string().min(draftActionPlanBodyLanguageMin).max(draftActionPlanBodyLanguageMax),
+  "dataUseAcknowledged": zod.literal(true)
+})
+
+export const DraftActionPlanResponse = zod.object({
+  "summary": zod.string(),
+  "steps": zod.array(zod.object({
+  "text": zod.string(),
+  "owner": zod.enum(['client', 'lawyer']),
+  "dueDate": zod.string().nullable()
+})),
+  "documentsNeeded": zod.array(zod.string()),
+  "templateIds": zod.array(zod.string())
 })
 
 

@@ -772,6 +772,17 @@ export const ConsultationPaymentStatus = {
   refunded: 'refunded',
 } as const;
 
+export interface ConsultationBrief {
+  whatHappened: string;
+  location: string;
+  keyDates: string;
+  otherParty: string;
+  desiredOutcome: string;
+  questions: string;
+  preferredLanguage: string;
+  updatedAt: string;
+}
+
 export interface Consultation {
   id: string;
   userId: string;
@@ -791,7 +802,208 @@ export interface Consultation {
   transcript: string;
   callRecordingLanguageCode: string;
   demo: boolean;
+  brief?: ConsultationBrief | null;
   createdAt: string;
+}
+
+export interface ConsultationBriefInput {
+  /** @maxLength 5000 */
+  whatHappened: string;
+  /** @maxLength 300 */
+  location?: string;
+  /** @maxLength 2000 */
+  keyDates?: string;
+  /** @maxLength 300 */
+  otherParty?: string;
+  /** @maxLength 2000 */
+  desiredOutcome?: string;
+  /** @maxLength 2000 */
+  questions?: string;
+  /** @maxLength 50 */
+  preferredLanguage?: string;
+}
+
+export type ConsultationAttachmentUploadedBy = typeof ConsultationAttachmentUploadedBy[keyof typeof ConsultationAttachmentUploadedBy];
+
+
+export const ConsultationAttachmentUploadedBy = {
+  client: 'client',
+  lawyer: 'lawyer',
+} as const;
+
+export interface ConsultationAttachment {
+  id: string;
+  consultationId: string;
+  name: string;
+  contentType: string;
+  size: number;
+  uploadedBy: ConsultationAttachmentUploadedBy;
+  createdAt: string;
+  /** Path below the API base for participant-only download */
+  downloadPath: string;
+}
+
+export type AttachmentUploadInputContentType = typeof AttachmentUploadInputContentType[keyof typeof AttachmentUploadInputContentType];
+
+
+export const AttachmentUploadInputContentType = {
+  'application/pdf': 'application/pdf',
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+  'application/vndopenxmlformats-officedocumentwordprocessingmldocument': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain': 'text/plain',
+} as const;
+
+export interface AttachmentUploadInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 10485760
+     */
+  size: number;
+  contentType: AttachmentUploadInputContentType;
+}
+
+export interface AttachmentUploadTicket {
+  attachmentId: string;
+  uploadURL: string;
+}
+
+export type ActionPlanStepOwner = typeof ActionPlanStepOwner[keyof typeof ActionPlanStepOwner];
+
+
+export const ActionPlanStepOwner = {
+  client: 'client',
+  lawyer: 'lawyer',
+} as const;
+
+export interface ActionPlanStep {
+  id: string;
+  text: string;
+  owner: ActionPlanStepOwner;
+  /** @nullable */
+  dueDate: string | null;
+  done: boolean;
+}
+
+export type ActionPlanStatus = typeof ActionPlanStatus[keyof typeof ActionPlanStatus];
+
+
+export const ActionPlanStatus = {
+  draft: 'draft',
+  published: 'published',
+} as const;
+
+export interface ActionPlan {
+  id: string;
+  consultationId: string;
+  summary: string;
+  steps: ActionPlanStep[];
+  documentsNeeded: string[];
+  templateIds: string[];
+  status: ActionPlanStatus;
+  aiAssisted: boolean;
+  /** @nullable */
+  lawyerReviewedAt: string | null;
+  /** @nullable */
+  publishedAt: string | null;
+  updatedAt: string;
+}
+
+export type ActionPlanStepInputOwner = typeof ActionPlanStepInputOwner[keyof typeof ActionPlanStepInputOwner];
+
+
+export const ActionPlanStepInputOwner = {
+  client: 'client',
+  lawyer: 'lawyer',
+} as const;
+
+export interface ActionPlanStepInput {
+  /** @maxLength 64 */
+  id?: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  text: string;
+  owner: ActionPlanStepInputOwner;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  dueDate?: string | null;
+  done?: boolean;
+}
+
+export type ActionPlanInputStatus = typeof ActionPlanInputStatus[keyof typeof ActionPlanInputStatus];
+
+
+export const ActionPlanInputStatus = {
+  draft: 'draft',
+  published: 'published',
+} as const;
+
+export interface ActionPlanInput {
+  /** @maxLength 4000 */
+  summary: string;
+  /** @maxItems 20 */
+  steps: ActionPlanStepInput[];
+  /**
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 200
+     */
+  documentsNeeded: string[];
+  /** @maxItems 5 */
+  templateIds: string[];
+  status: ActionPlanInputStatus;
+  reviewConfirmed: boolean;
+  aiAssisted: boolean;
+}
+
+export interface ActionPlanStepUpdate {
+  done: boolean;
+}
+
+export interface ActionPlanDraftInput {
+  /**
+     * @minLength 1
+     * @maxLength 20000
+     */
+  notes: string;
+  /**
+     * @minLength 2
+     * @maxLength 50
+     */
+  language: string;
+  dataUseAcknowledged: true;
+}
+
+export type ActionPlanDraftStepsItemOwner = typeof ActionPlanDraftStepsItemOwner[keyof typeof ActionPlanDraftStepsItemOwner];
+
+
+export const ActionPlanDraftStepsItemOwner = {
+  client: 'client',
+  lawyer: 'lawyer',
+} as const;
+
+export type ActionPlanDraftStepsItem = {
+  text: string;
+  owner: ActionPlanDraftStepsItemOwner;
+  /** @nullable */
+  dueDate: string | null;
+};
+
+export interface ActionPlanDraft {
+  summary: string;
+  steps: ActionPlanDraftStepsItem[];
+  documentsNeeded: string[];
+  templateIds: string[];
 }
 
 export type ConsultationInputMode = typeof ConsultationInputMode[keyof typeof ConsultationInputMode];
@@ -822,6 +1034,7 @@ export interface ConsultationInput {
   notes?: string;
   mode: ConsultationInputMode;
   package: ConsultationInputPackage;
+  brief?: ConsultationBriefInput;
 }
 
 export type ConsultationUpdateStatus = typeof ConsultationUpdateStatus[keyof typeof ConsultationUpdateStatus];
