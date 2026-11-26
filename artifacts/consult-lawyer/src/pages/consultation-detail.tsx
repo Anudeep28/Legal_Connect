@@ -88,16 +88,26 @@ function Inner({ id, me }: { id: string; me: Account }) {
 }
 
 function ConsultationPayment({ c }: { c: Consultation }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const platform = useGetPlatform({ query: { refetchInterval: 15_000 } });
   const checkout = usePaymentCheckout();
   const payable = !c.demo && c.status === 'requested' && ['unpaid', 'pending'].includes(c.paymentStatus) && new Date(c.startsAt).getTime() > Date.now();
   const checkoutReady = !!platform.data?.paidConsultationsEnabled;
   const checkoutPaused = !!platform.data?.consultationCheckoutPaused;
+  const continueToPayment = () => {
+    setConfirmOpen(false);
+    void checkout.start({ plan: 'consultation', consultationId: c.id });
+  };
   return <div className="mt-4">
     <Notice icon={<Info />}>
       Payment: <strong>{c.paymentStatus.replace('_', ' ')}</strong>. {c.paymentStatus === 'paid' ? 'Captured payment does not itself confirm the appointment; the lawyer must accept.'
         : c.demo ? 'Illustrative profiles never accept payments.' : 'Only a server-verified captured payment marks this request paid.'}
-      {payable && <Button className="mt-3 block" disabled={!checkoutReady || checkout.pending} onClick={() => checkout.start({ plan: 'consultation', consultationId: c.id })} data-testid="button-pay-consultation">
+      {payable && (
+        <div className="mt-3 rounded-xl border border-border/70 bg-background/70 p-3 text-sm" data-testid="payment-review-summary">
+          <strong>Before you pay:</strong> {inr(c.fee)} is for one 30-minute {c.mode} consultation scheduled for {fmtDateTime(c.startsAt)} IST. Payment is collected before the advocate accepts. The appointment is confirmed only after the advocate accepts. If they decline or cancel, request an eligible refund from Payment history; Razorpay returns it to the original payment method after processing. Client cancellation is generally non-refundable, subject to applicable law.
+        </div>
+      )}
+      {payable && <Button className="mt-3 block" disabled={!checkoutReady || checkout.pending} onClick={() => setConfirmOpen(true)} data-testid="button-pay-consultation">
         {checkoutReady ? `Pay ${inr(c.fee)} with Razorpay` : checkoutPaused ? 'Consultation checkout is temporarily paused' : 'Paid consultation checkout is closed'}
       </Button>}
       {payable && !checkoutReady && <p className="mt-2 text-sm">{checkoutPaused
@@ -105,6 +115,20 @@ function ConsultationPayment({ c }: { c: Consultation }) {
         : 'Paid consultations open only after Razorpay verification and qualified-counsel approval of the current policies and contact details.'}</p>}
       <p className="mt-2 text-sm">Consultation refunds require lawyer cancellation. Client cancellation is not refundable, subject to applicable law.</p>
     </Notice>
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="font-display">Review before you pay</AlertDialogTitle>
+          <AlertDialogDescription>
+            You are about to pay {inr(c.fee)} for one 30-minute {c.mode} consultation on {fmtDateTime(c.startsAt)} IST. Payment does not confirm the appointment; the advocate must accept after payment is verified. If the advocate declines or cancels, you can request an eligible refund from Payment history. Client cancellation is generally non-refundable, subject to applicable law.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Go back</AlertDialogCancel>
+          <AlertDialogAction onClick={continueToPayment} data-testid="button-confirm-consultation-payment">Continue to Razorpay</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <PaymentHistory consultationId={c.id} />
   </div>;
 }

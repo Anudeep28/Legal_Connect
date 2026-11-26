@@ -40,10 +40,15 @@ export default function Home() {
       <section className="relative overflow-hidden">
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 pb-16 pt-10 md:px-6 lg:grid-cols-[1.15fr_1fr] lg:pt-16">
           <div>
-            <p className="rise inline-flex items-center gap-2 rounded-full border border-primary/15 bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
-              <span className="live-dot h-2 w-2 rounded-full bg-[hsl(152_55%_40%)]" />
-              {p ? `${p.onlineCount} of ${p.lawyerCount} listed advocates online now` : 'Advocates across India'}
-            </p>
+            <Link
+              href="/lawyers"
+              className="rise inline-flex items-center gap-2 rounded-full border border-primary/15 bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-primary hover:border-primary/40"
+              data-testid="link-home-availability"
+            >
+              {p && !p.demo && p.onlineCount > 0
+                ? <><span className="live-dot h-2 w-2 rounded-full bg-[hsl(152_55%_40%)]" />{p.onlineCount} advocates online now</>
+                : 'Find advocates by language and area'}
+            </Link>
             <h1 className="rise rise-1 mt-6 text-[2.75rem] font-semibold leading-[0.98] sm:text-6xl lg:text-[4.6rem]">
               A legal worry is heavy. <span className="italic text-primary">Talking it through</span> <span className="haldi-underline">should not be.</span>
             </h1>
@@ -255,7 +260,7 @@ export default function Home() {
             <h2 className="text-3xl font-semibold">Questions people ask first</h2>
             <Accordion type="single" collapsible className="mt-4">
               {[
-                ['Do I pay when I send a request?', 'No. Saving a request does not charge you. Once checkout is verified and enabled, pay from your consultation page; the advocate can then accept. Illustrative profiles cannot accept payments.'],
+                ['Do I pay when I send a request?', 'No. Sending the request does not charge you. If paid checkout is enabled, you pay from the consultation page before the advocate can accept. Payment alone does not confirm the appointment. Illustrative profiles cannot accept payments.'],
                 ['How is the fee calculated?', 'Each advocate sets one price for a 30-minute consultation in INR. If you add a document, their document percentage is added on top.'],
                 ['Can I talk in Hindi or my regional language?', 'Yes. Filter the directory by language to find advocates who speak it.'],
                 ['Will the lawyer guarantee a result?', 'No honest advocate can. Expect a clear explanation of your options and next steps.'],

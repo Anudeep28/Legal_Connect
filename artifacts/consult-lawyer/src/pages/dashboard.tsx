@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Guard } from '@/components/guard';
 import { AppPage } from '@/components/shell';
 import { DemoTag, EmptyState, ErrorState, PersonAvatar, StatusPill } from '@/components/kit';
+import { useNotificationPrivacy } from '@/hooks/use-notification-privacy';
 import { fmtDateTime, inr, relTime } from '@/lib/format';
 
 export default function Dashboard() {
@@ -25,6 +26,7 @@ export default function Dashboard() {
 }
 
 function DashboardInner({ me }: { me: Account }) {
+  const [hideNotificationPreviews] = useNotificationPrivacy();
   const consults = useListConsultations();
   const notifs = useListNotifications({ query: { queryKey: getListNotificationsQueryKey() } });
   const isLawyer = me.role === 'lawyer';
@@ -145,7 +147,7 @@ function DashboardInner({ me }: { me: Account }) {
                 {(notifs.data ?? []).slice(0, 4).map((n) => (
                   <li key={n.id} className="flex gap-3">
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? 'bg-border' : 'bg-haldi'}`} />
-                    <div className="min-w-0"><div className="truncate text-sm font-medium">{n.title}</div><div className="text-xs text-muted-foreground">{relTime(n.createdAt)}</div></div>
+                    <div className="min-w-0"><div className="truncate text-sm font-medium">{hideNotificationPreviews ? 'Private update' : n.title}</div><div className="text-xs text-muted-foreground">{relTime(n.createdAt)}</div></div>
                   </li>
                 ))}
               </ul>

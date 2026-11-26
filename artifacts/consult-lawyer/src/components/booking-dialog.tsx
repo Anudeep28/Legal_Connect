@@ -237,7 +237,7 @@ export function BookingDialog({ lawyer, open, onOpenChange, callsEnabled }: { la
               </div>
             </section>
             <Notice icon={<Info />}>
-              This saves an <strong>unpaid consultation request</strong>, not a confirmed appointment. For real lawyers, verified payment is required before acceptance. Checkout remains disabled until Razorpay verification. Fee {inr(total)}. Client cancellation does not qualify for a refund; lawyer cancellation does, subject to applicable law.
+              This saves an <strong>unpaid consultation request</strong>, not a confirmed appointment. Sending it does not charge you. If paid checkout is enabled, you pay from the consultation page before the advocate can accept; payment alone does not confirm the appointment. Fee {inr(total)}. Client cancellation is generally not refundable; if the advocate declines or cancels, you may request an eligible refund, subject to applicable law.
             </Notice>
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

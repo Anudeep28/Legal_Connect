@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useClerk } from '@clerk/react';
 import { CommunicationSettings } from '@/components/communication-settings';
 import { Link, useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
@@ -28,6 +29,7 @@ import { usePaymentCheckout } from '@/hooks/use-payment-checkout';
 import { PaymentHistory } from '@/components/payment-history';
 import { PolicySectionIndex } from '@/components/policy-section-index';
 import { getPolicySections } from '@/lib/policy-sections';
+import { useNotificationPrivacy } from '@/hooks/use-notification-privacy';
 
 const base = import.meta.env.BASE_URL;
 
@@ -130,6 +132,8 @@ function SettingsForm({ me }: { me: Account }) {
   const platform = useGetPlatform();
   const [name, setName] = useState(me.name);
   const [emails, setEmails] = useState(me.emailNotifications);
+  const [hideNotificationPreviews, setHideNotificationPreviews] = useNotificationPrivacy();
+  const { signOut } = useClerk();
   const upd = useUpdateMe();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -163,6 +167,32 @@ function SettingsForm({ me }: { me: Account }) {
           <span><span className="block font-medium">Email notifications preference</span><span className="text-sm text-muted-foreground">{platform.data?.emailEnabled ? 'Resend is configured. Opt in to outbound updates and appointment reminders. Delivery status is shown below.' : 'Resend is not configured. You can save your preference, but no email can be sent. Updates remain available in in-app Notifications.'}</span></span>
           <Switch checked={emails} onCheckedChange={setEmails} data-testid="switch-email" />
         </label>
+        <section className="space-y-4 rounded-2xl border p-4" aria-labelledby="shared-device-title">
+          <div>
+            <h2 id="shared-device-title" className="font-semibold">Shared-device privacy</h2>
+            <p className="mt-1 text-sm text-muted-foreground">These controls apply on this browser only. Push and email updates already use generic wording without case details.</p>
+          </div>
+          <label className="flex items-start justify-between gap-6 rounded-xl bg-muted/40 p-4">
+            <span>
+              <span className="block font-medium">Hide in-app notification previews</span>
+              <span className="text-sm text-muted-foreground">Replaces notification titles and message previews with a generic update in the dashboard and Notifications page.</span>
+            </span>
+            <Switch
+              checked={hideNotificationPreviews}
+              onCheckedChange={setHideNotificationPreviews}
+              data-testid="switch-hide-notification-previews"
+            />
+          </label>
+          <p className="text-xs text-muted-foreground">This does not lock your account or hide consultation pages and documents. Sign out when you finish on a shared phone.</p>
+          <Button
+            variant="outline"
+            className="rounded-full"
+            onClick={() => signOut({ redirectUrl: base || '/' })}
+            data-testid="button-quick-signout"
+          >
+            Sign out on this device
+          </Button>
+        </section>
         <Button onClick={save} disabled={!dirty || name.trim().length < 1 || upd.isPending} className="rounded-full" data-testid="button-save-settings">{upd.isPending && <Loader2 className="animate-spin" />} Save changes</Button>
       </div>
       <aside className="space-y-3 rounded-3xl border bg-secondary/50 p-6 text-sm">
@@ -197,6 +227,7 @@ function NotificationsInner() {
   const read = useReadNotification();
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
+  const [hideNotificationPreviews] = useNotificationPrivacy();
   const items = q.data ?? [];
   const unread = items.filter((n) => !n.read);
   const markRead = (id: string, then?: () => void) =>
@@ -217,8 +248,8 @@ function NotificationsInner() {
             <li key={n.id} className={cn('flex items-start gap-4 border-b p-5 last:border-0', !n.read && 'bg-haldi/10')} data-testid={`row-notification-${n.id}`}>
               <span className={cn('mt-2 h-2.5 w-2.5 shrink-0 rounded-full', n.read ? 'bg-border' : 'bg-haldi')} />
               <button className="min-w-0 flex-1 text-left" onClick={() => (n.link ? (n.read ? setLocation(toInternal(n.link)) : markRead(n.id, () => setLocation(toInternal(n.link)))) : undefined)}>
-                <div className="font-medium">{n.title}</div>
-                <p className="mt-0.5 text-sm text-muted-foreground">{n.body}</p>
+                <div className="font-medium">{hideNotificationPreviews ? 'Private update' : n.title}</div>
+                {!hideNotificationPreviews && <p className="mt-0.5 text-sm text-muted-foreground">{n.body}</p>}
                 <span className="mt-1 block font-mono text-[11px] text-muted-foreground">{relTime(n.createdAt)}</span>
               </button>
               {!n.read && <Button size="sm" variant="ghost" onClick={() => markRead(n.id)} data-testid={`button-read-${n.id}`}><Check /> Read</Button>}
