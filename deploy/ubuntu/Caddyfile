@@ -1,26 +1,8 @@
 consultwithlawyer.in {
 	encode zstd gzip
-	root * /opt/legal-connect/artifacts/consult-lawyer/dist/public
-
-	@api path /api/*
-	handle @api {
-		reverse_proxy 127.0.0.1:8080
-	}
-
-	handle {
-		try_files {path} /index.html
-		file_server
-	}
+	reverse_proxy 127.0.0.1:8080
 }
 
 www.consultwithlawyer.in {
 	redir https://consultwithlawyer.in{uri} permanent
-}
-
-# MinIO stays bound to loopback. Caddy provides the public HTTPS endpoint used
-# by short-lived, signed upload URLs; keep the MinIO console private.
-files.consultwithlawyer.in {
-	reverse_proxy 127.0.0.1:9000 {
-		header_up Host {http.request.host}
-	}
 }

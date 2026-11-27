@@ -1,14 +1,10 @@
 import { randomUUID } from 'crypto';
-import { PassThrough, Readable } from 'stream';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { Readable, Transform } from 'stream';
+import { pipeline } from 'node:stream/promises';
 import { File, Storage } from '@google-cloud/storage';
-import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  HeadObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 import {
   canAccessObject,
@@ -31,140 +27,143 @@ export interface ObjectEntityFile {
   createReadStream(): Readable;
 }
 
-type MinioConfig = {
-  endpoint: string;
-  publicEndpoint: string;
-  bucket: string;
-  region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
+export type ObjectEntityUploadContext = {
+  consultationId: string;
+  attachmentId: string;
 };
 
-type MinioDependencies = {
-  client?: S3Client;
-  presignerClient?: S3Client;
-  signUrl?: typeof getSignedUrl;
-};
+class ObjectUploadTooLargeError extends Error {
+  readonly type = 'entity.too.large';
 
-function minioConfigFromEnv(): MinioConfig {
-  const required = (name: string) => {
-    const value = process.env[name]?.trim();
-    if (!value) throw new Error(`${name} must be set when OBJECT_STORAGE_PROVIDER=minio.`);
-    return value;
-  };
-  const endpoint = new URL(required('MINIO_ENDPOINT'));
-  const publicEndpoint = new URL(required('MINIO_PUBLIC_ENDPOINT'));
-  if (endpoint.pathname !== '/' || publicEndpoint.pathname !== '/') {
-    throw new Error('MINIO_ENDPOINT and MINIO_PUBLIC_ENDPOINT must not include a URL path.');
+  constructor() {
+    super('Uploaded object exceeds the allowed size.');
+    this.name = 'ObjectUploadTooLargeError';
   }
-  if (process.env.NODE_ENV === 'production' && publicEndpoint.protocol !== 'https:') {
-    throw new Error('MINIO_PUBLIC_ENDPOINT must use HTTPS in production.');
-  }
-  if (!['http:', 'https:'].includes(endpoint.protocol) || !['http:', 'https:'].includes(publicEndpoint.protocol)) {
-    throw new Error('MinIO endpoints must use HTTP or HTTPS.');
-  }
-  return {
-    endpoint: endpoint.origin,
-    publicEndpoint: publicEndpoint.origin,
-    bucket: required('MINIO_BUCKET'),
-    region: process.env.MINIO_REGION?.trim() || 'us-east-1',
-    accessKeyId: required('MINIO_ACCESS_KEY'),
-    secretAccessKey: required('MINIO_SECRET_KEY'),
-  };
 }
 
-class MinioObjectEntityFile implements ObjectEntityFile {
+class LocalObjectEntityFile implements ObjectEntityFile {
   constructor(
-    private readonly client: S3Client,
-    private readonly bucket: string,
-    private readonly key: string,
+    private readonly filePath: string,
+    private readonly metadataPath: string,
   ) {}
 
   async getMetadata(): Promise<[ObjectEntityMetadata]> {
-    const result = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this.key }));
+    const [details, metadataContents] = await Promise.all([
+      stat(this.filePath),
+      readFile(this.metadataPath, 'utf8'),
+    ]);
+    const metadata = JSON.parse(metadataContents) as { contentType?: unknown };
     return [{
-      size: result.ContentLength,
-      contentType: result.ContentType,
+      size: details.size,
+      contentType: typeof metadata.contentType === 'string' ? metadata.contentType : undefined,
     }];
   }
 
   async delete(): Promise<void> {
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this.key }));
+    await Promise.all([
+      unlink(this.filePath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') throw error;
+      }),
+      unlink(this.metadataPath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') throw error;
+      }),
+    ]);
   }
 
   createReadStream(): Readable {
-    const output = new PassThrough();
-    void this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.key }))
-      .then((result) => {
-        const body = result.Body;
-        if (body instanceof Readable) body.pipe(output);
-        else if (body) output.destroy(new Error('MinIO returned an unsupported object stream.'));
-        else output.destroy(new Error('MinIO returned an empty object stream.'));
-      })
-      .catch((error: unknown) => output.destroy(error instanceof Error ? error : new Error('MinIO object download failed.')));
-    return output;
+    return createReadStream(this.filePath);
   }
 }
 
-/**
- * MinIO is private to the app server. The browser receives a short-lived,
- * content-type-bound upload URL through the public HTTPS MinIO endpoint.
- */
-export class MinioObjectStorageService {
-  private readonly client: S3Client;
-  private readonly presignerClient: S3Client;
-  private readonly signUrl: typeof getSignedUrl;
+class LocalFilesystemObjectStorageService {
+  private readonly root: string;
 
-  constructor(config = minioConfigFromEnv(), dependencies: MinioDependencies = {}) {
-    const credentials = { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey };
-    const options = { region: config.region, credentials, forcePathStyle: true };
-    this.client = dependencies.client ?? new S3Client({ ...options, endpoint: config.endpoint });
-    this.presignerClient = dependencies.presignerClient ?? new S3Client({ ...options, endpoint: config.publicEndpoint });
-    this.signUrl = dependencies.signUrl ?? getSignedUrl;
-    this.config = config;
+  constructor(root = process.env.LOCAL_OBJECT_STORAGE_DIR?.trim()) {
+    if (!root) throw new Error('LOCAL_OBJECT_STORAGE_DIR must be set when OBJECT_STORAGE_PROVIDER=local.');
+    if (!path.isAbsolute(root)) throw new Error('LOCAL_OBJECT_STORAGE_DIR must be an absolute path.');
+    this.root = path.resolve(root);
   }
 
-  private readonly config: MinioConfig;
-
-  async getObjectEntityUploadURL(contentType: string): Promise<string> {
-    const key = `uploads/${randomUUID()}`;
-    return this.signUrl(
-      this.presignerClient,
-      new PutObjectCommand({ Bucket: this.config.bucket, Key: key, ContentType: contentType }),
-      { expiresIn: 900, signableHeaders: new Set(['content-type']) },
-    );
+  getObjectEntityUploadURL(context: ObjectEntityUploadContext): string {
+    const consultationId = encodeURIComponent(context.consultationId);
+    const attachmentId = encodeURIComponent(context.attachmentId);
+    return `/api/consultations/${consultationId}/attachments/${attachmentId}/upload`;
   }
 
   normalizeObjectEntityPath(rawPath: string): string {
     if (rawPath.startsWith('/objects/')) return rawPath;
-    let url: URL;
     try {
-      url = new URL(rawPath);
+      const url = new URL(rawPath, 'http://localhost');
+      const match = url.pathname.match(/^\/api\/consultations\/([^/]+)\/attachments\/([^/]+)\/upload$/);
+      if (!match) return rawPath;
+      return `/objects/${decodeURIComponent(match[1]!)}/${decodeURIComponent(match[2]!)}`;
     } catch {
       return rawPath;
     }
-    if (url.origin !== this.config.publicEndpoint) return rawPath;
-    const segments = url.pathname.split('/').filter(Boolean);
-    if (segments.shift() !== this.config.bucket || segments.length === 0) return rawPath;
-    const key = segments.map((segment) => decodeURIComponent(segment)).join('/');
-    return `/objects/${key}`;
+  }
+
+  private resolveObjectPath(objectPath: string): { filePath: string; metadataPath: string } {
+    if (!objectPath.startsWith('/objects/')) throw new ObjectNotFoundError();
+    const key = objectPath.slice('/objects/'.length);
+    const segments = key.split('/');
+    if (segments.length !== 2 || segments.some((part) =>
+      !part || part === '.' || part === '..' || part.includes('\\') || part.includes('\0'))) {
+      throw new ObjectNotFoundError();
+    }
+    const filePath = path.resolve(this.root, ...segments);
+    if (!filePath.startsWith(`${this.root}${path.sep}`)) throw new ObjectNotFoundError();
+    return { filePath, metadataPath: `${filePath}.metadata.json` };
+  }
+
+  async writeObjectEntityFromStream(
+    objectPath: string,
+    input: Readable,
+    contentType: string,
+    maxBytes: number,
+  ): Promise<number> {
+    const { filePath, metadataPath } = this.resolveObjectPath(objectPath);
+    await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+    const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
+    const temporaryMetadataPath = `${metadataPath}.${randomUUID()}.tmp`;
+    let size = 0;
+    const byteLimit = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        size += chunk.length;
+        if (size > maxBytes) {
+          callback(new ObjectUploadTooLargeError());
+          return;
+        }
+        callback(null, chunk);
+      },
+    });
+
+    try {
+      await pipeline(input, byteLimit, createWriteStream(temporaryPath, { flags: 'wx', mode: 0o600 }));
+      if (size === 0) throw new Error('The uploaded file is empty.');
+      await writeFile(temporaryMetadataPath, JSON.stringify({ contentType }), { flag: 'wx', mode: 0o600 });
+      await rename(temporaryMetadataPath, metadataPath);
+      await rename(temporaryPath, filePath);
+      return size;
+    } catch (error) {
+      await Promise.all([
+        unlink(temporaryPath).catch(() => undefined),
+        unlink(temporaryMetadataPath).catch(() => undefined),
+      ]);
+      throw error;
+    }
   }
 
   async getObjectEntityFile(objectPath: string): Promise<ObjectEntityFile> {
-    if (!objectPath.startsWith('/objects/')) throw new ObjectNotFoundError();
-    const key = objectPath.slice('/objects/'.length);
-    if (!key || key.split('/').some((segment) => !segment || segment === '.' || segment === '..')) {
-      throw new ObjectNotFoundError();
-    }
+    const paths = this.resolveObjectPath(objectPath);
     try {
-      await this.client.send(new HeadObjectCommand({ Bucket: this.config.bucket, Key: key }));
+      const details = await stat(paths.filePath);
+      if (!details.isFile()) throw new ObjectNotFoundError();
+      return new LocalObjectEntityFile(paths.filePath, paths.metadataPath);
     } catch (error) {
-      const status = (error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
-      const name = (error as { name?: string })?.name;
-      if (status === 404 || name === 'NotFound' || name === 'NoSuchKey') throw new ObjectNotFoundError();
+      if (error instanceof ObjectNotFoundError) throw error;
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new ObjectNotFoundError();
       throw error;
     }
-    return new MinioObjectEntityFile(this.client, this.config.bucket, key);
   }
 }
 
@@ -195,14 +194,14 @@ export class ObjectNotFoundError extends Error {
 }
 
 export class ObjectStorageService {
-  private readonly minio: MinioObjectStorageService | null;
+  private readonly local: LocalFilesystemObjectStorageService | null;
 
   constructor() {
     const provider = process.env.OBJECT_STORAGE_PROVIDER || 'replit';
-    if (provider !== 'replit' && provider !== 'minio') {
+    if (provider !== 'replit' && provider !== 'local') {
       throw new Error(`Unsupported OBJECT_STORAGE_PROVIDER: ${provider}`);
     }
-    this.minio = provider === 'minio' ? new MinioObjectStorageService() : null;
+    this.local = provider === 'local' ? new LocalFilesystemObjectStorageService() : null;
   }
 
   getPublicObjectSearchPaths(): Array<string> {
@@ -275,10 +274,13 @@ export class ObjectStorageService {
     return new Response(webStream, { headers });
   }
 
-  async getObjectEntityUploadURL(contentType?: string): Promise<string> {
-    if (this.minio) {
-      if (!contentType) throw new Error('A content type is required to sign a MinIO upload.');
-      return this.minio.getObjectEntityUploadURL(contentType);
+  async getObjectEntityUploadURL(
+    contentType?: string,
+    context?: ObjectEntityUploadContext,
+  ): Promise<string> {
+    if (this.local) {
+      if (!context) throw new Error('Consultation and attachment IDs are required for a local upload.');
+      return this.local.getObjectEntityUploadURL(context);
     }
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
@@ -302,7 +304,7 @@ export class ObjectStorageService {
   }
 
   async getObjectEntityFile(objectPath: string): Promise<ObjectEntityFile> {
-    if (this.minio) return this.minio.getObjectEntityFile(objectPath);
+    if (this.local) return this.local.getObjectEntityFile(objectPath);
     if (!objectPath.startsWith('/objects/')) {
       throw new ObjectNotFoundError();
     }
@@ -329,7 +331,7 @@ export class ObjectStorageService {
   }
 
   normalizeObjectEntityPath(rawPath: string): string {
-    if (this.minio) return this.minio.normalizeObjectEntityPath(rawPath);
+    if (this.local) return this.local.normalizeObjectEntityPath(rawPath);
     if (!rawPath.startsWith('https://storage.googleapis.com/')) {
       return rawPath;
     }
@@ -350,6 +352,16 @@ export class ObjectStorageService {
     return `/objects/${entityId}`;
   }
 
+  async writeObjectEntityFromStream(
+    objectPath: string,
+    input: Readable,
+    contentType: string,
+    maxBytes: number,
+  ): Promise<number> {
+    if (!this.local) throw new Error('Authenticated API uploads are only enabled for local object storage.');
+    return this.local.writeObjectEntityFromStream(objectPath, input, contentType, maxBytes);
+  }
+
   async trySetObjectEntityAclPolicy(
     rawPath: string,
     aclPolicy: ObjectAclPolicy,
@@ -359,8 +371,8 @@ export class ObjectStorageService {
       return normalizedPath;
     }
 
-    if (this.minio) {
-      throw new Error('Object ACL metadata is not used for MinIO attachments; keep authorization in the application database.');
+    if (this.local) {
+      throw new Error('Object ACL metadata is not used for local attachments; keep authorization in the application database.');
     }
     const objectFile = await this.getObjectEntityFile(normalizedPath);
     await setObjectAclPolicy(objectFile as File, aclPolicy);

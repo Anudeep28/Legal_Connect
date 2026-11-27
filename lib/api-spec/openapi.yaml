@@ -458,7 +458,7 @@ paths:
               schema: { type: array, items: { $ref: "#/components/schemas/ConsultationAttachment" } }
     post:
       operationId: requestConsultationAttachmentUpload
-      description: Client-only. Reserves an attachment and returns a short-lived private upload URL. The file is sent directly to storage, then confirmed.
+      description: Client-only. Reserves an attachment and returns a private upload URL. Depending on the configured storage provider, the file is sent to storage directly or streamed through the authenticated API, then confirmed.
       requestBody:
         required: true
         content:
@@ -470,6 +470,26 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AttachmentUploadTicket" }
+  /consultations/{id}/attachments/{attachmentId}/upload:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: attachmentId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: uploadConsultationAttachment
+      description: Streams a pending attachment to local persistent storage. The caller must be the client who reserved the upload.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "204": { description: File bytes stored }
+        "400": { description: Content type or file is invalid }
+        "401": { description: Sign-in required }
+        "403": { description: Caller is not the uploading client }
+        "404": { description: Pending upload not found }
+        "409": { description: Consultation is closed or upload is no longer pending }
+        "413": { description: File exceeds its reserved size }
   /consultations/{id}/attachments/{attachmentId}:
     parameters:
       - { $ref: "#/components/parameters/Id" }

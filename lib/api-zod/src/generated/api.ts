@@ -996,7 +996,7 @@ export const ListConsultationAttachmentsResponse = zod.array(ListConsultationAtt
 
 
 /**
- * Client-only. Reserves an attachment and returns a short-lived private upload URL. The file is sent directly to storage, then confirmed.
+ * Client-only. Reserves an attachment and returns a private upload URL. Depending on the configured storage provider, the file is sent to storage directly or streamed through the authenticated API, then confirmed.
  */
 
 
@@ -1021,6 +1021,20 @@ export const RequestConsultationAttachmentUploadResponse = zod.object({
   "attachmentId": zod.string(),
   "uploadURL": zod.string()
 })
+
+
+/**
+ * Streams a pending attachment to local persistent storage. The caller must be the client who reserved the upload.
+ */
+
+
+
+export const UploadConsultationAttachmentParams = zod.object({
+  "id": zod.coerce.string().min(1),
+  "attachmentId": zod.coerce.string()
+})
+
+export const UploadConsultationAttachmentResponse = zod.void()
 
 
 

@@ -11,7 +11,8 @@ import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage"
 const MAX_ATTACHMENTS = 10;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
-type Storage = Pick<ObjectStorageService, "getObjectEntityUploadURL" | "normalizeObjectEntityPath" | "getObjectEntityFile">;
+type Storage = Pick<ObjectStorageService,
+  "getObjectEntityUploadURL" | "normalizeObjectEntityPath" | "getObjectEntityFile" | "writeObjectEntityFromStream">;
 
 function attachmentView(row: typeof consultationAttachments.$inferSelect, clientId: string) {
   return {
@@ -74,14 +75,17 @@ export function createConsultationWorkspaceRouter(dependencies: { authMiddleware
     const [{ count }] = await db.select({ count: sql<number>`count(*)::integer` }).from(consultationAttachments)
       .where(eq(consultationAttachments.consultationId, id));
     if (count >= MAX_ATTACHMENTS) throw new HttpError(409, `You can attach up to ${MAX_ATTACHMENTS} files. Remove one to add another.`);
+    const attachmentId = randomUUID();
     let uploadURL: string;
     try {
-      uploadURL = await storage.getObjectEntityUploadURL(input.contentType);
+      uploadURL = await storage.getObjectEntityUploadURL(input.contentType, {
+        consultationId: id,
+        attachmentId,
+      });
     } catch (err) {
       req.log.warn({ name: err instanceof Error ? err.name : "UnknownError" }, "Attachment upload URL could not be created");
       throw new HttpError(503, "File uploads are temporarily unavailable. Please try again.");
     }
-    const attachmentId = randomUUID();
     await db.insert(consultationAttachments).values({
       id: attachmentId, consultationId: id, uploaderId: req.account.id,
       objectPath: storage.normalizeObjectEntityPath(uploadURL.split("?")[0]),
@@ -89,6 +93,45 @@ export function createConsultationWorkspaceRouter(dependencies: { authMiddleware
       contentType: input.contentType, size: input.size, status: "pending",
     });
     res.status(201).json(api.RequestConsultationAttachmentUploadResponse.parse({ attachmentId, uploadURL }));
+  });
+
+  router.put("/consultations/:id/attachments/:attachmentId/upload", ...auth, async (req, res): Promise<void> => {
+    const { id, attachmentId } = api.ConfirmConsultationAttachmentParams.parse(req.params);
+    const { record } = await participantConsultation(req.account, id);
+    if (!["requested", "booked"].includes(record.status)) {
+      throw new HttpError(409, "This consultation is closed. Attachments are read-only.");
+    }
+    const [row] = await db.select().from(consultationAttachments).where(and(
+      eq(consultationAttachments.id, attachmentId),
+      eq(consultationAttachments.consultationId, id),
+      eq(consultationAttachments.uploaderId, req.account.id),
+      eq(consultationAttachments.status, "pending"),
+    ));
+    if (!row) throw new HttpError(404, "Pending attachment upload not found.");
+    if (req.get("content-type")?.split(";", 1)[0].trim() !== row.contentType) {
+      throw new HttpError(400, "The uploaded file type did not match the selected file.");
+    }
+    const contentLength = Number(req.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > Math.min(MAX_ATTACHMENT_BYTES, row.size)) {
+      throw new HttpError(413, "The uploaded file is larger than the allowed size.");
+    }
+    try {
+      await storage.writeObjectEntityFromStream(
+        row.objectPath,
+        req,
+        row.contentType,
+        Math.min(MAX_ATTACHMENT_BYTES, row.size),
+      );
+    } catch (error) {
+      if ((error as { type?: string })?.type === "entity.too.large") {
+        throw new HttpError(413, "The uploaded file is larger than the allowed size.");
+      }
+      if ((error as Error)?.message === "The uploaded file is empty.") {
+        throw new HttpError(400, "The uploaded file is empty.");
+      }
+      throw error;
+    }
+    res.sendStatus(204);
   });
 
   router.post("/consultations/:id/attachments/:attachmentId/confirm", ...auth, async (req, res): Promise<void> => {
@@ -111,7 +154,7 @@ export function createConsultationWorkspaceRouter(dependencies: { authMiddleware
         if (err instanceof ObjectNotFoundError) throw new HttpError(409, "The file upload did not finish. Please try again.");
         throw err;
       }
-      if (!size || size > MAX_ATTACHMENT_BYTES || contentType !== row.contentType) {
+      if (!size || size !== row.size || size > MAX_ATTACHMENT_BYTES || contentType !== row.contentType) {
         await db.delete(consultationAttachments).where(eq(consultationAttachments.id, row.id));
         try { await (await storage.getObjectEntityFile(row.objectPath)).delete(); } catch { /* best effort */ }
         throw new HttpError(400, "The uploaded file did not match the allowed type or size (10 MB).");

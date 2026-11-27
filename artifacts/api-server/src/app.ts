@@ -1,4 +1,5 @@
 import express, { type Express } from "express";
+import path from "node:path";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -48,6 +49,20 @@ app.use(clerkMiddleware((req) => ({
 })));
 app.use("/api", csrfProtection);
 app.use("/api", router);
+const frontendDir = process.env.FRONTEND_DIST_DIR?.trim();
+if (frontendDir) {
+  const absoluteFrontendDir = path.resolve(frontendDir);
+  app.use(express.static(absoluteFrontendDir, { index: false }));
+  app.use((req, res, next) => {
+    if (req.method !== "GET" || req.path === "/api" || req.path.startsWith("/api/")) {
+      next();
+      return;
+    }
+    res.sendFile(path.join(absoluteFrontendDir, "index.html"), (error) => {
+      if (error) next(error);
+    });
+  });
+}
 app.use(apiErrorHandler);
 
 export default app;

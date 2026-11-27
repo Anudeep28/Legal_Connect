@@ -3,6 +3,7 @@ import { after, before, test } from "node:test";
 import { randomUUID } from "node:crypto";
 import type { RequestHandler } from "express";
 import express from "express";
+import { Readable } from "node:stream";
 import { inArray } from "drizzle-orm";
 
 process.env.DATABASE_URL ??= "postgres://workspace-test:workspace-test@127.0.0.1:1/workspace_test";
@@ -23,18 +24,37 @@ let server: ReturnType<ReturnType<typeof express>["listen"]>;
 let baseUrl = "";
 
 // In-memory stand-in for App Storage: tests never touch the real bucket.
-const objects = new Map<string, { size: number; contentType: string }>();
-let nextObject = "";
+const objects = new Map<string, { size: number; contentType: string; body: Buffer }>();
 const fakeStorage = {
-  async getObjectEntityUploadURL() {
-    nextObject = `uploads/${randomUUID()}`;
-    return `https://storage.googleapis.com/test-bucket/private/${nextObject}?sig=1`;
+  async getObjectEntityUploadURL(_contentType: string, context: { consultationId: string; attachmentId: string }) {
+    return `${baseUrl}/consultations/${context.consultationId}/attachments/${context.attachmentId}/upload`;
   },
-  normalizeObjectEntityPath() { return `/objects/${nextObject}`; },
+  normalizeObjectEntityPath(rawPath: string) {
+    if (rawPath.startsWith("/objects/")) return rawPath;
+    const url = new URL(rawPath);
+    const match = url.pathname.match(/\/consultations\/([^/]+)\/attachments\/([^/]+)\/upload$/);
+    return match ? `/objects/${match[1]}/${match[2]}` : rawPath;
+  },
+  async writeObjectEntityFromStream(path: string, input: Readable, contentType: string, maxBytes: number) {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of input) {
+      const data = Buffer.from(chunk);
+      size += data.length;
+      if (size > maxBytes) throw Object.assign(new Error("too large"), { type: "entity.too.large" });
+      chunks.push(data);
+    }
+    objects.set(path, { size, contentType, body: Buffer.concat(chunks) });
+    return size;
+  },
   async getObjectEntityFile(path: string) {
     const meta = objects.get(path);
     if (!meta) throw new ObjectNotFoundError();
-    return { getMetadata: async () => [meta], delete: async () => { objects.delete(path); } } as never;
+    return {
+      getMetadata: async () => [{ size: meta.size, contentType: meta.contentType }],
+      delete: async () => { objects.delete(path); },
+      createReadStream: () => Readable.from([meta.body]),
+    };
   },
 };
 
@@ -105,13 +125,21 @@ test("only the client edits the brief and only participants see attachments", as
   assert.equal(saved.response.status, 200);
   assert.equal(saved.body.brief.whatHappened, "Landlord kept deposit");
 
-  const ticket = await call(`${base}/attachments`, clientId, { method: "POST", body: JSON.stringify({ name: "agreement.pdf", size: 1000, contentType: "application/pdf" }) });
+  const fileContents = Buffer.alloc(1000, 7);
+  const ticket = await call(`${base}/attachments`, clientId, { method: "POST", body: JSON.stringify({ name: "agreement.pdf", size: fileContents.length, contentType: "application/pdf" }) });
   assert.equal(ticket.response.status, 201);
   const pendingList = await call(`${base}/attachments`, lawyerAccountId);
   assert.deepEqual(pendingList.body, []);
   const notUploaded = await call(`${base}/attachments/${ticket.body.attachmentId}/confirm`, clientId, { method: "POST" });
   assert.equal(notUploaded.response.status, 409);
-  objects.set(`/objects/${nextObject}`, { size: 1000, contentType: "application/pdf" });
+  const unauthorizedUpload = await call(`${base}/attachments/${ticket.body.attachmentId}/upload`, lawyerAccountId, {
+    method: "PUT", body: fileContents, headers: { "content-type": "application/pdf" },
+  });
+  assert.equal(unauthorizedUpload.response.status, 404);
+  const uploaded = await call(`${base}/attachments/${ticket.body.attachmentId}/upload`, clientId, {
+    method: "PUT", body: fileContents, headers: { "content-type": "application/pdf" },
+  });
+  assert.equal(uploaded.response.status, 204);
   const confirmed = await call(`${base}/attachments/${ticket.body.attachmentId}/confirm`, clientId, { method: "POST" });
   assert.equal(confirmed.response.status, 200);
   assert.equal(confirmed.body.uploadedBy, "client");
@@ -119,6 +147,9 @@ test("only the client edits the brief and only participants see attachments", as
   assert.equal(lawyerList.body.length, 1);
   const outsider = await call(`${base}/attachments`, otherId);
   assert.equal(outsider.response.status, 404);
+  const downloaded = await fetch(`${baseUrl}/${confirmed.body.downloadPath}`, { headers: { "x-test-account": lawyerAccountId } });
+  assert.equal(downloaded.status, 200);
+  assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()), fileContents);
 
   const wrongType = await call(`${base}/attachments`, clientId, { method: "POST", body: JSON.stringify({ name: "x.exe", size: 10, contentType: "application/x-msdownload" }) });
   assert.equal(wrongType.response.status, 400);

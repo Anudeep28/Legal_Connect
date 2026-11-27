@@ -3258,7 +3258,7 @@ export const getRequestConsultationAttachmentUploadUrl = (id: string,) => {
 }
 
 /**
- * Client-only. Reserves an attachment and returns a short-lived private upload URL. The file is sent directly to storage, then confirmed.
+ * Client-only. Reserves an attachment and returns a private upload URL. Depending on the configured storage provider, the file is sent to storage directly or streamed through the authenticated API, then confirmed.
  */
 export const requestConsultationAttachmentUpload = async (id: string,
     attachmentUploadInput: AttachmentUploadInput, options?: Parameters<typeof customFetch>[1]): Promise<AttachmentUploadTicket> => {
@@ -3333,6 +3333,94 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getRequestConsultationAttachmentUploadMutationOptions(options), queryClient);
+    }
+
+export const getUploadConsultationAttachmentUrl = (id: string,
+    attachmentId: string,) => {
+
+
+
+
+  return `/api/consultations/${id}/attachments/${attachmentId}/upload`
+}
+
+/**
+ * Streams a pending attachment to local persistent storage. The caller must be the client who reserved the upload.
+ */
+export const uploadConsultationAttachment = async (id: string,
+    attachmentId: string,
+    uploadConsultationAttachmentBody: Blob, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<void>(getUploadConsultationAttachmentUrl(id,attachmentId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/octet-stream', ...getHeaders(options?.headers) },
+    body: uploadConsultationAttachmentBody
+  }
+);}
+
+
+
+
+
+export const getUploadConsultationAttachmentMutationKey = () => ['uploadConsultationAttachment'] as const;
+
+export const getUploadConsultationAttachmentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadConsultationAttachment>>, TError,UploadConsultationAttachmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadConsultationAttachment>>, TError,UploadConsultationAttachmentMutationVariables, TContext> => {
+
+const mutationKey = getUploadConsultationAttachmentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadConsultationAttachment>>, UploadConsultationAttachmentMutationVariables> = (props) => {
+          const {id,attachmentId,data} = props ?? {};
+
+          return  uploadConsultationAttachment(id,attachmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadConsultationAttachmentMutationResult = NonNullable<Awaited<ReturnType<typeof uploadConsultationAttachment>>>
+    export type UploadConsultationAttachmentMutationBody = BodyType<Blob>
+    export type UploadConsultationAttachmentMutationError = ErrorType<void>
+    export type UploadConsultationAttachmentMutationVariables = {id: string;attachmentId: string;data: BodyType<Blob>}
+
+    export const useUploadConsultationAttachment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadConsultationAttachment>>, TError,UploadConsultationAttachmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof uploadConsultationAttachment>>,
+        TError,
+        UploadConsultationAttachmentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUploadConsultationAttachmentMutationOptions(options), queryClient);
     }
 
 export const getDeleteConsultationAttachmentUrl = (id: string,
