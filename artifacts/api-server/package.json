@@ -12,6 +12,7 @@
     "test:policy-disclosures": "NODE_ENV=test tsx --test src/lib/__tests__/policy-disclosures.test.ts",
     "test:grievances": "NODE_ENV=test tsx --test src/routes/grievances.test.ts",
     "test:consultation-workspace": "NODE_ENV=test tsx --test src/routes/consultation-workspace.test.ts",
+    "test:minio-storage": "NODE_ENV=test tsx --test src/lib/objectStorage-minio.test.ts",
     "test:health": "NODE_ENV=test tsx --test src/routes/health.test.ts src/routes/readiness.test.ts src/lib/__tests__/database-outage-monitor.test.ts src/routes/admin-system-status.test.ts",
     "seed": "tsx src/lib/seed.ts",
     "grant-admin": "tsx src/lib/grant-admin.ts",
@@ -22,6 +23,8 @@
     "test:billing": "NODE_ENV=test RAZORPAY_KEY_ID=rzp_test_fixture RAZORPAY_KEY_SECRET=billing-test-only-secret RAZORPAY_WEBHOOK_SECRET=billing-test-only-webhook RAZORPAY_CHECKOUT_VERIFIED_MODE=test tsx --test src/lib/__tests__/billing.test.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1178.0",
+    "@aws-sdk/s3-request-presigner": "^3.1178.0",
     "@clerk/express": "^2.1.87",
     "@clerk/shared": "^4.44.0",
     "@google-cloud/storage": "^7.22.0",

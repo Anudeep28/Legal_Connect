@@ -76,7 +76,7 @@ export function createConsultationWorkspaceRouter(dependencies: { authMiddleware
     if (count >= MAX_ATTACHMENTS) throw new HttpError(409, `You can attach up to ${MAX_ATTACHMENTS} files. Remove one to add another.`);
     let uploadURL: string;
     try {
-      uploadURL = await storage.getObjectEntityUploadURL();
+      uploadURL = await storage.getObjectEntityUploadURL(input.contentType);
     } catch (err) {
       req.log.warn({ name: err instanceof Error ? err.name : "UnknownError" }, "Attachment upload URL could not be created");
       throw new HttpError(503, "File uploads are temporarily unavailable. Please try again.");

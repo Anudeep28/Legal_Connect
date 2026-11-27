@@ -1,0 +1,13 @@
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": [
+        "https://consultwithlawyer.in",
+        "https://www.consultwithlawyer.in"
+      ],
+      "AllowedMethods": ["PUT", "HEAD"],
+      "AllowedHeaders": ["Content-Type", "x-amz-*"],
+      "MaxAgeSeconds": 600
+    }
+  ]
+}

@@ -16,6 +16,7 @@ if (!rawPort) {
 }
 
 const port = Number(rawPort);
+const host = process.env.HOST || "0.0.0.0";
 
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
@@ -23,7 +24,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 await bootstrapConfiguredOwner();
 
-app.listen(port, (err) => {
+app.listen(port, host, (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
