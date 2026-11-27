@@ -17,7 +17,7 @@ ENV NODE_ENV=production \
   VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY} \
   VITE_CLERK_PROXY_URL=${VITE_CLERK_PROXY_URL}
 
-RUN pnpm install --frozen-lockfile \
+RUN pnpm install --frozen-lockfile --prod=false \
   && pnpm run typecheck \
   && pnpm --filter @workspace/api-server run build \
   && pnpm --filter @workspace/consult-lawyer run build

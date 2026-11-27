@@ -49,10 +49,12 @@ The `\password` command prompts without placing the password in SQL history. For
 Before changing a database that already contains data, make a protected backup:
 
 ```sh
+set -o pipefail
 sudo install -d -m 700 /var/backups/consultwithlawyer
 BACKUP="/var/backups/consultwithlawyer/before-schema-$(date +%F-%H%M%S).dump"
 sudo -u postgres pg_dump -Fc consultwithlawyer | sudo tee "$BACKUP" >/dev/null
 sudo chmod 600 "$BACKUP"
+sudo pg_restore --list "$BACKUP" >/dev/null
 ```
 
 A new empty database has no app records to back up. Applying the schema does not import Replit records, Clerk accounts, or uploaded files.
@@ -135,8 +137,8 @@ sudo docker compose \
 Check status and logs:
 
 ```sh
-sudo docker compose -f deploy/ubuntu/docker-compose.yml ps
-sudo docker compose -f deploy/ubuntu/docker-compose.yml logs --tail=100 app
+sudo docker compose --env-file /etc/consultwithlawyer/frontend-build.env -f deploy/ubuntu/docker-compose.yml ps
+sudo docker compose --env-file /etc/consultwithlawyer/frontend-build.env -f deploy/ubuntu/docker-compose.yml logs --tail=100 app
 curl -fsS https://consultwithlawyer.in/api/healthz
 curl -fsS https://consultwithlawyer.in/api/readyz
 ```
