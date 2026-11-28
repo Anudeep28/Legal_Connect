@@ -46,3 +46,6 @@ channel = "stable-25_05"
 
 [userenv.production]
 RAZORPAY_CHECKOUT_VERIFIED_MODE = "test"
+
+[objectStorage]
+defaultBucketID = "replit-objstore-05ffa812-42f2-47d9-8e76-c8ac25f7fc67"
