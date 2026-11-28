@@ -75,7 +75,7 @@ sudoedit /etc/consultwithlawyer/frontend-build.env
 In the Clerk Dashboard, create or select the production instance and use its production `pk_live_...` and `sk_live_...` keys, not development/test keys. Set:
 
 - In `app.env`: `DATABASE_URL=postgresql://consultwithlawyer:<URL-safe-password>@127.0.0.1:5432/consultwithlawyer`, `APP_PUBLIC_URL=https://consultwithlawyer.in`, `CLERK_PUBLISHABLE_KEY`, and `CLERK_SECRET_KEY`.
-- In `frontend-build.env`: `VITE_CLERK_PUBLISHABLE_KEY` and `VITE_CLERK_PROXY_URL=https://consultwithlawyer.in/api/__clerk`.
+- In `frontend-build.env`: `VITE_CLERK_PUBLISHABLE_KEY`, and leave `VITE_CLERK_PROXY_URL` empty when you use Clerk's DNS records (`clerk.consultwithlawyer.in`, `accounts.consultwithlawyer.in`, etc.). Set it to `https://consultwithlawyer.in/api/__clerk` only if you enabled the proxy option for the production instance in the Clerk Dashboard; otherwise Clerk rejects requests with "Invalid host" and the sign-in form stays blank.
 
 The publishable key is included in the browser build; it is not a secret. Keep the Clerk secret key only in `app.env`. Configure the production sign-in redirects and any OAuth provider credentials in Clerk. Production Clerk starts without the development instance's users; migrate those separately if needed. Follow Clerk's [production deployment guide](https://clerk.com/docs/deployments/overview), and add any DNS verification records Clerk explicitly gives you.
 

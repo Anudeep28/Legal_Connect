@@ -5,7 +5,7 @@ services:
       dockerfile: deploy/ubuntu/Dockerfile
       args:
         VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:?Set the production Clerk publishable key}
-        VITE_CLERK_PROXY_URL: ${VITE_CLERK_PROXY_URL:?Set the production Clerk proxy URL}
+        VITE_CLERK_PROXY_URL: ${VITE_CLERK_PROXY_URL:-}
     image: consultwithlawyer:local
     init: true
     restart: unless-stopped
