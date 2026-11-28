@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { ClerkProvider, Show, useClerk } from '@clerk/react';
+import { ClerkProvider, useAuth, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { Redirect, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
@@ -114,17 +114,12 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+// Render the public homepage immediately. Waiting for Clerk here left the page
+// blank on browsers where the sign-in service loads slowly or is blocked.
 function HomeRedirect() {
-  return (
-    <>
-      <Show when="signed-in">
-        <Redirect to="/dashboard" />
-      </Show>
-      <Show when="signed-out">
-        <Home />
-      </Show>
-    </>
-  );
+  const { isLoaded, isSignedIn } = useAuth();
+  if (isLoaded && isSignedIn) return <Redirect to="/dashboard" />;
+  return <Home />;
 }
 
 function ScrollTop() {

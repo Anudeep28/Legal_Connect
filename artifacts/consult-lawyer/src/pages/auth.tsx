@@ -1,8 +1,52 @@
-import { SignIn, SignUp } from '@clerk/react';
+import { useEffect, useState } from 'react';
+import { ClerkFailed, ClerkLoaded, ClerkLoading, SignIn, SignUp } from '@clerk/react';
 import { Link } from 'wouter';
+import { Loader2 } from 'lucide-react';
 import { LogoMark } from '@/components/kit';
+import { Button } from '@/components/ui/button';
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const SLOW_AFTER_MS = 12000;
+
+function AuthUnavailable({ slow }: { slow?: boolean }) {
+  return (
+    <div className="rounded-[1.6rem] border bg-card p-6 text-center shadow-sm" role="alert" data-testid="auth-unavailable">
+      <h1 className="font-display text-2xl font-semibold">{slow ? 'Sign-in is taking longer than usual' : 'Sign-in could not load'}</h1>
+      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+        Check your connection and reload. If you use Brave or a content blocker, turn off its shields for consultwithlawyer.in, or try Safari or Chrome.
+      </p>
+      <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
+        <Button className="rounded-full" onClick={() => window.location.reload()} data-testid="button-auth-reload">Reload</Button>
+        <Button asChild variant="outline" className="rounded-full"><Link href="/">Back to home</Link></Button>
+      </div>
+    </div>
+  );
+}
+
+function AuthLoading() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setSlow(true), SLOW_AFTER_MS);
+    return () => window.clearTimeout(t);
+  }, []);
+  if (slow) return <AuthUnavailable slow />;
+  return (
+    <div className="flex flex-col items-center gap-3 py-16 text-sm text-muted-foreground" role="status" data-testid="auth-loading">
+      <Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden />
+      Loading secure sign-in…
+    </div>
+  );
+}
+
+function AuthWidget({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <ClerkLoading><AuthLoading /></ClerkLoading>
+      <ClerkFailed><AuthUnavailable /></ClerkFailed>
+      <ClerkLoaded>{children}</ClerkLoaded>
+    </>
+  );
+}
 
 function AuthLayout({ children, title, body }: { children: React.ReactNode; title: string; body: string }) {
   return (
@@ -19,7 +63,7 @@ function AuthLayout({ children, title, body }: { children: React.ReactNode; titl
       <main className="flex min-w-0 items-center justify-center bg-background px-4 py-12">
         <div className="w-full min-w-0 max-w-[460px]">
           <Link href="/" className="mb-8 flex items-center justify-center gap-2 lg:hidden"><LogoMark /><span className="font-display text-lg">Consult with Lawyer</span></Link>
-          {children}
+          <AuthWidget>{children}</AuthWidget>
         </div>
       </main>
     </div>
